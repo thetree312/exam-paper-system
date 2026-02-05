@@ -117,6 +117,9 @@ backend/glm_raw_results/
 backend/glm_crops/
 backend/debug_crops/
 
+# Uploads and user data
+backend/uploads/
+
 # OCR demos
 glm_ocr_demo/
 
