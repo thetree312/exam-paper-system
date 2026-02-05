@@ -123,6 +123,13 @@ backend/uploads/
 # OCR demos
 glm_ocr_demo/
 
+# Documentation and temporary files
+SECURITY_AND_PERFORMANCE_AUDIT.md
+DEBUGGING_GUIDE.md
+头像.txt
+新建文本文档.txt
+日志/
+
 # Pandoc
 pandoc-*/
 
