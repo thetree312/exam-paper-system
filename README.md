@@ -1,32 +1,33 @@
-# 📚 Exam Paper Management System
+# 📚 Exam Paper Management System | 试卷管理系统
 
 A comprehensive exam paper management system with OCR capabilities and AI-powered features, built for educational institutions and students.
+一个全面的试卷管理系统，具备 OCR 功能和 AI 驱动的特性，为教育机构和学生构建。
 
-## ✨ Features
+## ✨ Features | 功能特性
 
-### 🎯 Core Functionality
-- **📄 PDF Processing**: Upload and process exam papers in PDF format
-- **🔍 OCR Recognition**: Advanced text extraction using GLM OCR and PaddleOCR
-- **🤖 AI Assistant**: Intelligent agent for question answering and assistance
-- **📊 Question Management**: Organize and categorize exam questions by type and subject
-- **🎨 Visual Editor**: Rich text editor for question editing and formatting
+### 🎯 Core Functionality | 核心功能
+- **📄 PDF Processing**: Upload and process exam papers in PDF format | PDF 处理：上传和处理 PDF 格式的试卷
+- **🔍 OCR Recognition**: Advanced text extraction using GLM OCR and PaddleOCR | OCR 识别：使用 GLM OCR 和 PaddleOCR 进行高级文本提取
+- **🤖 AI Assistant**: Intelligent agent for question answering and assistance | AI 助手：智能代理用于问答和辅助
+- **📊 Question Management**: Organize and categorize exam questions by type and subject | 题目管理：按类型和学科组织和分类考试题目
+- **🎨 Visual Editor**: Rich text editor for question editing and formatting | 可视化编辑器：用于题目编辑和格式化的富文本编辑器
 
-### 🛠️ Technical Features
-- **🌐 Modern Web Interface**: React + TypeScript frontend with responsive design
-- **⚡ High-Performance Backend**: FastAPI with PostgreSQL database
-- **🔄 Real-time Updates**: WebSocket support for live collaboration
-- **📱 Mobile Friendly**: Fully responsive design for all devices
-- **🔐 Secure Authentication**: User management and access control
+### 🛠️ Technical Features | 技术特性
+- **🌐 Modern Web Interface**: React + TypeScript frontend with responsive design | 现代网页界面：React + TypeScript 前端，响应式设计
+- **⚡ High-Performance Backend**: FastAPI with PostgreSQL database | 高性能后端：FastAPI 配合 PostgreSQL 数据库
+- **🔄 Real-time Updates**: WebSocket support for live collaboration | 实时更新：WebSocket 支持实时协作
+- **📱 Mobile Friendly**: Fully responsive design for all devices | 移动友好：完全响应式设计适配所有设备
+- **🔐 Secure Authentication**: User management and access control | 安全认证：用户管理和访问控制
 
-## 🚀 Quick Start
+## 🚀 Quick Start | 快速开始
 
-### Prerequisites
+### Prerequisites | 前置要求
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
-- Redis (optional, for caching)
+- Redis (optional, for caching | 可选，用于缓存)
 
-### Installation
+### Installation | 安装
 
 1. **Clone the repository**
    ```bash
@@ -55,12 +56,12 @@ A comprehensive exam paper management system with OCR capabilities and AI-powere
    npm run dev
    ```
 
-4. **Access the Application**
+4. **Access the Application | 访问应用**
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
 
-## 📁 Project Structure
+## 📁 Project Structure | 项目结构
 
 ```
 exam-paper-system/
@@ -82,9 +83,9 @@ exam-paper-system/
 └── README.md              # This file
 ```
 
-## 🔧 Configuration
+## 🔧 Configuration | 配置
 
-### Environment Variables
+### Environment Variables | 环境变量
 
 **Backend (.env)**
 ```env
