@@ -1,34 +1,41 @@
-# 📚 Exam Paper Management System (试卷管理系统)
+<p align="center">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/English-🇬🇧-lightgrey?style=for-the-badge">
+  </a>
+  <a href="README.zh-CN.md">
+    <img src="https://img.shields.io/badge/简体中文-🇨🇳-red?style=for-the-badge">
+  </a>
+</p>
+
+# 📚 Exam Paper Management System
 
 A comprehensive exam paper management system with OCR capabilities and AI-powered features, built for educational institutions and students.
 
-一个全面的试卷管理系统，具备 OCR 功能和 AI 驱动的特性，为教育机构和学生构建。
+## ✨ Features
 
-## ✨ Features (功能特性)
-
-### 🎯 Core Functionality (核心功能)
+### 🎯 Core Functionality
 - **📄 PDF Processing**: Upload and process exam papers in PDF format
-- **🔍 OCR Recognition**: Advanced text extraction using GLM OCR and PaddleOCR  
+- **🔍 OCR Recognition**: Advanced text extraction using GLM OCR and PaddleOCR
 - **🤖 AI Assistant**: Intelligent agent for question answering and assistance
 - **📊 Question Management**: Organize and categorize exam questions by type and subject
 - **🎨 Visual Editor**: Rich text editor for question editing and formatting
 
-### 🛠️ Technical Features (技术特性)
+### 🛠️ Technical Features
 - **🌐 Modern Web Interface**: React + TypeScript frontend with responsive design
 - **⚡ High-Performance Backend**: FastAPI with PostgreSQL database
 - **🔄 Real-time Updates**: WebSocket support for live collaboration
 - **📱 Mobile Friendly**: Fully responsive design for all devices
 - **🔐 Secure Authentication**: User management and access control
 
-## 🚀 Quick Start (快速开始)
+## 🚀 Quick Start
 
-### Prerequisites (前置要求)
+### Prerequisites
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
-- Redis (optional, for caching | 可选，用于缓存)
+- Redis (optional, for caching)
 
-### Installation (安装)
+### Installation
 
 1. **Clone the repository**
    ```bash
@@ -57,12 +64,12 @@ A comprehensive exam paper management system with OCR capabilities and AI-powere
    npm run dev
    ```
 
-4. **Access the Application (访问应用)**
+4. **Access the Application**
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
 
-## 📁 Project Structure (项目结构)
+## 📁 Project Structure
 
 ```
 exam-paper-system/
@@ -84,9 +91,9 @@ exam-paper-system/
 └── README.md              # This file
 ```
 
-## 🔧 Configuration (配置)
+## 🔧 Configuration
 
-### Environment Variables (环境变量)
+### Environment Variables
 
 **Backend (.env)**
 ```env
