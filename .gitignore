@@ -108,6 +108,18 @@ dmypy.json
 out/
 build/
 
+# PaddleOCR models and cache
+backend/paddle_models/
+backend/.cache/
+
+# GLM OCR results and crops
+backend/glm_raw_results/
+backend/glm_crops/
+backend/debug_crops/
+
+# OCR demos
+glm_ocr_demo/
+
 # Pandoc
 pandoc-*/
 
