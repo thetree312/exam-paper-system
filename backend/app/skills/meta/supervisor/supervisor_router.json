@@ -1,0 +1,30 @@
+{
+  "name": "supervisor_router",
+  "kind": "inference",
+  "description": "根据当前对话和题目信息，为 Solver 规划本轮任务，包括是否需要视觉、是否需要批量出题配置、是否可以直接回复等。",
+  "summary": "解析 doc_context 与对话，给出指导 Solver/vision/工具调用的 JSON 计划。",
+  "template": "你是 Exam 系统中的调度主管（Supervisor Agent）。你的唯一职责是：在每一轮对话开始前，读取当前已注入的题目信息与对话内容，给出一份严格的 JSON 指令，供下游 Solver / Vision / SimilarQuestionTool 使用。\n\n【输入信息】\n- 文档与题目上下文（已按需载入的题目，不代表整卷）：\n{doc_context}\n- 可能存在的批量出题配置（由上一轮 HITL 或系统给出，若无则为空）：\n{batch_config}\n- 近期对话片段（含学生与助手）：\n{recent_dialogue}\n\n【执行指南】\n1. 仅使用上述输入信息，禁止引用或拼接任何外部文档。\n2. 如果用户只要求讲解/分析，不提练习题，则 needs_practice 必须为 false，且 expected_new_question_count 设为 null，plans 留空。\n3. 如果用户提出“出题/练习/类似题”等需求，但没有指明题量/题型/难度等必要字段（如“出几道题”“随便给几题”），必须：\n   - 设置 batch_config_required=true；\n   - 在 batch_config_missing_fields 中列出缺失项（至少包含 question_count）；\n   - 将 expected_new_question_count 设为 null，allow_solver_tools=false，plans 数组留空；\n   - context_notes 用中文说明“需学生确认题量/难度后再生成”。\n4. 只有当题量等关键信息已确定时，才允许 needs_practice=true 且 allow_solver_tools=true，并补全 expected_new_question_count。\n5. 当 needs_practice=true 且允许出题时：\n   - similar_question_tool_needed 必须为 true；\n   - plans 数组至少包含一项，且每项需包含 base_question_id、target_sequence_index、mode、new_questions[*] 以及 metadata（difficulty/focus/similarity）；\n   - new_questions[*] 只能描述结构要求，不得复制实际题干，可使用“占位题目”描述。\n6. 所有输出必须是合法 JSON，不得包含自然语言解释、示例或代码块。",
+  "doc_sections": {},
+  "default_full_sections": [],
+  "schema_example": {
+    "solver_instruction": "学生仅提出“想多练练”这类模糊请求，且未提供题量/题型。请先讲解当前题目，再引导学生填写题量与难度需求，等待补充后再生成练习。",
+    "reply_outline": "确认需求→解析原题→说明需题量/难度→请学生补充",
+    "focus_sequence_index": 0,
+    "require_vision": false,
+    "context_notes": "学生想要练习，但题量/难度为空，必须触发 batch config 表单。",
+    "expected_new_question_count": null,
+    "batch_config_required": true,
+    "batch_config_missing_fields": [
+      "question_count",
+      "difficulty"
+    ],
+    "batch_config_reason": "needs_practice 请求缺少题量/难度",
+    "direct_reply": false,
+    "direct_reply_message": null,
+    "allow_solver_tools": false,
+    "similar_question_tool_needed": false,
+    "plans": []
+  },
+  "output_schema": {},
+  "agent": "supervisor"
+}

@@ -1,0 +1,160 @@
+/**
+ * 输入验证工具
+ * 
+ * 提供前端输入验证，防止无效数据和潜在的注入攻击
+ */
+
+/**
+ * 验证邮箱格式
+ */
+export function validateEmail(email: string): { valid: boolean; error?: string } {
+  if (!email || email.trim().length === 0) {
+    return { valid: false, error: '邮箱不能为空' }
+  }
+
+  const trimmed = email.trim()
+  
+  // 基本长度检查
+  if (trimmed.length > 254) {
+    return { valid: false, error: '邮箱长度不能超过 254 个字符' }
+  }
+
+  // RFC 5322 简化版正则
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
+  
+  if (!emailRegex.test(trimmed)) {
+    return { valid: false, error: '邮箱格式不正确' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * 验证密码强度
+ */
+export function validatePassword(password: string): { valid: boolean; error?: string } {
+  if (!password || password.length === 0) {
+    return { valid: false, error: '密码不能为空' }
+  }
+
+  if (password.length < 8) {
+    return { valid: false, error: '密码长度至少为 8 位' }
+  }
+
+  if (password.length > 128) {
+    return { valid: false, error: '密码长度不能超过 128 位' }
+  }
+
+  // 检查是否包含至少一个字母和一个数字
+  const hasLetter = /[a-zA-Z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+
+  if (!hasLetter || !hasNumber) {
+    return { valid: false, error: '密码必须包含字母和数字' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * 验证租户代码
+ */
+export function validateTenantCode(code: string): { valid: boolean; error?: string } {
+  if (!code || code.trim().length === 0) {
+    return { valid: false, error: '租户编码不能为空' }
+  }
+
+  const trimmed = code.trim()
+
+  if (trimmed.length < 2) {
+    return { valid: false, error: '租户编码至少为 2 个字符' }
+  }
+
+  if (trimmed.length > 64) {
+    return { valid: false, error: '租户编码不能超过 64 个字符' }
+  }
+
+  // 只允许字母、数字、下划线和连字符
+  const codeRegex = /^[a-zA-Z0-9_-]+$/
+  
+  if (!codeRegex.test(trimmed)) {
+    return { valid: false, error: '租户编码只能包含字母、数字、下划线和连字符' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * 验证显示名称
+ */
+export function validateDisplayName(name: string): { valid: boolean; error?: string } {
+  // 显示名称可以为空（可选字段）
+  if (!name || name.trim().length === 0) {
+    return { valid: true }
+  }
+
+  const trimmed = name.trim()
+
+  if (trimmed.length > 100) {
+    return { valid: false, error: '昵称不能超过 100 个字符' }
+  }
+
+  // 防止 XSS：不允许 HTML 标签
+  if (/<[^>]*>/g.test(trimmed)) {
+    return { valid: false, error: '昵称不能包含 HTML 标签' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * 清理用户输入（移除潜在的 XSS 字符）
+ */
+export function sanitizeInput(input: string): string {
+  if (!input) return ''
+  
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // 移除尖括号
+    .replace(/javascript:/gi, '') // 移除 javascript: 协议
+    .replace(/on\w+\s*=/gi, '') // 移除事件处理器
+}
+
+/**
+ * 验证文件类型
+ */
+export function validateFileType(file: File): { valid: boolean; error?: string } {
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ]
+
+  if (!allowedTypes.includes(file.type)) {
+    return { valid: false, error: '不支持的文件类型，仅支持图片、PDF 和 Word 文档' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * 验证文件大小
+ */
+export function validateFileSize(file: File, maxSizeMB: number = 50): { valid: boolean; error?: string } {
+  const maxSizeBytes = maxSizeMB * 1024 * 1024
+
+  if (file.size > maxSizeBytes) {
+    return { valid: false, error: `文件大小不能超过 ${maxSizeMB}MB` }
+  }
+
+  if (file.size === 0) {
+    return { valid: false, error: '文件不能为空' }
+  }
+
+  return { valid: true }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.14.0",
+    "@tiptap/extension-image": "^3.14.0",
+    "@tiptap/extension-subscript": "^3.14.0",
+    "@tiptap/extension-superscript": "^3.14.0",
+    "@tiptap/extension-table": "^3.14.0",
+    "@tiptap/extension-table-cell": "^3.14.0",
+    "@tiptap/extension-table-header": "^3.14.0",
+    "@tiptap/extension-table-row": "^3.14.0",
+    "@tiptap/html": "^3.14.0",
+    "@tiptap/markdown": "^3.14.0",
+    "@tiptap/react": "^3.14.0",
+    "@tiptap/starter-kit": "^3.14.0",
+    "@types/dompurify": "^3.0.5",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-window": "^1.8.8",
+    "d3-hierarchy": "^3.1.2",
+    "dagre": "^0.8.5",
+    "dompurify": "^3.3.1",
+    "katex": "^0.16.27",
+    "lottie-react": "^2.4.1",
+    "pdfjs-dist": "^5.4.449",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-markdown": "^10.1.0",
+    "react-window": "^2.2.5",
+    "reactflow": "^11.11.4",
+    "rehype-katex": "^7.0.1",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "zustand": "^5.0.10"
+  }
+}

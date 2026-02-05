@@ -1,0 +1,575 @@
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.tiptap table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+  background-color: #fff;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.25);
+}
+
+.tiptap thead th {
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02));
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.tiptap th,
+.tiptap td {
+  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  text-align: center;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.tiptap tbody tr:nth-child(odd) {
+  background-color: rgba(148, 163, 184, 0.1);
+}
+
+.tiptap tbody tr:hover {
+  background-color: rgba(79, 70, 229, 0.08);
+}
+
+/* Markdown rendering (agent replies, etc.) */
+.markdown-body {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.markdown-body code,
+.markdown-body pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.markdown-body img,
+.markdown-body table {
+  max-width: 100%;
+}
+
+.question-card {
+  position: relative;
+}
+
+.question-card-shiny {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.6), 0 18px 45px rgba(15, 23, 42, 0.3);
+  transform: translateY(-1px);
+}
+
+.question-card-shiny::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 255, 255, 0) 80%
+  );
+  animation: shiny-sweep 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes shiny-sweep {
+  0% {
+    transform: translateX(-120%) rotate(15deg);
+  }
+  55% {
+    transform: translateX(120%) rotate(15deg);
+  }
+  100% {
+    transform: translateX(120%) rotate(15deg);
+  }
+}
+
+.english-serif {
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, 'Times New Roman', serif;
+}
+
+.translation-toolbar-popover {
+  position: absolute;
+  z-index: 1200;
+  transform: translate(-50%, calc(-100% - 12px));
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 999px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.translation-toolbar-popover[data-error='true'] {
+  background: #450a0a;
+  color: #fecdd3;
+}
+
+.translation-trigger-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.translation-trigger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.translation-toolbar-spinner {
+  font-size: 16px;
+  animation: spin 1s linear infinite;
+}
+
+.translation-trigger-icon {
+  font-size: 15px;
+}
+
+.translation-toolbar-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.translation-toolbar-message {
+  font-size: 11px;
+  color: #cbd5f5;
+}
+
+.translation-toolbar-message--error {
+  color: #fecdd3;
+}
+
+.translation-toolbar-close {
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translation-toolbar-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.immersive-translation-block {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 26px;
+  padding-left: 1.25rem;
+  border-left: 2px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  background-color: #fff;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 0 6px 25px rgba(15, 23, 42, 0.06);
+  animation: fadeInTranslate 0.35s ease-out;
+  position: relative;
+}
+
+.immersive-translation-block:hover {
+  border-left-color: #3b82f6;
+}
+
+.translation-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.translation-block-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.translation-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.translation-block-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: rgba(148, 163, 184, 0.18);
+  color: #475569;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.translation-block-action:hover {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
+.translation-word-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.translation-word-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.translation-word-term {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.translation-word-phonetic {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.translation-word-meaning {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.translation-word-example {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.translation-sentence-body {
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.translation-footnote-ref {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.translation-footnote-badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.8);
+  background-color: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translation-footnote-tooltip {
+  position: absolute;
+  z-index: 1500;
+  min-width: 220px;
+  max-width: 320px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  animation: fadeInTranslate 0.2s ease;
+}
+
+.translation-footnote-header {
+  position: relative;
+  padding-right: 48px;
+  margin-bottom: 8px;
+}
+
+.translation-footnote-term {
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.translation-footnote-term-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.translation-footnote-term-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.translation-footnote-lemma {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.translation-footnote-lemma-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.translation-footnote-lemma-label {
+  color: #94a3b8;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.translation-footnote-lemma-value {
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.translation-footnote-phonetic {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.translation-footnote-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  gap: 6px;
+  padding-left: 8px;
+  background: #0f172a;
+}
+
+.translation-footnote-close,
+.translation-footnote-remove {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translation-footnote-close:hover,
+.translation-footnote-remove:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.translation-footnote-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.translation-footnote-senses {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.translation-footnote-sense {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+}
+
+.translation-footnote-sense-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5f5;
+  text-transform: uppercase;
+}
+
+.translation-footnote-sense-text {
+  color: #fff;
+  font-weight: 500;
+}
+
+.translation-footnote-sense-note {
+  font-size: 11px;
+  color: #a5b4fc;
+}
+
+.translation-footnote-meaning {
+  color: #fff;
+  font-weight: 600;
+}
+
+.translation-footnote-example {
+  color: #cbd5f5;
+  font-style: italic;
+}
+
+@keyframes fadeInTranslate {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 行内翻译指示器：紧跟在文本之后的圆形进度/错误图标 */
+.translation-inline-indicator {
+  position: absolute;
+  z-index: 1200;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 近似与正文行高匹配，避免撑开行距 */
+  width: 1em;
+  height: 1em;
+}
+
+.translation-inline-indicator__spinner {
+  box-sizing: border-box;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.5);
+  border-top-color: #3b82f6;
+  animation: spin 0.8s linear infinite;
+}
+
+.translation-inline-indicator__error-btn {
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  width: 1em;
+  height: 1em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translation-inline-indicator__error-icon {
+  font-size: 1.1em;
+  color: #f97316;
+}
+
+/* 悬浮翻译按钮：靠近选区上方的小圆按钮 */
+.translation-toolbar-fab {
+  position: absolute;
+  z-index: 1200;
+  transform: translate(-50%, calc(-100% - 8px));
+  border: none;
+  background: #0f172a;
+  color: #e5e7eb;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+}
+
+.translation-toolbar-fab:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.translation-toolbar-fab__icon {
+  font-size: 18px;
+}
+
+.translation-inline-placeholder {
+  display: inline-block;
+  width: 28px;
+  height: 1em;
+  vertical-align: middle;
+  pointer-events: none;
+  color: transparent;
+  user-select: none;
+}

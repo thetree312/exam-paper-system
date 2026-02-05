@@ -1,0 +1,123 @@
+import React, { useEffect } from 'react'
+import { SelectionWorkspace } from './SelectionWorkspace'
+import { useSelectionInteraction } from '../hooks/useSelectionInteraction'
+import type {
+  PageSelectionSegment,
+  SelectionBox,
+  SelectionExclusion,
+  SelectionLegend,
+  RegionPayload,
+  LegendRegionPayload,
+} from '../types'
+
+interface SelectionPaneProps {
+  previewSources: string[]
+  previewType: string | null
+  activeStatus: string
+  hasActiveFile: boolean
+  pageRefs: React.MutableRefObject<Record<number, HTMLDivElement | null>>
+  imageRefs: React.MutableRefObject<Record<number, HTMLImageElement | null>>
+  isExtracting: boolean
+  previewScrollRef: React.RefObject<HTMLDivElement>
+  onSelectionSnapshotChange?: (snapshot: {
+    selection: SelectionBox | null
+    pendingExclusions: PageSelectionSegment[]
+    pendingLegends: PageSelectionSegment[]
+    buildRegionsPayload: () => RegionPayload[] | null
+    buildLegendsPayload: () => LegendRegionPayload[] | null
+  }) => void
+  onAddClick: () => void
+  onClearSelection: () => void
+}
+
+export const SelectionPane: React.FC<SelectionPaneProps> = ({
+  previewSources,
+  previewType,
+  activeStatus,
+  hasActiveFile,
+  pageRefs,
+  imageRefs,
+  isExtracting,
+  previewScrollRef,
+  onSelectionSnapshotChange,
+  onAddClick,
+  onClearSelection,
+}) => {
+  const {
+    selection,
+    pendingExclusions,
+    pendingLegends,
+    isExclusionMode,
+    isLegendMode,
+    handlePointerDown,
+    toggleExclusionMode,
+    toggleLegendMode,
+    clearSelection,
+    removeExclusion,
+    removeLegend,
+    buildRegionsPayload,
+    buildLegendsPayload,
+  } = useSelectionInteraction({
+    previewScrollRef,
+    pageRefs,
+    imageRefs,
+  })
+
+  useEffect(() => {
+    if (!onSelectionSnapshotChange) return
+    onSelectionSnapshotChange({
+      selection,
+      pendingExclusions,
+      pendingLegends,
+      buildRegionsPayload,
+      buildLegendsPayload,
+      clearSelection,
+    })
+  }, [
+    buildLegendsPayload,
+    buildRegionsPayload,
+    clearSelection,
+    onSelectionSnapshotChange,
+    pendingExclusions,
+    pendingLegends,
+    selection,
+  ])
+
+  const handleAdd = () => {
+    onAddClick()
+  }
+
+  const handleClear = () => {
+    clearSelection()
+    onClearSelection()
+  }
+
+  return (
+    <div
+      ref={previewScrollRef}
+      className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950 p-3 sm:p-4 lg:p-6 relative scrollbar-hidden"
+      onPointerDown={handlePointerDown}
+    >
+      <SelectionWorkspace
+        previewSources={previewSources}
+        previewType={previewType}
+        activeStatus={activeStatus}
+        hasActiveFile={hasActiveFile}
+        selection={selection}
+        pendingExclusions={pendingExclusions}
+        pendingLegends={pendingLegends}
+        isExclusionMode={isExclusionMode}
+        isLegendMode={isLegendMode}
+        pageRefs={pageRefs}
+        imageRefs={imageRefs}
+        isExtracting={isExtracting}
+        onAddClick={handleAdd}
+        onClearClick={handleClear}
+        onToggleExclude={toggleExclusionMode}
+        onRemoveExclusion={removeExclusion}
+        onToggleLegend={toggleLegendMode}
+        onRemoveLegend={removeLegend}
+      />
+    </div>
+  )
+}

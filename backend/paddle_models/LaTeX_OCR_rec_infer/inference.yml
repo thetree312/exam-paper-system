@@ -1,0 +1,2339 @@
+Global:
+  model_name: LaTeX_OCR_rec
+Hpi:
+  backend_configs:
+    paddle_infer:
+      trt_dynamic_shapes: &id001
+        x:
+        - - 1
+          - 1
+          - 32
+          - 32
+        - - 1
+          - 1
+          - 64
+          - 448
+        - - 1
+          - 1
+          - 192
+          - 672
+    tensorrt:
+      dynamic_shapes: *id001
+PreProcess:
+  transform_ops:
+  - DecodeImage:
+      channel_first: false
+      img_mode: RGB
+  - MinMaxResize:
+      max_dimensions:
+      - 672
+      - 192
+      min_dimensions:
+      - 32
+      - 32
+  - LatexTestTransform: null
+  - NormalizeImage:
+      mean:
+      - 0.7931
+      - 0.7931
+      - 0.7931
+      order: hwc
+      std:
+      - 0.1738
+      - 0.1738
+      - 0.1738
+  - LatexImageFormat: null
+  - KeepKeys:
+      keep_keys:
+      - image
+PostProcess:
+  name: LaTeXOCRDecode
+  character_dict:
+    added_tokens:
+    - content: '[PAD]'
+      id: 0
+      lstrip: false
+      normalized: false
+      rstrip: false
+      single_word: false
+      special: true
+    - content: '[BOS]'
+      id: 1
+      lstrip: false
+      normalized: false
+      rstrip: false
+      single_word: false
+      special: true
+    - content: '[EOS]'
+      id: 2
+      lstrip: false
+      normalized: false
+      rstrip: false
+      single_word: false
+      special: true
+    decoder: null
+    model:
+      continuing_subword_prefix: null
+      dropout: null
+      end_of_word_suffix: null
+      fuse_unk: false
+      merges:
+      - Ġ }
+      - Ġ {
+      - Ġ \
+      - Ġ _
+      - Ġ ^
+      - Ġ 2
+      - Ġ )
+      - Ġ (
+      - Ġ 1
+      - r a
+      - Ġ =
+      - Ġ -
+      - č Ċ
+      - Ġ ,
+      - f ra
+      - fra c
+      - Ġ +
+      - m a
+      - t a
+      - i g
+      - Ġ 0
+      - a r
+      - a l
+      - l e
+      - Ġ i
+      - t h
+      - Ġ x
+      - f t
+      - ig h
+      - m e
+      - r igh
+      - ma th
+      - Ġ n
+      - Ġ .
+      - Ġ\ ,
+      - i n
+      - p h
+      - Ġ d
+      - le ft
+      - Ġ a
+      - righ t
+      - a m
+      - e ta
+      - t i
+      - Ġ m
+      - m u
+      - Ġ 3
+      - Ġ k
+      - Ġ t
+      - Ġ e
+      - Ġ r
+      - Ġ &
+      - Ġ c
+      - Ġ p
+      - s i
+      - r m
+      - d e
+      - math rm
+      - Ġ 4
+      - Ġ s
+      - p r
+      - Ġ ~
+      - ph a
+      - Ġ l
+      - al pha
+      - d a
+      - Ġ A
+      - Ġ\ ;
+      - o t
+      - p i
+      - p ar
+      - ti al
+      - par tial
+      - i me
+      - pr ime
+      - p si
+      - d ot
+      - Ġ j
+      - Ġ b
+      - Ġ f
+      - l ta
+      - Ġ |
+      - am ma
+      - b da
+      - am bda
+      - ph i
+      - Ġ q
+      - b f
+      - Ġ g
+      - n u
+      - Ġ z
+      - ra y
+      - ar ray
+      - Ġ M
+      - Ġ T
+      - Ġ y
+      - c al
+      - b ar
+      - Ġ N
+      - ig ma
+      - Ġ R
+      - r t
+      - l ambda
+      - in t
+      - Ġ B
+      - v e
+      - n g
+      - q u
+      - Ġ L
+      - Ġ /
+      - l o
+      - b eta
+      - ng le
+      - Ġ u
+      - de lta
+      - s q
+      - sq rt
+      - th eta
+      - Ġ\ \
+      - g amma
+      - Ġ ]
+      - s igma
+      - g a
+      - me ga
+      - Ġ D
+      - Ġ F
+      - Ġ [
+      - Ġ S
+      - math bf
+      - s u
+      - Ġ P
+      - lo n
+      - Ġ v
+      - su m
+      - psi lon
+      - Ġ V
+      - Ġ C
+      - c dot
+      - e psilon
+      - a t
+      - h at
+      - a d
+      - qu ad
+      - Ġ h
+      - h o
+      - r ho
+      - h i
+      - t o
+      - Ġ E
+      - l a
+      - Ġ H
+      - l de
+      - ti lde
+      - Ġ Q
+      - Ġ 5
+      - v ar
+      - Ġ X
+      - Ġ G
+      - b e
+      - n d
+      - o mega
+      - e nd
+      - g in
+      - be gin
+      - ta u
+      - Ġ 6
+      - n a
+      - ve c
+      - Ġ I
+      - Ġ o
+      - ra ngle
+      - Ġ *
+      - D e
+      - De lta
+      - G amma
+      - p e
+      - ft y
+      - in fty
+      - Ġ K
+      - x i
+      - Ġ 8
+      - o w
+      - Ġ J
+      - Ġ U
+      - r ow
+      - ta r
+      - g e
+      - P hi
+      - a p
+      - Ġ W
+      - c o
+      - me s
+      - ti mes
+      - s in
+      - Ġ Z
+      - la ngle
+      - o pe
+      - r na
+      - ra to
+      - ope rato
+      - rna me
+      - operato rname
+      - tar row
+      - l in
+      - lin e
+      - var phi
+      - p m
+      - r line
+      - L ambda
+      - Ġ\ !
+      - Ġ ;
+      - dot s
+      - co s
+      - Ġ w
+      - righ tarrow
+      - b ig
+      - c hi
+      - o ve
+      - Ġ\ }
+      - ove rline
+      - Ġ 7
+      - e x
+      - p a
+      - s t
+      - pr o
+      - q quad
+      - i v
+      - e qu
+      - equ iv
+      - Ġ O
+      - l n
+      - O mega
+      - l l
+      - Ġ 9
+      - k ap
+      - kap pa
+      - B ig
+      - Ġ\ {
+      - da g
+      - Ġ Y
+      - \ {
+      - var epsilon
+      - cdot s
+      - 'Ġ :'
+      - math cal
+      - P si
+      - Ġ >
+      - b o
+      - bo l
+      - Ġ <
+      - ge r
+      - dag ger
+      - l dots
+      - e ll
+      - b la
+      - na bla
+      - ex p
+      - y le
+      - st yle
+      - z eta
+      - S igma
+      - w i
+      - wi de
+      - si m
+      - le q
+      - Ġ !
+      - big g
+      - math b
+      - mathb b
+      - 'Ġ\ :'
+      - h bar
+      - o times
+      - bol d
+      - \ }
+      - m i
+      - pro x
+      - ap prox
+      - P i
+      - lo g
+      - mi d
+      - s p
+      - ve rt
+      - d i
+      - pro d
+      - pe r
+      - per p
+      - y style
+      - la ystyle
+      - sp laystyle
+      - di splaystyle
+      - me q
+      - si meq
+      - e d
+      - w ed
+      - wed ge
+      - wide tilde
+      - s y
+      - sy m
+      - sym bol
+      - bold symbol
+      - c k
+      - t ex
+      - tex t
+      - r i
+      - T h
+      - Th eta
+      - ge q
+      - s e
+      - e q
+      - n de
+      - u nde
+      - ta n
+      - s c
+      - a st
+      - r c
+      - se t
+      - p t
+      - wide hat
+      - c i
+      - ci rc
+      - r e
+      - ri pt
+      - sc ript
+      - unde rline
+      - Ġ\ |
+      - re l
+      - n eq
+      - s ta
+      - sta ck
+      - stack rel
+      - sin h
+      - o p
+      - u s
+      - cos h
+      - Big g
+      - c e
+      - text style
+      - s tar
+      - n ot
+      - fra k
+      - math frak
+      - m p
+      - bigg r
+      - l us
+      - op lus
+      - var theta
+      - bigg l
+      - Big r
+      - b ra
+      - Big l
+      - f o
+      - s f
+      - su b
+      - sub set
+      - ng rightarrow
+      - e c
+      - bold math
+      - ra ll
+      - fo rall
+      - script style
+      - ec t
+      - par row
+      - u parrow
+      - b j
+      - bj ect
+      - p to
+      - pro pto
+      - Ġ '
+      - lo ngrightarrow
+      - big l
+      - big r
+      - o int
+      - p s
+      - ma ps
+      - maps to
+      - o m
+      - l le
+      - \ |
+      - d dot
+      - c u
+      - b in
+      - bin om
+      - v dots
+      - a ngle
+      - left rightarrow
+      - ove r
+      - o r
+      - math sf
+      - cu p
+      - bra ce
+      - n o
+      - ar c
+      - f lo
+      - flo or
+      - t ri
+      - tri angle
+      - X i
+      - c ot
+      - b ot
+      - co ng
+      - i t
+      - m be
+      - nu mbe
+      - no numbe
+      - nonumbe r
+      - c ap
+      - R igh
+      - Righ tarrow
+      - z e
+      - si ze
+      - text rm
+      - n e
+      - arc tan
+      - ra lle
+      - pa ralle
+      - paralle l
+      - c frac
+      - Ġ- -
+      - o bject
+      - ĠO bject
+      - bra ck
+      - s h
+      - ar row
+      - ow n
+      - var rho
+      - subset eq
+      - r brace
+      - text bf
+      - i math
+      - o d
+      - d own
+      - h e
+      - la nd
+      - script scriptstyle
+      - script size
+      - c he
+      - che ck
+      - s la
+      - over rightarrow
+      - down arrow
+      - Bigg l
+      - g g
+      - n to
+      - pha nto
+      - phanto m
+      - e xi
+      - h line
+      - st s
+      - exi sts
+      - Bigg r
+      - b u
+      - r floor
+      - d dots
+      - i o
+      - io ta
+      - lle t
+      - bu llet
+      - co lon
+      - in us
+      - U psilon
+      - l floor
+      - l brack
+      - unde rbrace
+      - ne g
+      - I m
+      - math it
+      - t in
+      - tin y
+      - j math
+      - le f
+      - sla sh
+      - ve e
+      - m inus
+      - set minus
+      - R e
+      - i int
+      - lef tarrow
+      - V e
+      - Ve rt
+      - at op
+      - su p
+      - big cup
+      - w p
+      - di m
+      - se c
+      - sup set
+      - L o
+      - lo r
+      - pm od
+      - m od
+      - big oplus
+      - i l
+      - b mod
+      - co th
+      - L e
+      - ft rightarrow
+      - Le ftrightarrow
+      - ng leftrightarrow
+      - s ma
+      - u psilon
+      - \ ,
+      - c sc
+      - e ph
+      - al eph
+      - big wedge
+      - arc sin
+      - sma ll
+      - o dot
+      - over set
+      - r brack
+      - mi t
+      - l brace
+      - l i
+      - ar p
+      - ar ge
+      - 'Ġ\ #'
+      - b re
+      - text sf
+      - Lo ngrightarrow
+      - bre ve
+      - e m
+      - y set
+      - var pi
+      - pt yset
+      - em ptyset
+      - f f
+      - i ff
+      - n t
+      - e r
+      - la p
+      - ln ot
+      - da sh
+      - unde r
+      - sla nt
+      - ar g
+      - under set
+      - B o
+      - Bo x
+      - Ġ "
+      - s pa
+      - spa ce
+      - de g
+      - i iint
+      - o o
+      - ot not
+      - fo otnot
+      - arp oo
+      - footnot e
+      - r lap
+      - e s
+      - i mp
+      - s b
+      - t e
+      - big triangle
+      - li es
+      - imp lies
+      - \ ;
+      - k er
+      - footnote size
+      - th arpoo
+      - u p
+      - a cu
+      - acu te
+      - lo ngleftrightarrow
+      - e il
+      - l ce
+      - rc eil
+      - lce il
+      - v phantom
+      - e n
+      - th in
+      - a ck
+      - b ack
+      - t t
+      - back slash
+      - x rightarrow
+      - v dash
+      - to p
+      - righ tharpoo
+      - var sigma
+      - Lo ngleftrightarrow
+      - math op
+      - l arge
+      - big cap
+      - leq slant
+      - Ġ `
+      - over brace
+      - nu p
+      - rightharpoo nup
+      - big otimes
+      - triangle q
+      - L arge
+      - r u
+      - nu ll
+      - bigtriangle up
+      - var no
+      - thin g
+      - varno thing
+      - dot eq
+      - Ġ\ _
+      - over leftarrow
+      - h f
+      - big star
+      - en space
+      - \ !
+      - st ru
+      - stru t
+      - om inus
+      - d iv
+      - o nd
+      - am ond
+      - d dagger
+      - Ġc m
+      - n i
+      - s k
+      - di amond
+      - r Vert
+      - pr ot
+      - prot ect
+      - i p
+      - var Delta
+      - not in
+      - sk ip
+      - l Vert
+      - Ġ\ /
+      - dots c
+      - i ll
+      - u le
+      - '\ :'
+      - hf ill
+      - k rightarrow
+      - o krightarrow
+      - ho okrightarrow
+      - sh arp
+      - V dash
+      - big vee
+      - subset neq
+      - supset eq
+      - Ġ ?
+      - ng mapsto
+      - lo ngmapsto
+      - cdot p
+      - geq slant
+      - bigtriangle down
+      - dots b
+      - li m
+      - f l
+      - triangle left
+      - fl at
+      - s l
+      - bo x
+      - Ġ-- -
+      - sq cup
+      - j lim
+      - l s
+      - m o
+      - de ls
+      - re f
+      - mo dels
+      - ta g
+      - P r
+      - ma l
+      - o u
+      - l lap
+      - thin space
+      - en skip
+      - V ec
+      - e box
+      - k ebox
+      - n or
+      - r d
+      - s qu
+      - v line
+      - ¿ ½
+      - ï ¿½
+      - Ġ ï¿½
+      - ma kebox
+      - su rd
+      - nor mal
+      - ar e
+      - squ are
+      - p ou
+      - math rel
+      - var Omega
+      - nd s
+      - small setminus
+      - pou nds
+      - n s
+      - s s
+      - s mi
+      - math or
+      - right lef
+      - text up
+      - tharpoo ns
+      - smi le
+      - mathor d
+      - rightlef tharpoons
+      - c c
+      - Ġ\ -
+      - su cc
+      - f tarrow
+      - r times
+      - de t
+      - pr ec
+      - text tt
+      - o slash
+      - Ġ\ &
+      - arrow vert
+      - l g
+      - Ġm m
+      - int er
+      - ngle ftarrow
+      - hf il
+      - inter cal
+      - f row
+      - Ġ\ *
+      - frow n
+      - m pe
+      - Ġp t
+      - var pro
+      - se arrow
+      - bu mpe
+      - varpro jlim
+      - bumpe q
+      - D own
+      - S S
+      - c d
+      - e re
+      - g cd
+      - o he
+      - t w
+      - le me
+      - th ere
+      - in jlim
+      - ti t
+      - ad rightarrow
+      - var injlim
+      - co mp
+      - tex tit
+      - fo re
+      - over leftrightarrow
+      - Down arrow
+      - ohe adrightarrow
+      - tw oheadrightarrow
+      - leme nt
+      - there fore
+      - comp lement
+      - c a
+      - th i
+      - lo ngleftarrow
+      - big m
+      - triangle right
+      - ne arrow
+      - '\ #'
+      - n ce
+      - ra l
+      - ca nce
+      - thi ck
+      - cance l
+      - U parrow
+      - n at
+      - u ral
+      - math strut
+      - su it
+      - big circ
+      - small skip
+      - diamond suit
+      - normal size
+      - nat ural
+      - g t
+      - le ss
+      - math tt
+      - big sqcup
+      - thick sim
+      - less sim
+      - b ow
+      - l lde
+      - ti e
+      - nu llde
+      - mit er
+      - li miter
+      - ker n
+      - bow tie
+      - nullde limiter
+      - nulldelimiter space
+      - D a
+      - h phantom
+      - r o
+      - v Da
+      - bar wedge
+      - be th
+      - eq no
+      - vDa sh
+      - A R
+      - D i
+      - G E
+      - L AR
+      - d skip
+      - t s
+      - Ġ @
+      - me dskip
+      - nd own
+      - ge ts
+      - co prod
+      - dots m
+      - sma sh
+      - rightharpoo ndown
+      - Di amond
+      - LAR GE
+      - n rightarrow
+      - n leftrightarrow
+      - r sim
+      - r ne
+      - w arrow
+      - math c
+      - co rne
+      - text normal
+      - prec eq
+      - gt rsim
+      - ro up
+      - corne r
+      - Ġ\ [
+      - Ġ\ ]
+      - math ope
+      - left eq
+      - lo se
+      - var kappa
+      - Big m
+      - Bigg m
+      - mathc lose
+      - mathope n
+      - lefteq n
+      - B ar
+      - T i
+      - l r
+      - s warrow
+      - u ge
+      - v ru
+      - x leftarrow
+      - math normal
+      - right rightarrow
+      - right leftarrow
+      - sq subseteq
+      - succ eq
+      - Ti lde
+      - lr corner
+      - vru le
+      - rightrightarrow s
+      - rightleftarrow s
+      - A A
+      - H at
+      - a k
+      - b le
+      - d ou
+      - h ss
+      - m in
+      - n right
+      - n leftarrow
+      - u ph
+      - w bre
+      - al lo
+      - si de
+      - sq cap
+      - ho m
+      - big odot
+      - arpoo nright
+      - ble barwedge
+      - dou blebarwedge
+      - uph arpoonright
+      - wbre ak
+      - allo wbreak
+      - side set
+      - '- -'
+      - H uge
+      - a mal
+      - d o
+      - f box
+      - g roup
+      - h skip
+      - l se
+      - p prox
+      - r k
+      - r group
+      - ra pprox
+      - Ġi n
+      - array co
+      - su re
+      - var lim
+      - pm b
+      - ci te
+      - sub stack
+      - leftrightarrow s
+      - supset neq
+      - Lo ngleftarrow
+      - up downarrow
+      - en sure
+      - lg roup
+      - gt rapprox
+      - amal g
+      - lse p
+      - arrayco lsep
+      - ensure math
+      - a sym
+      - c h
+      - d ig
+      - d dag
+      - e w
+      - g ra
+      - g ime
+      - j o
+      - l times
+      - n leq
+      - t ch
+      - fra me
+      - ma x
+      - th de
+      - in rel
+      - ve r
+      - wi thde
+      - oint op
+      - no tag
+      - small int
+      - sk ew
+      - lim s
+      - asym p
+      - dig amma
+      - gra ve
+      - gime l
+      - jo inrel
+      - frame box
+      - withde lims
+      - A r
+      - R rightarrow
+      - a e
+      - a g
+      - f ill
+      - h space
+      - h uge
+      - l q
+      - n warrow
+      - w line
+      - Ġ1 4
+      - ma rk
+      - le d
+      - in f
+      - in de
+      - Ġe x
+      - pi tch
+      - dot si
+      - int op
+      - row vert
+      - ll corner
+      - bla ck
+      - leq q
+      - bigg m
+      - approx eq
+      - di ag
+      - text sc
+      - text sl
+      - circ led
+      - fo rk
+      - cu r
+      - ne wline
+      - neg thick
+      - atop withdelims
+      - Le ftarrow
+      - footnote mark
+      - up lus
+      - subsetneq q
+      - -- -
+      - varlim sup
+      - varlim inf
+      - ver b
+      - Ar rowvert
+      - pitch fork
+      - black square
+      - diag up
+      - negthick space
+      - 2 3
+      - 2 5
+      - \ -
+      - \ /
+      - a pe
+      - c kap
+      - d ddot
+      - e rline
+      - e ver
+      - i j
+      - i ce
+      - l y
+      - m d
+      - n da
+      - n nu
+      - n mid
+      - n Rightarrow
+      - n Vdash
+      - o f
+      - o ff
+      - s ho
+      - s pe
+      - w r
+      - y math
+      - 'Ġ #'
+      - Ġ\ '
+      - Ġ\ ^
+      - Ġ1 0
+      - Ġ1 5
+      - ma nnu
+      - ig arrow
+      - ft er
+      - me ral
+      - left rightharpoo
+      - right squ
+      - de f
+      - array st
+      - rt mid
+      - int erline
+      - ve arrow
+      - ng eq
+      - ho ice
+      - la x
+      - var Gamma
+      - var propto
+      - var triangle
+      - var Upsilon
+      - big uplus
+      - ex pa
+      - Ġ< $
+      - mathb in
+      - per ca
+      - text circled
+      - text md
+      - sc sh
+      - ci al
+      - re tch
+      - re lax
+      - over withdelims
+      - no inde
+      - own s
+      - vee bar
+      - under bar
+      - under rightarrow
+      - up perca
+      - back simeq
+      - triangleleft eq
+      - box times
+      - box ed
+      - prec cur
+      - thi ckap
+      - ro ot
+      - ro mannu
+      - mathc hoice
+      - inde x
+      - circled circ
+      - cur vearrow
+      - ever ymath
+      - ly eq
+      - nda fter
+      - off interline
+      - sho rtmid
+      - spe cial
+      - leftrightharpoo ns
+      - rightsqu igarrow
+      - arrayst retch
+      - expa ndafter
+      - scsh ape
+      - noinde nt
+      - upperca se
+      - preccur lyeq
+      - thickap prox
+      - romannu meral
+      - curvearrow right
+      - offinterline skip
+      unk_token: null
+      vocab:
+        '!': 3
+        '"': 4
+        '#': 5
+        $: 6
+        '&': 7
+        '''': 8
+        (: 9
+        ): 10
+        '*': 11
+        +: 12
+        ',': 13
+        '-': 14
+        --: 974
+        '---': 1071
+        .: 15
+        /: 16
+        '0': 17
+        '1': 18
+        '2': 19
+        '23': 1080
+        '25': 1081
+        '3': 20
+        '4': 21
+        '5': 22
+        '6': 23
+        '7': 24
+        '8': 25
+        '9': 26
+        ':': 27
+        ;: 28
+        <: 29
+        '=': 30
+        '>': 31
+        '?': 32
+        '@': 33
+        A: 34
+        AA: 951
+        AR: 895
+        Ar: 1033
+        Arrowvert: 1075
+        B: 35
+        Bar: 934
+        Big: 338
+        Bigg: 436
+        Biggl: 542
+        Biggm: 930
+        Biggr: 551
+        Bigl: 451
+        Bigm: 929
+        Bigr: 449
+        Bo: 638
+        Box: 639
+        C: 36
+        D: 37
+        Da: 887
+        De: 274
+        Delta: 275
+        Di: 896
+        Diamond: 909
+        Down: 826
+        Downarrow: 843
+        E: 38
+        F: 39
+        G: 40
+        GE: 897
+        Gamma: 276
+        H: 41
+        Hat: 952
+        Huge: 975
+        I: 42
+        Im: 566
+        J: 43
+        K: 44
+        L: 45
+        LAR: 898
+        LARGE: 910
+        Lambda: 310
+        Large: 693
+        Le: 596
+        Leftarrow: 1067
+        Leftrightarrow: 598
+        Lo: 588
+        Longleftarrow: 995
+        Longleftrightarrow: 682
+        Longrightarrow: 620
+        M: 46
+        N: 47
+        O: 48
+        Omega: 333
+        P: 49
+        Phi: 289
+        Pi: 379
+        Pr: 762
+        Psi: 347
+        Q: 50
+        R: 51
+        Re: 576
+        Righ: 508
+        Rightarrow: 509
+        Rrightarrow: 1034
+        S: 52
+        SS: 827
+        Sigma: 362
+        T: 53
+        Th: 406
+        Theta: 407
+        Ti: 935
+        Tilde: 946
+        U: 54
+        Uparrow: 861
+        Upsilon: 561
+        V: 55
+        Vdash: 736
+        Ve: 579
+        Vec: 768
+        Vert: 580
+        W: 56
+        X: 57
+        Xi: 498
+        Y: 58
+        Z: 59
+        '[': 60
+        '[BOS]': 1
+        '[EOS]': 2
+        '[PAD]': 0
+        \: 61
+        \!: 706
+        \#: 855
+        \,: 602
+        \-: 1082
+        \/: 1083
+        '\:': 730
+        \;: 658
+        \{: 342
+        \|: 479
+        \}: 375
+        ']': 62
+        ^: 63
+        _: 64
+        '`': 65
+        a: 66
+        ack: 673
+        acu: 663
+        acute: 664
+        ad: 243
+        adrightarrow: 837
+        ae: 1035
+        ag: 1036
+        ak: 953
+        al: 124
+        aleph: 605
+        allo: 962
+        allowbreak: 972
+        alpha: 166
+        am: 143
+        amal: 976
+        amalg: 1000
+        ambda: 186
+        amma: 184
+        amond: 712
+        angle: 485
+        ap: 290
+        ape: 1084
+        approx: 378
+        approxeq: 1057
+        ar: 123
+        arc: 493
+        arcsin: 607
+        arctan: 514
+        are: 781
+        arg: 636
+        arge: 616
+        arp: 615
+        arpoo: 648
+        arpoonright: 967
+        array: 194
+        arrayco: 987
+        arraycolsep: 1002
+        arrayst: 1116
+        arraystretch: 1165
+        arrow: 524
+        arrowvert: 809
+        ast: 415
+        asym: 1004
+        asymp: 1026
+        at: 241
+        atop: 581
+        atopwithdelims: 1066
+        b: 67
+        back: 674
+        backsimeq: 1145
+        backslash: 676
+        bar: 199
+        barwedge: 891
+        bda: 185
+        be: 260
+        begin: 265
+        beta: 213
+        beth: 892
+        bf: 189
+        big: 317
+        bigcap: 685
+        bigcirc: 866
+        bigcup: 583
+        bigg: 368
+        biggl: 448
+        biggm: 1056
+        biggr: 444
+        bigl: 471
+        bigm: 852
+        bigodot: 966
+        bigoplus: 592
+        bigotimes: 691
+        bigr: 472
+        bigsqcup: 874
+        bigstar: 704
+        bigtriangle: 655
+        bigtriangledown: 745
+        bigtriangleup: 696
+        biguplus: 1127
+        bigvee: 737
+        bigwedge: 606
+        bin: 482
+        binom: 483
+        bj: 465
+        bject: 466
+        bla: 356
+        black: 1054
+        blacksquare: 1077
+        ble: 954
+        blebarwedge: 968
+        bmod: 594
+        bo: 349
+        bol: 350
+        bold: 374
+        boldmath: 458
+        boldsymbol: 401
+        bot: 500
+        bow: 877
+        bowtie: 884
+        box: 752
+        boxed: 1148
+        boxtimes: 1147
+        bra: 450
+        brace: 491
+        brack: 522
+        bre: 618
+        breve: 621
+        bu: 552
+        bullet: 558
+        bumpe: 823
+        bumpeq: 825
+        c: 68
+        ca: 849
+        cal: 198
+        cance: 858
+        cancel: 860
+        cap: 507
+        cc: 799
+        cd: 828
+        cdot: 239
+        cdotp: 743
+        cdots: 344
+        ce: 437
+        cfrac: 518
+        ch: 1005
+        che: 537
+        check: 538
+        chi: 318
+        ci: 420
+        cial: 1135
+        circ: 421
+        circled: 1061
+        circledcirc: 1155
+        cite: 991
+        ck: 402
+        ckap: 1085
+        co: 292
+        colon: 559
+        comp: 839
+        complement: 848
+        cong: 501
+        coprod: 905
+        corne: 917
+        corner: 922
+        cos: 314
+        cosh: 435
+        cot: 499
+        coth: 595
+        csc: 603
+        cu: 481
+        cup: 490
+        cur: 1063
+        curvearrow: 1156
+        curvearrowright: 1173
+        d: 69
+        da: 167
+        dag: 340
+        dagger: 353
+        dash: 633
+        ddag: 1007
+        ddagger: 713
+        dddot: 1086
+        ddot: 480
+        ddots: 554
+        de: 158
+        def: 1115
+        deg: 643
+        dels: 758
+        delta: 216
+        det: 804
+        di: 384
+        diag: 1058
+        diagup: 1078
+        diamond: 717
+        diamondsuit: 868
+        dig: 1006
+        digamma: 1027
+        dim: 585
+        displaystyle: 391
+        div: 710
+        do: 977
+        dot: 178
+        doteq: 700
+        dots: 313
+        dotsb: 746
+        dotsc: 727
+        dotsi: 1050
+        dotsm: 906
+        dou: 955
+        doublebarwedge: 969
+        down: 532
+        downarrow: 541
+        dskip: 899
+        e: 70
+        ebox: 769
+        ec: 457
+        ect: 462
+        ed: 394
+        eil: 666
+        ell: 355
+        em: 622
+        emptyset: 626
+        en: 671
+        end: 263
+        enskip: 767
+        enspace: 705
+        ensure: 997
+        ensuremath: 1003
+        eph: 604
+        epsilon: 240
+        eq: 410
+        eqno: 893
+        equ: 329
+        equiv: 330
+        er: 630
+        ere: 829
+        erline: 1087
+        es: 651
+        eta: 144
+        ever: 1088
+        everymath: 1157
+        ew: 1008
+        ex: 323
+        exi: 547
+        exists: 550
+        exp: 358
+        expa: 1128
+        expandafter: 1166
+        f: 71
+        fbox: 978
+        ff: 627
+        fill: 1037
+        fl: 748
+        flat: 750
+        flo: 494
+        floor: 495
+        fo: 452
+        footnot: 647
+        footnote: 649
+        footnotemark: 1068
+        footnotesize: 660
+        forall: 460
+        fore: 841
+        fork: 1062
+        fra: 116
+        frac: 117
+        frak: 441
+        frame: 1015
+        framebox: 1031
+        frow: 816
+        frown: 818
+        ft: 129
+        ftarrow: 802
+        fter: 1111
+        ftrightarrow: 597
+        fty: 278
+        g: 72
+        ga: 224
+        gamma: 221
+        gcd: 830
+        ge: 288
+        geq: 408
+        geqslant: 744
+        ger: 352
+        gets: 904
+        gg: 543
+        gime: 1010
+        gimel: 1029
+        gin: 264
+        gra: 1009
+        grave: 1028
+        group: 979
+        gt: 871
+        gtrapprox: 999
+        gtrsim: 920
+        h: 73
+        hat: 242
+        hbar: 372
+        he: 533
+        hf: 703
+        hfil: 814
+        hfill: 731
+        hi: 248
+        hline: 548
+        ho: 246
+        hoice: 1121
+        hom: 965
+        hookrightarrow: 734
+        hphantom: 888
+        hskip: 980
+        hspace: 1038
+        hss: 956
+        huge: 1039
+        i: 74
+        ice: 1090
+        iff: 628
+        ig: 121
+        igarrow: 1110
+        igh: 130
+        igma: 201
+        iiint: 644
+        iint: 577
+        ij: 1089
+        il: 593
+        ill: 728
+        imath: 530
+        ime: 175
+        imp: 652
+        implies: 657
+        in: 137
+        inde: 1047
+        index: 1154
+        inf: 1046
+        infty: 279
+        injlim: 835
+        inrel: 1018
+        int: 205
+        inter: 812
+        intercal: 815
+        interline: 1118
+        intop: 1051
+        inus: 560
+        io: 555
+        iota: 556
+        ip: 721
+        it: 502
+        iv: 328
+        j: 75
+        jlim: 755
+        jmath: 570
+        jo: 1011
+        joinrel: 1030
+        k: 76
+        kap: 336
+        kappa: 337
+        kebox: 770
+        ker: 659
+        kern: 883
+        krightarrow: 732
+        l: 77
+        lVert: 725
+        la: 251
+        lambda: 204
+        land: 534
+        langle: 297
+        lap: 631
+        large: 684
+        lax: 1122
+        laystyle: 389
+        lbrace: 613
+        lbrack: 563
+        lce: 667
+        lceil: 669
+        lde: 253
+        ldots: 354
+        le: 125
+        led: 1045
+        lef: 571
+        left: 140
+        leftarrow: 578
+        lefteq: 926
+        lefteqn: 933
+        leftrightarrow: 486
+        leftrightarrows: 993
+        leftrightharpoo: 1113
+        leftrightharpoons: 1163
+        leme: 833
+        lement: 846
+        leq: 366
+        leqq: 1055
+        leqslant: 686
+        less: 872
+        lesssim: 876
+        lfloor: 562
+        lg: 810
+        lgroup: 998
+        li: 614
+        lies: 656
+        lim: 747
+        limiter: 882
+        lims: 1025
+        lin: 305
+        line: 306
+        ll: 334
+        llap: 765
+        llcorner: 1053
+        llde: 878
+        lle: 478
+        llet: 557
+        ln: 332
+        lnot: 632
+        lo: 212
+        log: 380
+        lon: 233
+        longleftarrow: 851
+        longleftrightarrow: 665
+        longmapsto: 742
+        longrightarrow: 470
+        lor: 589
+        lose: 927
+        lq: 1040
+        lr: 936
+        lrcorner: 947
+        ls: 756
+        lse: 981
+        lsep: 1001
+        lta: 182
+        ltimes: 1012
+        lus: 445
+        ly: 1091
+        lyeq: 1158
+        m: 78
+        ma: 119
+        makebox: 778
+        mal: 763
+        mannu: 1109
+        maps: 475
+        mapsto: 476
+        mark: 1044
+        math: 133
+        mathb: 369
+        mathbb: 370
+        mathbf: 230
+        mathbin: 1130
+        mathc: 916
+        mathcal: 346
+        mathchoice: 1153
+        mathclose: 931
+        mathfrak: 442
+        mathit: 567
+        mathnormal: 941
+        mathop: 683
+        mathope: 925
+        mathopen: 932
+        mathor: 792
+        mathord: 797
+        mathrel: 784
+        mathrm: 159
+        mathsf: 489
+        mathstrut: 864
+        mathtt: 873
+        max: 1016
+        mbe: 503
+        md: 1092
+        me: 131
+        medskip: 902
+        mega: 225
+        meq: 392
+        meral: 1112
+        mes: 293
+        mi: 376
+        mid: 381
+        min: 957
+        minus: 574
+        mit: 612
+        miter: 881
+        mo: 757
+        mod: 591
+        models: 760
+        mp: 443
+        mpe: 819
+        mu: 147
+        n: 79
+        nRightarrow: 1096
+        nVdash: 1097
+        na: 268
+        nabla: 357
+        nat: 862
+        natural: 870
+        nce: 856
+        nd: 261
+        nda: 1093
+        ndafter: 1159
+        nde: 411
+        ndown: 903
+        nds: 786
+        ne: 513
+        nearrow: 854
+        neg: 565
+        negthick: 1065
+        negthickspace: 1079
+        neq: 428
+        newline: 1064
+        ng: 208
+        ngeq: 1120
+        ngle: 214
+        ngleftarrow: 813
+        ngleftrightarrow: 599
+        ngmapsto: 741
+        ngrightarrow: 456
+        ni: 715
+        nleftarrow: 959
+        nleftrightarrow: 912
+        nleq: 1013
+        nmid: 1095
+        nnu: 1094
+        'no': 492
+        noinde: 1139
+        noindent: 1168
+        nonumbe: 505
+        nonumber: 506
+        nor: 771
+        normal: 780
+        normalsize: 869
+        not: 440
+        notag: 1022
+        notin: 723
+        nright: 958
+        nrightarrow: 911
+        ns: 789
+        nt: 629
+        nto: 544
+        nu: 191
+        'null': 695
+        nullde: 880
+        nulldelimiter: 885
+        nulldelimiterspace: 886
+        numbe: 504
+        nup: 689
+        nwarrow: 1041
+        o: 80
+        object: 520
+        od: 531
+        odot: 609
+        of: 1098
+        'off': 1099
+        offinterline: 1160
+        offinterlineskip: 1174
+        ohe: 831
+        oheadrightarrow: 844
+        oint: 473
+        ointop: 1021
+        okrightarrow: 733
+        om: 477
+        omega: 262
+        ominus: 709
+        ond: 711
+        oo: 645
+        op: 433
+        ope: 298
+        operato: 301
+        operatorname: 303
+        oplus: 446
+        or: 488
+        oslash: 807
+        ot: 170
+        otimes: 373
+        otnot: 646
+        ou: 764
+        ove: 319
+        over: 487
+        overbrace: 688
+        overleftarrow: 702
+        overleftrightarrow: 842
+        overline: 321
+        overrightarrow: 540
+        overset: 610
+        overwithdelims: 1138
+        ow: 283
+        own: 525
+        owns: 1140
+        p: 81
+        pa: 324
+        par: 172
+        paralle: 516
+        parallel: 517
+        parrow: 463
+        partial: 174
+        pe: 277
+        per: 386
+        perca: 1131
+        perp: 387
+        ph: 138
+        pha: 164
+        phanto: 545
+        phantom: 546
+        phi: 187
+        pi: 171
+        pitch: 1049
+        pitchfork: 1076
+        pm: 308
+        pmb: 990
+        pmod: 590
+        pou: 783
+        pounds: 788
+        pprox: 982
+        pr: 162
+        prec: 805
+        preccur: 1149
+        preccurlyeq: 1170
+        preceq: 919
+        prime: 176
+        pro: 326
+        prod: 385
+        propto: 468
+        prot: 719
+        protect: 720
+        prox: 377
+        ps: 474
+        psi: 177
+        psilon: 236
+        pt: 418
+        pto: 467
+        ptyset: 625
+        q: 82
+        qquad: 327
+        qu: 209
+        quad: 244
+        r: 83
+        rVert: 718
+        ra: 111
+        ral: 857
+        rall: 459
+        ralle: 515
+        rangle: 272
+        rapprox: 985
+        rato: 300
+        ray: 193
+        rbrace: 528
+        rbrack: 611
+        rc: 416
+        rceil: 668
+        rd: 772
+        re: 422
+        ref: 759
+        rel: 427
+        relax: 1137
+        retch: 1136
+        rfloor: 553
+        rgroup: 984
+        rho: 247
+        ri: 405
+        righ: 132
+        right: 142
+        rightarrow: 316
+        rightharpoo: 680
+        rightharpoondown: 908
+        rightharpoonup: 690
+        rightlef: 793
+        rightleftarrow: 943
+        rightleftarrows: 950
+        rightleftharpoons: 798
+        rightrightarrow: 942
+        rightrightarrows: 949
+        rightsqu: 1114
+        rightsquigarrow: 1164
+        ript: 423
+        rk: 983
+        rlap: 650
+        rline: 309
+        rm: 157
+        rna: 299
+        rname: 302
+        rne: 914
+        ro: 889
+        romannu: 1152
+        romannumeral: 1172
+        root: 1151
+        roup: 921
+        row: 286
+        rowvert: 1052
+        rsim: 913
+        rt: 203
+        rtimes: 803
+        rtmid: 1117
+        ru: 694
+        s: 84
+        sb: 653
+        sc: 414
+        script: 424
+        scriptscriptstyle: 535
+        scriptsize: 536
+        scriptstyle: 461
+        scsh: 1134
+        scshape: 1167
+        se: 409
+        searrow: 822
+        sec: 586
+        set: 417
+        setminus: 575
+        sf: 453
+        sh: 523
+        sharp: 735
+        sho: 1100
+        shortmid: 1161
+        si: 156
+        side: 963
+        sideset: 973
+        sigma: 223
+        sim: 365
+        simeq: 393
+        sin: 295
+        sinh: 432
+        size: 511
+        sk: 716
+        skew: 1024
+        skip: 724
+        sl: 751
+        sla: 539
+        slant: 635
+        slash: 572
+        sma: 600
+        small: 608
+        smallint: 1023
+        smallsetminus: 787
+        smallskip: 867
+        smash: 907
+        smi: 791
+        smile: 796
+        sp: 382
+        spa: 641
+        space: 642
+        spe: 1101
+        special: 1162
+        splaystyle: 390
+        sq: 217
+        sqcap: 964
+        sqcup: 754
+        sqrt: 218
+        sqsubseteq: 944
+        squ: 773
+        square: 782
+        ss: 790
+        st: 325
+        sta: 429
+        stack: 430
+        stackrel: 431
+        star: 439
+        stru: 707
+        strut: 708
+        sts: 549
+        style: 360
+        su: 231
+        sub: 454
+        subset: 455
+        subseteq: 527
+        subsetneq: 738
+        subsetneqq: 1070
+        substack: 992
+        succ: 801
+        succeq: 945
+        suit: 865
+        sum: 235
+        sup: 582
+        supset: 587
+        supseteq: 739
+        supsetneq: 994
+        surd: 779
+        sure: 988
+        swarrow: 937
+        sy: 398
+        sym: 399
+        symbol: 400
+        t: 85
+        ta: 120
+        tag: 761
+        tan: 413
+        tar: 287
+        tarrow: 304
+        tau: 266
+        tch: 1014
+        te: 654
+        tex: 403
+        text: 404
+        textbf: 529
+        textcircled: 1132
+        textit: 840
+        textmd: 1133
+        textnormal: 918
+        textrm: 512
+        textsc: 1059
+        textsf: 619
+        textsl: 1060
+        textstyle: 438
+        texttt: 806
+        textup: 794
+        th: 127
+        tharpoo: 661
+        tharpoons: 795
+        thde: 1017
+        there: 834
+        therefore: 847
+        theta: 219
+        thi: 850
+        thick: 859
+        thickap: 1150
+        thickapprox: 1171
+        thicksim: 875
+        thin: 672
+        thing: 698
+        thinspace: 766
+        ti: 145
+        tial: 173
+        tie: 879
+        tilde: 254
+        times: 294
+        tin: 568
+        tiny: 569
+        tit: 836
+        to: 249
+        top: 679
+        tri: 496
+        triangle: 497
+        triangleleft: 749
+        trianglelefteq: 1146
+        triangleq: 692
+        triangleright: 853
+        ts: 900
+        tt: 675
+        tw: 832
+        twoheadrightarrow: 845
+        u: 86
+        uge: 938
+        ule: 729
+        unde: 412
+        under: 634
+        underbar: 1142
+        underbrace: 564
+        underline: 425
+        underrightarrow: 1143
+        underset: 637
+        up: 662
+        uparrow: 464
+        updownarrow: 996
+        uph: 960
+        upharpoonright: 970
+        uplus: 1069
+        upperca: 1144
+        uppercase: 1169
+        upsilon: 601
+        ural: 863
+        us: 434
+        v: 87
+        vDa: 890
+        vDash: 894
+        var: 257
+        varDelta: 722
+        varGamma: 1123
+        varOmega: 785
+        varUpsilon: 1126
+        varepsilon: 343
+        varinjlim: 838
+        varkappa: 928
+        varlim: 989
+        varliminf: 1073
+        varlimsup: 1072
+        varno: 697
+        varnothing: 699
+        varphi: 307
+        varpi: 624
+        varpro: 821
+        varprojlim: 824
+        varpropto: 1124
+        varrho: 526
+        varsigma: 681
+        vartheta: 447
+        vartriangle: 1125
+        vdash: 678
+        vdots: 484
+        ve: 207
+        vearrow: 1119
+        vec: 269
+        vee: 573
+        veebar: 1141
+        ver: 1019
+        verb: 1074
+        vert: 383
+        vline: 774
+        vphantom: 670
+        vru: 939
+        vrule: 948
+        w: 88
+        warrow: 915
+        wbre: 961
+        wbreak: 971
+        wed: 395
+        wedge: 396
+        wi: 363
+        wide: 364
+        widehat: 419
+        widetilde: 397
+        withde: 1020
+        withdelims: 1032
+        wline: 1042
+        wp: 584
+        wr: 1102
+        x: 89
+        xi: 281
+        xleftarrow: 940
+        xrightarrow: 677
+        y: 90
+        yle: 359
+        ymath: 1103
+        yset: 623
+        ystyle: 388
+        z: 91
+        ze: 510
+        zeta: 361
+        '{': 92
+        '|': 93
+        '}': 94
+        '~': 95
+        ½: 96
+        ¿: 97
+        ¿½: 775
+        ï: 98
+        ï¿½: 776
+        Ċ: 99
+        č: 100
+        čĊ: 114
+        Ġ: 101
+        Ġ!: 367
+        Ġ": 640
+        Ġ#: 1104
+        Ġ&: 153
+        Ġ': 469
+        Ġ(: 109
+        Ġ): 108
+        Ġ*: 273
+        Ġ+: 118
+        Ġ,: 115
+        Ġ-: 113
+        Ġ--: 519
+        Ġ---: 753
+        Ġ.: 135
+        Ġ/: 211
+        Ġ0: 122
+        Ġ1: 110
+        Ġ10: 1107
+        Ġ14: 1043
+        Ġ15: 1108
+        Ġ2: 107
+        Ġ3: 148
+        Ġ4: 160
+        Ġ5: 256
+        Ġ6: 267
+        Ġ7: 322
+        Ġ8: 282
+        Ġ9: 335
+        'Ġ:': 345
+        Ġ;: 312
+        Ġ<: 351
+        Ġ<$: 1129
+        Ġ=: 112
+        Ġ>: 348
+        Ġ?: 740
+        Ġ@: 901
+        ĠA: 168
+        ĠB: 206
+        ĠC: 238
+        ĠD: 226
+        ĠE: 250
+        ĠF: 227
+        ĠG: 259
+        ĠH: 252
+        ĠI: 270
+        ĠJ: 284
+        ĠK: 280
+        ĠL: 210
+        ĠM: 195
+        ĠN: 200
+        ĠO: 331
+        ĠObject: 521
+        ĠP: 232
+        ĠQ: 255
+        ĠR: 202
+        ĠS: 229
+        ĠT: 196
+        ĠU: 285
+        ĠV: 237
+        ĠW: 291
+        ĠX: 258
+        ĠY: 341
+        ĠZ: 296
+        Ġ[: 228
+        Ġ\: 104
+        Ġ\!: 311
+        Ġ\#: 617
+        Ġ\&: 808
+        Ġ\': 1105
+        Ġ\*: 817
+        Ġ\,: 136
+        Ġ\-: 800
+        Ġ\/: 726
+        'Ġ\:': 371
+        Ġ\;: 169
+        Ġ\[: 923
+        Ġ\\: 220
+        Ġ\]: 924
+        Ġ\^: 1106
+        Ġ\_: 701
+        Ġ\{: 339
+        Ġ\|: 426
+        Ġ\}: 320
+        Ġ]: 222
+        Ġ^: 106
+        Ġ_: 105
+        Ġ`: 687
+        Ġa: 141
+        Ġb: 180
+        Ġc: 154
+        Ġcm: 714
+        Ġd: 139
+        Ġe: 151
+        Ġex: 1048
+        Ġf: 181
+        Ġg: 190
+        Ġh: 245
+        Ġi: 126
+        Ġin: 986
+        Ġj: 179
+        Ġk: 149
+        Ġl: 165
+        Ġm: 146
+        Ġmm: 811
+        Ġn: 134
+        Ġo: 271
+        Ġp: 155
+        Ġpt: 820
+        Ġq: 188
+        Ġr: 152
+        Ġs: 161
+        Ġt: 150
+        Ġu: 215
+        Ġv: 234
+        Ġw: 315
+        Ġx: 128
+        Ġy: 197
+        Ġz: 192
+        Ġ{: 103
+        Ġ|: 183
+        Ġ}: 102
+        Ġ~: 163
+        Ġï¿½: 777
+    normalizer: null
+    padding: null
+    post_processor: null
+    pre_tokenizer:
+      add_prefix_space: false
+      trim_offsets: true
+      type: ByteLevel
+    truncation: null
+    version: '1.0'

@@ -1,0 +1,91 @@
+import React, { useState } from 'react';
+
+const MathQuiz = () => {
+  const [userAnswers, setUserAnswers] = useState({});
+  const [results, setResults] = useState({});
+
+  const problems = [
+    {
+      id: 12,
+      content: "若直线 $y = 2x + 5$ 是曲线 $y = e^x + x + a$ 的切线，则 $a = $",
+      answer: "4",
+      explanation: "设切点为 $(x_0, y_0)$。导函数 $y' = e^x + 1$。由切线斜率知 $e^{x_0} + 1 = 2$，得 $x_0 = 0$。代入曲线方程得 $y_0 = 1 + a$，代入切线方程得 $y_0 = 5$。故 $1 + a = 5$, $a = 4$。"
+    },
+    {
+      id: 13,
+      content: "若一个等比数列前 4 项和为 4，前 8 项和为 68，则该等比数列的公比为 ",
+      answer: "2",
+      explanation: "设前 $n$ 项和为 $S_n$。$S_4 = 4$, $S_8 = 68$。在等比数列中，$S_4$, $S_8-S_4$ 成等比数列，公比为 $q^4$。即 $4, 64$ 成等比，则 $4 \\cdot q^4 = 64 \\Rightarrow q^4 = 16$。由于 $S_4, S_8$ 均为正且增长快，$q=2$ 或 $-2$。校验知 $q=2$ 符合。"
+    },
+    {
+      id: 14,
+      content: "一个箱子里有 5 个相同的球，分别以 1~5 标号，若有放回地取三次，记至少取出一次的球的个数为 $X$，则数学期望 $E(X) = $",
+      answer: "61/25",
+      explanation: "引入指示变量 $X_i$ 表示标号为 $i$ 的球是否被选中。$X = \\sum_{i=1}^5 X_i$。单次不选中的概率为 $4/5$，三次均不选中的概率为 $(4/5)^3 = 64/125$。则 $P(X_i=1) = 1 - 64/125 = 61/125$。由期望线性性质，$E(X) = 5 \\cdot (61/125) = 61/25$。"
+    }
+  ];
+
+  const handleValidation = (id) => {
+    const input = userAnswers[id]?.trim();
+    if (!input) return;
+    const isCorrect = input === problems.find(p => p.id === id).answer;
+    setResults(prev => ({ ...prev, [id]: isCorrect }));
+  };
+
+  const renderContent = (text) => {
+    return text.split('$').map((part, i) => (
+      <span key={i} className={i % 2 === 1 ? "italic font-serif" : ""}>
+        {part}
+      </span>
+    ));
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-12 bg-white text-black leading-relaxed">
+      <h2 className="text-lg font-bold mb-10">三、填空题：本大题共 3 小题，每小题 5 分，共计 15 分。</h2>
+
+      <div className="space-y-10">
+        {problems.map((prob) => (
+          <div key={prob.id}>
+            <div className="flex items-start gap-2">
+              <span className="shrink-0">{prob.id}.</span>
+              <div className="flex-1">
+                {renderContent(prob.content)}
+                <input
+                  type="text"
+                  className="mx-2 w-24 border-b border-black text-center focus:outline-none focus:border-blue-500 transition-colors"
+                  value={userAnswers[prob.id] || ''}
+                  onChange={(e) => setUserAnswers({...userAnswers, [prob.id]: e.target.value})}
+                  onBlur={() => handleValidation(prob.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleValidation(prob.id)}
+                />
+                <span>.</span>
+              </div>
+            </div>
+
+            {results[prob.id] === true && (
+              <div className="mt-4 ml-6 p-4 border border-gray-100 bg-gray-50 text-sm">
+                <p className="font-bold text-green-700 mb-1">正确答案：{prob.answer}</p>
+                <p className="text-gray-600 italic font-serif leading-loose">
+                  解析：{prob.explanation}
+                </p>
+              </div>
+            )}
+            
+            {results[prob.id] === false && (
+              <div className="mt-2 ml-6 text-xs text-red-500 font-bold uppercase tracking-widest">
+                Verification failed
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default App;
+
+function App() {
+  return <MathQuiz />;
+}
