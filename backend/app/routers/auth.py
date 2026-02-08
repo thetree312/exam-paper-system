@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import os
 from typing import Optional, Tuple
+from uuid import uuid4
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -72,31 +73,49 @@ def _build_user_out(user: User) -> UserOut:
     )
 
 
+def _generate_tenant_name(email: str, display_name: Optional[str]) -> str:
+    if display_name:
+        return display_name
+    local_part = email.split("@", 1)[0]
+    return local_part or "用户空间"
+
+
+def _generate_candidate_code(email: str) -> str:
+    local_part = email.split("@", 1)[0].lower()
+    normalized = [ch if ch.isalnum() else "-" for ch in local_part]
+    base = "".join(normalized).strip("-") or "tenant"
+    suffix = uuid4().hex[:8]
+    candidate = f"{base}-{suffix}"
+    return candidate[:64]
+
+
+def _allocate_tenant(db: Session, email: str, display_name: Optional[str]) -> Tenant:
+    for _ in range(5):
+        code = _generate_candidate_code(email)
+        exists = db.query(Tenant.id).filter(Tenant.code == code).first()
+        if exists is None:
+            tenant = Tenant(
+                name=_generate_tenant_name(email, display_name),
+                code=code,
+                status=1,
+            )
+            db.add(tenant)
+            db.flush()
+            return tenant
+    raise HTTPException(status_code=500, detail="租户创建失败，请稍后再试")
+
+
 register_rate_limit = rate_limit("auth-register", limit=5, window_seconds=60)
 login_rate_limit = rate_limit("auth-login", limit=10, window_seconds=60)
 
 
 @router.post("/register", response_model=AuthResponse, dependencies=[Depends(register_rate_limit)])
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    tenant = (
-        db.query(Tenant)
-        .filter(Tenant.code == payload.tenant_code)
-        .one_or_none()
-    )
-    if tenant is None:
-        # 开发阶段：若传入租户不存在，则自动创建
-        name: str = payload.tenant_name or payload.tenant_code
-        tenant = Tenant(name=name, code=payload.tenant_code, status=1)
-        db.add(tenant)
-        db.flush()
-
-    existing = (
-        db.query(User)
-        .filter(User.tenant_id == tenant.id, User.email == payload.email)
-        .one_or_none()
-    )
+    existing = db.query(User).filter(User.email == payload.email).one_or_none()
     if existing is not None:
         raise HTTPException(status_code=400, detail="该邮箱已注册")
+
+    tenant = _allocate_tenant(db, payload.email, payload.display_name)
 
     display_name: str = payload.display_name or payload.email.split("@")[0]
     user = User(
@@ -104,7 +123,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         email=payload.email,
         password_hash=_hash_password(payload.password),
         display_name=display_name,
-        role="admin" if tenant.code == "default" else "member",
+        role="admin",
         status=1,
     )
     db.add(user)
@@ -116,35 +135,18 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse, dependencies=[Depends(login_rate_limit)])
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    print(f"[DEBUG] Login attempt: tenant_code={payload.tenant_code}, email={payload.email}")
+    print(f"[DEBUG] Login attempt: email={payload.email}")
 
-    tenant = (
-        db.query(Tenant)
-        .filter(Tenant.code == payload.tenant_code)
-        .one_or_none()
-    )
-    if tenant is None:
-        print(f"[DEBUG] Tenant not found: {payload.tenant_code}")
-        raise HTTPException(status_code=400, detail="租户不存在")
-
-    print(f"[DEBUG] Tenant found: id={tenant.id}, code={tenant.code}, name={tenant.name}")
-
-    user = (
-        db.query(User)
-        .filter(User.tenant_id == tenant.id, User.email == payload.email)
-        .one_or_none()
-    )
+    user = db.query(User).filter(User.email == payload.email).one_or_none()
     if user is None:
-        print(f"[DEBUG] User not found: email={payload.email}, tenant_id={tenant.id}")
+        print(f"[DEBUG] User not found: email={payload.email}")
         raise HTTPException(status_code=400, detail="邮箱或密码错误")
-
-    print(f"[DEBUG] User found: id={user.id}, email={user.email}, password_hash={user.password_hash[:10]}...")
 
     is_valid, needs_upgrade = _verify_password(payload.password, user.password_hash)
     print(f"[DEBUG] Password validation: is_valid={is_valid}, needs_upgrade={needs_upgrade}")
 
     if not is_valid:
-        print(f"[DEBUG] Password invalid for user {user.id}")
+        print(f"[DEBUG] Password invalid for user {payload.email}")
         raise HTTPException(status_code=400, detail="邮箱或密码错误")
 
     if needs_upgrade:

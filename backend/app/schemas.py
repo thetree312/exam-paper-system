@@ -80,20 +80,12 @@ class UserOut(BaseModel):
 
 PasswordStr = constr(min_length=8, max_length=128)
 LoginPasswordStr = constr(min_length=1, max_length=128)
-TenantCodeStr = constr(
-    pattern=r"^[a-zA-Z0-9_-]+$",
-    min_length=3,
-    max_length=64,
-    strip_whitespace=True,
-)
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: PasswordStr
     display_name: Optional[str] = None
-    tenant_code: TenantCodeStr = Field("default", description="租户编码，用于区分空间")
-    tenant_name: Optional[str] = Field(None, description="若租户不存在时用于创建租户的名称")
 
     @validator("password")
     def validate_password_strength(cls, value: str) -> str:
@@ -107,7 +99,6 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: LoginPasswordStr
-    tenant_code: TenantCodeStr = Field("default", description="租户编码")
 
 
 class AuthResponse(BaseModel):

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { AuthMode } from '../types'
-import { validateEmail, validatePassword, validateTenantCode, validateDisplayName } from '../utils/validation'
+import { validateEmail, validatePassword, validateDisplayName } from '../utils/validation'
 
 interface AuthScreenProps {
   authMode: AuthMode
@@ -9,8 +9,6 @@ interface AuthScreenProps {
   onAuthEmailChange: (value: string) => void
   authPassword: string
   onAuthPasswordChange: (value: string) => void
-  authTenantCode: string
-  onAuthTenantCodeChange: (value: string) => void
   authDisplayName: string
   onAuthDisplayNameChange: (value: string) => void
   authError: string | null
@@ -25,8 +23,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onAuthEmailChange,
   authPassword,
   onAuthPasswordChange,
-  authTenantCode,
-  onAuthTenantCodeChange,
   authDisplayName,
   onAuthDisplayNameChange,
   authError,
@@ -35,14 +31,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 }) => {
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [tenantCodeError, setTenantCodeError] = useState<string | null>(null)
   const [displayNameError, setDisplayNameError] = useState<string | null>(null)
 
   // 清除错误信息当切换模式时
   useEffect(() => {
     setEmailError(null)
     setPasswordError(null)
-    setTenantCodeError(null)
     setDisplayNameError(null)
   }, [authMode])
 
@@ -54,11 +48,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const handlePasswordBlur = () => {
     const result = validatePassword(authPassword)
     setPasswordError(result.valid ? null : result.error || null)
-  }
-
-  const handleTenantCodeBlur = () => {
-    const result = validateTenantCode(authTenantCode)
-    setTenantCodeError(result.valid ? null : result.error || null)
   }
 
   const handleDisplayNameBlur = () => {
@@ -74,15 +63,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     // 提交前验证所有字段
     const emailValidation = validateEmail(authEmail)
     const passwordValidation = validatePassword(authPassword)
-    const tenantCodeValidation = validateTenantCode(authTenantCode)
     const displayNameValidation = authMode === 'register' ? validateDisplayName(authDisplayName) : { valid: true }
 
     setEmailError(emailValidation.valid ? null : emailValidation.error || null)
     setPasswordError(passwordValidation.valid ? null : passwordValidation.error || null)
-    setTenantCodeError(tenantCodeValidation.valid ? null : tenantCodeValidation.error || null)
     setDisplayNameError(displayNameValidation.valid ? null : displayNameValidation.error || null)
 
-    if (!emailValidation.valid || !passwordValidation.valid || !tenantCodeValidation.valid || !displayNameValidation.valid) {
+    if (!emailValidation.valid || !passwordValidation.valid || !displayNameValidation.valid) {
       return
     }
 
@@ -133,21 +120,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               maxLength={254}
             />
             {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">租户编码</label>
-            <input
-              type="text"
-              required
-              className={`w-full h-9 px-3 rounded-lg border ${tenantCodeError ? 'border-red-500' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
-              value={authTenantCode}
-              onChange={(e) => onAuthTenantCodeChange(e.target.value)}
-              onBlur={handleTenantCodeBlur}
-              placeholder="default 或你的租户代号"
-              maxLength={64}
-            />
-            {tenantCodeError && <p className="text-xs text-red-500 mt-1">{tenantCodeError}</p>}
-            {!tenantCodeError && <p className="text-[11px] text-slate-400 mt-1">不存在时注册会自动创建同名租户。</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">密码</label>

@@ -9,7 +9,6 @@
 
 const STORAGE_KEYS = {
   USER: 'exam_user',
-  TENANT_CODE: 'exam_tenant_code',
 } as const
 
 export interface StoredUser {
@@ -17,7 +16,6 @@ export interface StoredUser {
   tenant_id: number
   email: string
   display_name: string
-  tenant_code?: string
 }
 
 /**
@@ -57,43 +55,8 @@ export function clearUser(): void {
 }
 
 /**
- * 保存租户代码到 localStorage（非敏感数据，可持久化）
- */
-export function saveTenantCode(code: string): void {
-  try {
-    localStorage.setItem(STORAGE_KEYS.TENANT_CODE, code)
-  } catch (error) {
-    console.error('[secureStorage] Failed to save tenant code:', error)
-  }
-}
-
-/**
- * 从 localStorage 读取租户代码
- */
-export function loadTenantCode(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.TENANT_CODE) || 'default'
-  } catch (error) {
-    console.error('[secureStorage] Failed to load tenant code:', error)
-    return 'default'
-  }
-}
-
-/**
- * 清除租户代码
- */
-export function clearTenantCode(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.TENANT_CODE)
-  } catch (error) {
-    console.error('[secureStorage] Failed to clear tenant code:', error)
-  }
-}
-
-/**
  * 清除所有存储数据
  */
 export function clearAll(): void {
   clearUser()
-  clearTenantCode()
 }

@@ -5,7 +5,6 @@ export interface UserInfo {
   tenant_id: number
   email: string
   display_name: string
-  tenant_code?: string
 }
 
 export interface PageSelectionSegment {

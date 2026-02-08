@@ -5,9 +5,6 @@ import {
   loadUser as secureLoadUser,
   saveUser as secureSaveUser,
   clearUser as secureClearUser,
-  loadTenantCode,
-  saveTenantCode,
-  clearTenantCode,
 } from '../utils/secureStorage'
 
 interface UseAuthReturn {
@@ -21,8 +18,6 @@ interface UseAuthReturn {
   setAuthPassword: (password: string) => void
   authDisplayName: string
   setAuthDisplayName: (name: string) => void
-  authTenantCode: string
-  setAuthTenantCode: (code: string) => void
   authError: string | null
   setAuthError: (error: string | null) => void
   authLoading: boolean
@@ -39,7 +34,6 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authDisplayName, setAuthDisplayName] = useState('')
-  const [authTenantCode, setAuthTenantCode] = useState(() => loadTenantCode())
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
 
@@ -49,10 +43,6 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
       const stored = secureLoadUser()
       if (stored) {
         setStoreUser(stored)
-        if (stored.tenant_code) {
-          setAuthTenantCode(stored.tenant_code)
-          saveTenantCode(stored.tenant_code)
-        }
         return true
       }
       return false
@@ -71,10 +61,7 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         setStoreUser(parsed)
         secureSaveUser(parsed)
         window.localStorage.removeItem('exam_user')
-        if (parsed.tenant_code) {
-          setAuthTenantCode(parsed.tenant_code)
-          saveTenantCode(parsed.tenant_code)
-        }
+        if ((parsed as UserInfo | null) == null) return
       }
     } catch (e) {
       console.error('migrate legacy user failed', e)
@@ -93,14 +80,12 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
       const payload: Record<string, unknown> = {
         email: authEmail,
         password: authPassword,
-        tenant_code: authTenantCode,
       }
 
       if (mode === 'register') {
         if (authDisplayName.trim()) {
           payload.display_name = authDisplayName.trim()
         }
-        payload.tenant_name = authTenantCode
       }
 
       try {
@@ -115,11 +100,9 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
           throw new Error(text || '请求失败')
         }
         const data = (await resp.json()) as { user: UserInfo }
-        const enrichedUser: UserInfo = { ...data.user, tenant_code: authTenantCode }
-        setStoreUser(enrichedUser)
-        secureSaveUser(enrichedUser)
-        saveTenantCode(authTenantCode)
-        console.log('[auth] success', enrichedUser)
+        setStoreUser(data.user)
+        secureSaveUser(data.user)
+        console.log('[auth] success', data.user)
       } catch (err) {
         console.error('[auth] failed', err)
         setAuthError('登录/注册失败，请检查邮箱和密码')
@@ -127,13 +110,12 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         setAuthLoading(false)
       }
     },
-    [authMode, authEmail, authPassword, authTenantCode, authDisplayName, backendBaseUrl],
+    [authMode, authEmail, authPassword, authDisplayName, backendBaseUrl],
   )
 
   const handleLogout = useCallback(() => {
     setStoreUser(null)
     secureClearUser()
-    clearTenantCode()
     setAuthEmail('')
     setAuthPassword('')
     setAuthDisplayName('')
@@ -150,8 +132,6 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
     setAuthPassword,
     authDisplayName,
     setAuthDisplayName,
-    authTenantCode,
-    setAuthTenantCode,
     authError,
     setAuthError,
     authLoading,

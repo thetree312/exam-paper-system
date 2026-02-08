@@ -57,34 +57,6 @@ export function validatePassword(password: string): { valid: boolean; error?: st
 }
 
 /**
- * 验证租户代码
- */
-export function validateTenantCode(code: string): { valid: boolean; error?: string } {
-  if (!code || code.trim().length === 0) {
-    return { valid: false, error: '租户编码不能为空' }
-  }
-
-  const trimmed = code.trim()
-
-  if (trimmed.length < 2) {
-    return { valid: false, error: '租户编码至少为 2 个字符' }
-  }
-
-  if (trimmed.length > 64) {
-    return { valid: false, error: '租户编码不能超过 64 个字符' }
-  }
-
-  // 只允许字母、数字、下划线和连字符
-  const codeRegex = /^[a-zA-Z0-9_-]+$/
-  
-  if (!codeRegex.test(trimmed)) {
-    return { valid: false, error: '租户编码只能包含字母、数字、下划线和连字符' }
-  }
-
-  return { valid: true }
-}
-
-/**
  * 验证显示名称
  */
 export function validateDisplayName(name: string): { valid: boolean; error?: string } {
