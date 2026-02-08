@@ -57,6 +57,9 @@ yarn-error.log*
 # Database
 *.db
 *.sqlite3
+agent_graph_checkpoint.db
+agent_graph_checkpoint.db-wal
+agent_graph_checkpoint.db-shm
 
 # Logs
 logs/

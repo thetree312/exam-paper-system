@@ -1,3 +1,4 @@
+import atexit
 import json
 import logging
 import os
@@ -5,6 +6,7 @@ import queue
 import re
 import threading
 import time
+from contextlib import AbstractContextManager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Literal, Optional
@@ -51,6 +53,24 @@ split_limit = rate_limit("agent-split", limit=10, window_seconds=60)
 sync_limit = rate_limit("agent-sync", limit=60, window_seconds=60)
 snapshot_limit = rate_limit("agent-snapshot", limit=60, window_seconds=60)
 mindmap_limit = rate_limit("mindmap-generate", limit=5, window_seconds=60)
+
+_postgres_checkpointer_ctx: AbstractContextManager[PostgresSaver] | None = None
+
+
+def _close_postgres_checkpointer_ctx() -> None:
+    global _postgres_checkpointer_ctx
+    ctx = _postgres_checkpointer_ctx
+    if ctx is None:
+        return
+    try:
+        ctx.__exit__(None, None, None)
+    except Exception:  # noqa: BLE001
+        logger.exception("agent.router.checkpointer_postgres_close_failed")
+    finally:
+        _postgres_checkpointer_ctx = None
+
+
+atexit.register(_close_postgres_checkpointer_ctx)
 
 
 class AgentMessage(BaseModel):
@@ -330,6 +350,80 @@ def _log_snapshot_overview(tag: str, snapshot: List) -> None:
     logger.info("%s snapshot_preview=%s total=%s", tag, preview, len(snapshot))
 
 
+def _build_question_index_map(snapshot_questions: List) -> dict:
+    """Construct lookup tables for question ids, sequence indices, and display indices."""
+
+    if not snapshot_questions:
+        return {}
+
+    def _normalize_entry(raw: Any) -> dict:
+        if isinstance(raw, dict):
+            return raw
+        return {
+            "id": getattr(raw, "id", None),
+            "sequence_index": getattr(raw, "sequence_index", None),
+            "page": getattr(raw, "page", None),
+            "legend_images": getattr(raw, "legend_images", None),
+        }
+
+    def _has_vision_asset(raw_legend: Any) -> bool:
+        if isinstance(raw_legend, list):
+            return any(bool(item) for item in raw_legend)
+        if isinstance(raw_legend, str):
+            try:
+                parsed = json.loads(raw_legend)
+                if isinstance(parsed, list):
+                    return any(bool(item) for item in parsed)
+            except Exception:  # noqa: BLE001
+                return False
+        return False
+
+    normalized: list[dict] = [_normalize_entry(item) for item in snapshot_questions]
+    ordered = sorted(
+        normalized,
+        key=lambda item: (
+            item.get("sequence_index") if isinstance(item.get("sequence_index"), int) else float("inf"),
+            item.get("id") or 0,
+        ),
+    )
+
+    index_map: dict = {
+        "display_to_id": {},
+        "id_to_display": {},
+        "sequence_to_id": {},
+        "id_to_sequence": {},
+        "display_to_sequence": {},
+        "sequence_to_display": {},
+        "id_to_meta": {},
+    }
+
+    for display_idx, item in enumerate(ordered, start=1):
+        qid = item.get("id")
+        seq_idx = item.get("sequence_index") if isinstance(item.get("sequence_index"), int) else None
+
+        if isinstance(qid, int):
+            index_map["display_to_id"][display_idx] = qid
+            index_map["id_to_display"][qid] = display_idx
+            index_map["id_to_meta"][qid] = {
+                "question_id": qid,
+                "display_index": display_idx,
+                "sequence_index": seq_idx,
+                "page": item.get("page"),
+                "has_vision_asset": _has_vision_asset(item.get("legend_images")),
+            }
+            if seq_idx is not None:
+                index_map["id_to_sequence"][qid] = seq_idx
+
+        if seq_idx is not None:
+            index_map["sequence_to_id"][seq_idx] = qid
+            index_map["display_to_sequence"][display_idx] = seq_idx
+            index_map["sequence_to_display"][seq_idx] = display_idx
+        else:
+            index_map["display_to_sequence"][display_idx] = None
+
+    return index_map
+
+
 def _is_fresh_conversation(messages: List[AgentMessage]) -> bool:
     """Detect whether the incoming payload represents a brand-new turn."""
 
@@ -354,12 +448,12 @@ _QUESTION_REF_PATTERNS = [
     re.compile(r"题目\s*#\s*(\d+)", re.IGNORECASE),
     re.compile(r"第\s*(\d+)\s*(?:题目|题|道|问)"),
 ]
-QUESTION_RANGE_PATTERN = re.compile(
+_QUESTION_RANGE_PATTERN = re.compile(
     r"第\s*([0-9一二三四五六七八九十百零〇两、，,.-－—~～至到]+)\s*(?:题目|题|道|问)",
     re.IGNORECASE,
 )
-FULLWIDTH_DIGIT_TRANS = str.maketrans({ord("０") + i: str(i) for i in range(10)})
-CHINESE_DIGITS = {
+_FULLWIDTH_DIGIT_TRANS = str.maketrans({ord("０") + i: str(i) for i in range(10)})
+_CHINESE_DIGITS = {
     "零": 0,
     "〇": 0,
     "一": 1,
@@ -373,7 +467,21 @@ CHINESE_DIGITS = {
     "八": 8,
     "九": 9,
 }
-CHINESE_UNITS = {"十": 10, "百": 100, "千": 1000}
+_CHINESE_UNITS = {"十": 10, "百": 100, "千": 1000}
+
+
+def _normalize_postgres_checkpoint_url(url: str) -> str:
+    """Convert SQLAlchemy-style URLs to libpq-compatible DSN."""
+
+    scheme_split = url.split("://", 1)
+    if len(scheme_split) != 2:
+        return url
+    scheme, rest = scheme_split
+    lowered = scheme.lower()
+    if lowered.startswith("postgresql+"):
+        normalized_scheme = "postgresql"
+        return f"{normalized_scheme}://{rest}"
+    return url
 
 
 def _create_checkpointer():
@@ -390,20 +498,24 @@ def _create_checkpointer():
     if not checkpoint_url:
         checkpoint_url = settings.database_url
 
-    if checkpoint_url.lower().startswith("postgres"):
+    global _postgres_checkpointer_ctx
+
+    normalized_url = _normalize_postgres_checkpoint_url(checkpoint_url)
+    if normalized_url.lower().startswith("postgres"):
         try:
             # PostgresSaver.from_conn_string 返回一个 contextmanager（Iterator[PostgresSaver]）。
-            ctx = PostgresSaver.from_conn_string(checkpoint_url)
+            ctx = PostgresSaver.from_conn_string(normalized_url)
             saver = ctx.__enter__()
             try:
                 saver.setup()
             except Exception:  # noqa: BLE001
                 logger.exception("agent.router.checkpointer_postgres_setup_failed")
             else:
-                logger.info("agent.router.checkpointer_postgres_ok url=%s", checkpoint_url)
+                logger.info("agent.router.checkpointer_postgres_ok url=%s", normalized_url)
+                _postgres_checkpointer_ctx = ctx
                 return saver
         except Exception:  # noqa: BLE001
-            logger.exception("agent.router.checkpointer_postgres_init_failed url=%s", checkpoint_url)
+            logger.exception("agent.router.checkpointer_postgres_init_failed url=%s", normalized_url)
 
     # 回退到本地 SQLite 存储，兼容无 Postgres 的开发环境。
     _checkpoint_conn = sqlite3.connect("agent_graph_checkpoint.db", check_same_thread=False)
@@ -1218,6 +1330,21 @@ class QuestionSyncRequest(BaseModel):
     source_type: str | None = None  # 'upload' 或 'favorite'
 
 
+class EnsureDocumentRequest(BaseModel):
+    tenant_id: int
+    user_id: int
+    document_id: int | None = None
+    session_id: int | None = None
+    file_id: int | None = None
+    title: str | None = None
+    source_type: str | None = None
+
+
+class EnsureDocumentResponse(BaseModel):
+    document_id: int
+    title: str
+
+
 @router.post("/sync-question", dependencies=[Depends(sync_limit)])
 def sync_question(payload: QuestionSyncRequest, db: Session = Depends(get_db)) -> dict:
     """与旧前端兼容的题目同步接口。
@@ -1249,6 +1376,30 @@ def sync_question(payload: QuestionSyncRequest, db: Session = Depends(get_db)) -
             "sequence_index": question.sequence_index,
         },
     }
+
+
+@router.post("/ensure-document", response_model=EnsureDocumentResponse)
+def ensure_document(payload: EnsureDocumentRequest, db: Session = Depends(get_db)) -> EnsureDocumentResponse:
+    svc = AgentService(db)
+    svc.require_active_subscription(payload.tenant_id)
+
+    if payload.source_type == "favorite" and payload.document_id is None:
+        document = svc._ensure_favorite_document(
+            tenant_id=payload.tenant_id,
+            user_id=payload.user_id,
+            title=payload.title,
+        )
+    else:
+        document = svc._ensure_document(
+            tenant_id=payload.tenant_id,
+            user_id=payload.user_id,
+            document_id=payload.document_id,
+            session_id=payload.session_id,
+            file_id=payload.file_id,
+            title=payload.title,
+        )
+
+    return EnsureDocumentResponse(document_id=document.id, title=document.title)
 
 
 @router.post("/snapshot", dependencies=[Depends(snapshot_limit)])

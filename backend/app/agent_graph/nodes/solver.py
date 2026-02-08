@@ -6,7 +6,7 @@ import json
 
 import time
 
-from typing import List
+from typing import Any, List
 
 
 
@@ -33,6 +33,37 @@ from .solver_context import prepare_solver_context_bundle
 
 
 MAX_SOLVER_TOOL_FEEDBACK = 1
+
+
+def _coerce_int_value(value: Any) -> int | None:
+    """Convert numeric strings to int, otherwise return None."""
+
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _normalize_tool_plan_numeric_fields(plan: dict) -> None:
+    """Ensure critical numeric fields are ints before downstream processing."""
+
+    for key in ("base_question_id", "target_sequence_index", "sequence_index"):
+        if key in plan:
+            coerced = _coerce_int_value(plan.get(key))
+            if coerced is not None:
+                plan[key] = coerced
+            else:
+                plan.pop(key, None)
 
 
 
@@ -696,7 +727,7 @@ def solver_node(state: AgentState) -> AgentState:
 
                         args = _safe_json_loads(str(args_raw))
 
-                        plans_val = args.get("plans")
+                        plans_val = args.get("plans") if isinstance(args, dict) else None
 
                         if isinstance(plans_val, list):
 
@@ -704,24 +735,21 @@ def solver_node(state: AgentState) -> AgentState:
 
                                 if isinstance(plan, dict):
 
+                                    _normalize_tool_plan_numeric_fields(plan)
+
                                     tool_calls_local.append(plan)
+
+
 
                 usage_local = (result or {}).get("usage")  # type: ignore[name-defined]
 
             else:
-
                 logger.info(
-
                     "agent.graph.solver.skip_llm_no_tools tenant=%s user=%s needs_practice=%s tag=%s",
-
                     state.get("tenant_id"),
-
                     state.get("user_id"),
-
                     base_intent.get("needs_practice"),
-
                     tag,
-
                 )
 
         except Exception as exc:  # noqa: BLE001

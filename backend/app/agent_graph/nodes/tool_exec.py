@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from typing import List
+from typing import Any, List, Optional, Union
 
 
 
@@ -143,6 +143,21 @@ def _build_prompt_events(events: List[dict]) -> List[dict]:
     return prompt_events
 
 
+def _coerce_int_value(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except Exception:  # noqa: BLE001
+        return None
 
 
 
@@ -271,6 +286,13 @@ def tool_exec_node(state: AgentState) -> AgentState:
             continue
 
         plan_copy = dict(plan)
+        for key in ("base_question_id", "target_sequence_index", "sequence_index"):
+            if key in plan_copy:
+                coerced = _coerce_int_value(plan_copy.get(key))
+                if coerced is not None:
+                    plan_copy[key] = coerced
+                else:
+                    plan_copy.pop(key, None)
 
         mode = plan_copy.get("mode")
 
