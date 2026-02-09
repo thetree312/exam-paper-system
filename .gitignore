@@ -133,6 +133,39 @@ DEBUGGING_GUIDE.md
 新建文本文档.txt
 日志/
 
+# Large reference documents / binary assets
+backend/docs/
+backend/uploads/
+backend/tmp/glm_ocr_dumps/
+backend/templates/word_templates/
+backend/scripts/
+.windsurf/
+docs/reference/
+docs/source_materials/
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.key
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.psd
+*.ai
+*.indd
+*.xd
+*.sketch
+*.fig
+*.heic
+*.heif
+*.mp4
+*.mov
+*.avi
+
 # Pandoc
 pandoc-*/
 
