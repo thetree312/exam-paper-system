@@ -98,7 +98,7 @@
   },
   "flashcard": {
     "header": {
-      "badge": "Flashcards",
+      "badge": "Knowledge Flashcards",
       "back": "Back to editor"
     },
     "document": {
@@ -106,43 +106,60 @@
     },
     "messages": {
       "login_required": "Sign in to view flashcards.",
-      "need_document": "Click “Generate flashcards” to import and build them.",
+      "need_document": "Click \"Generate flashcards\" to extract knowledge points from the document.",
       "load_failed": "Failed to load flashcards",
-      "load_failed_with_reason": "Failed to load flashcards: {{reason}}",
-      "no_items": "This document has no flashcards yet—click the button below to generate them."
+      "generate_failed": "Failed to generate flashcards",
+      "no_items": "No knowledge flashcards have been generated for this document yet.",
+      "generating_in_progress": "Flashcards are being generated, please wait…"
     },
-    "info": {
-      "article": "Flashcards were generated automatically from the document content.",
-      "exam": "Question-answer cards loaded for step-by-step practice.",
-      "default": "Flashcards will be generated from the current document.",
-      "source_label": "Source: {{source}}",
-      "source_article": "Article overview",
-      "source_exam": "Question records",
-      "footer_article": "Generated from article context for overview-style review.",
-      "footer_exam": "Based on question records for drill practice."
+    "mode": {
+      "all": "All cards",
+      "due": "Due for review"
+    },
+    "stats": {
+      "total": "{{count}} total",
+      "mastered": "Mastered {{count}}",
+      "reviewing": "Reviewing {{count}}",
+      "struggling": "Struggling {{count}}",
+      "new_cards": "New {{count}}",
+      "due_today": "Due today {{count}}"
+    },
+    "mastery": {
+      "new": "New",
+      "struggling": "Struggling",
+      "reviewing": "Reviewing",
+      "mastered": "Mastered"
+    },
+    "card": {
+      "cue_label": "Cue",
+      "answer_label": "Key Points",
+      "confidence": "Confidence {{value}}%"
     },
     "buttons": {
       "generate": "Generate flashcards",
       "generating": "Generating…",
-      "show_answer": "Show answer",
+      "regenerate": "Regenerate",
+      "show_answer": "Flip to see answer",
       "hide_answer": "Hide answer",
-      "refresh": "Refresh deck"
+      "refresh": "Refresh"
+    },
+    "review": {
+      "score_0": "Didn't know",
+      "score_1": "So-so",
+      "score_2": "Got it",
+      "ask_agent": "Don't understand? Ask AI to explain"
     },
     "states": {
       "loading": "Loading flashcards…",
-      "question_label": "Question",
-      "answer_label": "Answer",
-      "empty_answer": "No answer yet",
-      "empty_front": "(Question stem is empty)"
-    },
-    "badges": {
-      "answer_ai_draft": "AI draft",
-      "answer_standard": "Standard answer",
-      "source_ai": "AI",
-      "source_manual": "Manual"
+      "empty_front": "(Cue is empty)",
+      "empty_answer": "No answer yet"
     },
     "toast": {
-      "load_failed": "Flashcard load failed: {{error}}"
+      "generated": "Generated {{count}} knowledge flashcards (mode: {{mode}})",
+      "load_failed": "Flashcard load failed: {{error}}",
+      "review_failed": "Review submission failed, please retry",
+      "round_complete": "Review round complete!",
+      "escalate_failed": "Failed to escalate to AI tutor, please retry"
     }
   },
   "source_panel": {

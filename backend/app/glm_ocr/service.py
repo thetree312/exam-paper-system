@@ -468,9 +468,9 @@ class GlmOcrService:
             page_num = page_idx + 1
 
             # 若在已经开始出题之后，某一页包含明显的卷首/注意事项标题，则整页视为说明页，直接跳过
+            page_contains_answer_kw = False
             if has_started_questions:
                 page_has_notice_title = False
-                page_contains_answer_kw = False
                 for b in blocks:
                     native_label_page = str(b.get("native_label") or "").lower()
                     text_page = str(b.get("content") or "")
@@ -488,6 +488,18 @@ class GlmOcrService:
                         page_num,
                     )
                     continue
+
+                if page_contains_answer_kw and not in_answer_section:
+                    if current_parts:
+                        flush_current()
+                        current_parts.clear()
+                        current_legends.clear()
+                        current_page = None
+                    in_answer_section = True
+                    logger.debug(
+                        "[glm_ocr.import] page=%s flagged as answer section before parsing",
+                        page_num,
+                    )
 
             image = self._load_preview_image(file, page_num)
 

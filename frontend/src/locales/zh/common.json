@@ -98,7 +98,7 @@
   },
   "flashcard": {
     "header": {
-      "badge": "闪卡",
+      "badge": "知识点闪卡",
       "back": "返回编辑区"
     },
     "document": {
@@ -106,43 +106,60 @@
     },
     "messages": {
       "login_required": "请先登录后查看闪卡。",
-      "need_document": "点击“生成闪卡”即可导入并生成。",
+      "need_document": "点击\"生成闪卡\"即可从文档中提取知识点。",
       "load_failed": "闪卡加载失败",
-      "load_failed_with_reason": "闪卡加载失败：{{reason}}",
-      "no_items": "当前文档尚未生成闪卡，点击下方按钮即可立即生成。"
+      "generate_failed": "闪卡生成失败",
+      "no_items": "当前文档尚未生成知识点闪卡。",
+      "generating_in_progress": "正在生成知识点闪卡，请稍候…"
     },
-    "info": {
-      "article": "已根据文档内容自动生成复习闪卡。",
-      "exam": "已加载题目与标准答案，适合逐题练习。",
-      "default": "闪卡将依据当前文档自动生成。",
-      "source_label": "数据来源：{{source}}",
-      "source_article": "文章概览",
-      "source_exam": "题目记录",
-      "footer_article": "基于文章内容生成，可用于概览式复习。",
-      "footer_exam": "基于题目记录，可用于逐题刷题。"
+    "mode": {
+      "all": "全部卡片",
+      "due": "待复习"
+    },
+    "stats": {
+      "total": "共 {{count}} 张",
+      "mastered": "已掌握 {{count}}",
+      "reviewing": "复习中 {{count}}",
+      "struggling": "未掌握 {{count}}",
+      "new_cards": "新卡 {{count}}",
+      "due_today": "今日待复习 {{count}}"
+    },
+    "mastery": {
+      "new": "新卡",
+      "struggling": "未掌握",
+      "reviewing": "复习中",
+      "mastered": "已掌握"
+    },
+    "card": {
+      "cue_label": "提示",
+      "answer_label": "要点",
+      "confidence": "置信度 {{value}}%"
     },
     "buttons": {
       "generate": "生成闪卡",
       "generating": "生成中...",
-      "show_answer": "显示答案",
+      "regenerate": "重新生成",
+      "show_answer": "翻面查看答案",
       "hide_answer": "隐藏答案",
-      "refresh": "刷新闪卡"
+      "refresh": "刷新"
+    },
+    "review": {
+      "score_0": "没掌握",
+      "score_1": "一般",
+      "score_2": "熟练",
+      "ask_agent": "不理解？让 AI 帮我讲解"
     },
     "states": {
       "loading": "闪卡加载中...",
-      "question_label": "题目",
-      "answer_label": "答案",
-      "empty_answer": "暂无答案",
-      "empty_front": "（题干为空）"
-    },
-    "badges": {
-      "answer_ai_draft": "AI 草稿",
-      "answer_standard": "标准答案",
-      "source_ai": "AI",
-      "source_manual": "人工"
+      "empty_front": "（提示为空）",
+      "empty_answer": "暂无答案"
     },
     "toast": {
-      "load_failed": "闪卡加载失败：{{error}}"
+      "generated": "已生成 {{count}} 张知识点闪卡（模式：{{mode}}）",
+      "load_failed": "闪卡加载失败：{{error}}",
+      "review_failed": "自评提交失败，请重试",
+      "round_complete": "本轮复习完成！",
+      "escalate_failed": "提交 AI 辅导失败，请重试"
     }
   },
   "source_panel": {

@@ -248,9 +248,47 @@ export interface AgentMessage {
 
 export type AgentRunContext = 'blank' | 'exam_editor' | 'code_editor' | 'other' | 'batch_question'
 
+export type AgentThinkingTraceKind = 'thought' | 'tool'
+
+export interface AgentThinkingThoughtTrace {
+  id: string
+  type: 'thought'
+  label?: string
+  text?: string
+}
+
+export interface AgentThinkingToolTrace {
+  id: string
+  type: 'tool'
+  name?: string
+  args?: unknown
+  text?: string
+  result?: string
+  status?: 'calling' | 'result'
+}
+
+export type AgentThinkingTrace = AgentThinkingThoughtTrace | AgentThinkingToolTrace
+
+export interface AgentThinkingState {
+  isActive: boolean
+  historyTraces: AgentThinkingTrace[]
+  activeThought: AgentThinkingThoughtTrace | null
+  activeTool: AgentThinkingToolTrace | null
+  lastEventKind?: string
+  lastUpdatedAt?: number
+}
+
 export interface AgentRunMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
+  /** 当前消息是否处于流式生成中，仅用于前端 UI 控制。 */
+  isStreaming?: boolean
+  /** 当前活跃的推导焦点。 */
+  activeThought?: AgentThinkingThoughtTrace | null
+  /** 当前活跃的工具调用。 */
+  activeTool?: AgentThinkingToolTrace | null
+  /** 已沉淀的思考/工具轨迹，用于可视化 Agentic 过程。 */
+  historyTraces?: AgentThinkingTrace[]
 }
 
 export interface AgentNoteFocus {

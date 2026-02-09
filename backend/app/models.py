@@ -6,9 +6,11 @@ from sqlalchemy import (
     Column,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     JSON,
+    SmallInteger,
     String,
     Text,
     Boolean,
@@ -269,6 +271,9 @@ class Document(Base):
         DateTime, nullable=True
     )
     ocr_cache_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    long_summary_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    long_summary_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     owner: Mapped[Optional[User]] = relationship("User")
@@ -276,6 +281,9 @@ class Document(Base):
     session: Mapped[Optional[ExtractionSession]] = relationship("ExtractionSession")
     questions: Mapped[list["Question"]] = relationship(
         "Question", back_populates="document", cascade="all, delete-orphan"
+    )
+    flashcard_concepts: Mapped[list["FlashcardConcept"]] = relationship(
+        "FlashcardConcept", back_populates="document", cascade="all, delete-orphan"
     )
 
 
@@ -550,6 +558,105 @@ class Tag(Base):
     favorites: Mapped[list["QuestionFavorite"]] = relationship(
         "QuestionFavorite", secondary="favorite_tags", back_populates="tags"
     )
+
+
+class FlashcardConcept(Base):
+    """知识点闪卡：由 LLM 从文档/题目中抽取的知识点卡片"""
+    __tablename__ = "flashcard_concepts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    document_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("questions.id", ondelete="SET NULL"), nullable=True
+    )
+    chunk_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    concept_tag: Mapped[str] = mapped_column(String(255), nullable=False)
+    cue: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    source_ref: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    legend_images: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    document: Mapped[Document] = relationship("Document", back_populates="flashcard_concepts")
+    question: Mapped[Optional["Question"]] = relationship("Question")
+    created_by: Mapped[Optional[User]] = relationship("User")
+    reviews: Mapped[list["FlashcardReview"]] = relationship(
+        "FlashcardReview", back_populates="card", cascade="all, delete-orphan"
+    )
+
+
+class FlashcardReview(Base):
+    """闪卡复习记录：记录用户每次自评结果与间隔重复调度"""
+    __tablename__ = "flashcard_reviews"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    card_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("flashcard_concepts.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    score: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_review_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bucket: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    memo: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    card: Mapped[FlashcardConcept] = relationship("FlashcardConcept", back_populates="reviews")
+    user: Mapped[User] = relationship("User")
+
+
+class FlashcardGenerationJob(Base):
+    """闪卡生成任务：跟踪异步知识点抽取进度"""
+    __tablename__ = "flashcard_generation_jobs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    document_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    progress: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    triggered_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    document: Mapped[Document] = relationship("Document")
+    triggered_by: Mapped[Optional[User]] = relationship("User")
 
 
 class FavoriteTag(Base):

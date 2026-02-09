@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { FlashcardItem, UserInfo } from '../types'
+import type { FlashcardItem, FlashcardMasteryStats, UserInfo } from '../types'
 import { MarkdownWithMath } from './MarkdownWithMath'
 import { FlashcardApi } from '../services/flashcardApi'
 
@@ -11,16 +11,16 @@ interface FlashcardPanelProps {
   user: UserInfo | null
   onBack: () => void
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
-  /** 当需要生成题目文档时触发，例如调用 GLM-OCR；返回生成后的 documentId */
   ensureDocument?: () => Promise<number | null>
   onDocumentResolved?: (documentId: number) => void
 }
 
-function getCardKey(item: FlashcardItem, index: number): string {
-  return `${item.documentId || 'doc'}-${item.questionId ?? 'virtual'}-${index}`
+const MASTERY_COLORS: Record<string, string> = {
+  new: 'bg-slate-100 text-slate-600 border-slate-200',
+  struggling: 'bg-rose-50 text-rose-700 border-rose-200',
+  reviewing: 'bg-amber-50 text-amber-700 border-amber-200',
+  mastered: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 }
-
-type FlashcardSource = 'exam' | 'article'
 
 export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   backendBaseUrl,
@@ -35,340 +35,413 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   const { t } = useTranslation('common')
   const [items, setItems] = useState<FlashcardItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [revealedMap, setRevealedMap] = useState<Record<string, boolean>>({})
-  const [activeSource, setActiveSource] = useState<FlashcardSource | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [revealed, setRevealed] = useState(false)
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
+  const [stats, setStats] = useState<FlashcardMasteryStats | null>(null)
+  const [mode, setMode] = useState<'all' | 'due'>('all')
 
   const tenantId = user?.tenant_id
+  const userId = user?.id
   const docTitle = documentTitle ?? t('flashcard.document.untitled')
+  const canOperate = Boolean(tenantId && userId)
 
-  const disableFetchMessage = useMemo(() => {
-    if (!user) return t('flashcard.messages.login_required')
-    if (!documentId) return t('flashcard.messages.need_document')
-    return null
-  }, [user, documentId, t])
+  // ── 加载闪卡列表 ──────────────────────────────────
 
-  const loadFlashcards = useCallback(
-    async (options?: { skipEnsure?: boolean }) => {
-      if (!tenantId) {
-        setError(t('flashcard.messages.login_required'))
+  const loadCards = useCallback(async (overrideMode?: 'all' | 'due', overrideDocumentId?: number) => {
+    const targetDocumentId = overrideDocumentId ?? documentId
+    if (!tenantId || !userId || !targetDocumentId) return
+    setLoading(true)
+    setError(null)
+    try {
+      let cards: FlashcardItem[]
+      const effectiveMode = overrideMode ?? mode
+      if (effectiveMode === 'due') {
+        cards = await FlashcardApi.getDueFlashcards(backendBaseUrl, tenantId, userId, targetDocumentId)
+      } else {
+        cards = await FlashcardApi.listFlashcards(backendBaseUrl, tenantId, userId, targetDocumentId)
+      }
+      setItems(cards)
+      setCurrentIndex(0)
+      setRevealed(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('flashcard.messages.load_failed')
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [backendBaseUrl, tenantId, userId, documentId, mode, t])
+
+  // ── 加载掌握统计 ──────────────────────────────────
+
+  const loadStats = useCallback(async () => {
+    if (!tenantId || !userId || !documentId) return
+    try {
+      const s = await FlashcardApi.getMasteryStats(backendBaseUrl, tenantId, userId, documentId)
+      setStats(s)
+    } catch {
+      // 统计加载失败不阻塞主流程
+    }
+  }, [backendBaseUrl, tenantId, userId, documentId])
+
+  // ── 生成闪卡 ──────────────────────────────────────
+
+  const handleGenerate = useCallback(async (force = false) => {
+    if (!tenantId || !userId) return
+
+    setGenerating(true)
+    setError(null)
+
+    let targetDocId = documentId
+    try {
+      if (!targetDocId && ensureDocument) {
+        const resolved = await ensureDocument()
+        if (resolved) {
+          targetDocId = resolved
+          onDocumentResolved?.(resolved)
+        }
+      }
+      if (!targetDocId) {
+        setError(t('flashcard.messages.need_document'))
         return
       }
 
-      setLoading(true)
-      setError(null)
+      const result = await FlashcardApi.generateFlashcards(
+        backendBaseUrl, tenantId, userId, targetDocId, 40, force,
+      )
+      onToast?.(
+        t('flashcard.toast.generated', { count: result.cardCount, mode: result.mode }),
+        'success',
+      )
+      // 生成结束后默认回到“全部卡片”，并强制使用生成时的 documentId 刷新
+      setMode('all')
+      await loadCards('all', targetDocId)
+      await loadStats()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('flashcard.messages.generate_failed')
+      setError(msg)
+      onToast?.(msg, 'error')
+    } finally {
+      setGenerating(false)
+    }
+  }, [backendBaseUrl, tenantId, userId, documentId, ensureDocument, onDocumentResolved, onToast, t, loadCards, loadStats])
 
-      let targetDocumentId = documentId
-      try {
-        if (!targetDocumentId && !options?.skipEnsure && ensureDocument) {
-          const resolvedId = await ensureDocument()
-          if (resolvedId) {
-            targetDocumentId = resolvedId
-            onDocumentResolved?.(resolvedId)
-          }
-        }
+  // ── 自评提交 ──────────────────────────────────────
 
-        if (!targetDocumentId) {
-          setItems([])
-          setActiveSource(null)
-          setError(disableFetchMessage)
-          return
-        }
+  const handleReview = useCallback(async (score: number) => {
+    const card = items[currentIndex]
+    if (!card || !tenantId || !userId) return
 
-        let nextItems: FlashcardItem[] = []
-        let source: FlashcardSource | null = null
-        let lastError: Error | null = null
-
-        try {
-          const examItems = await FlashcardApi.fetchExamFlashcards(backendBaseUrl, tenantId, targetDocumentId)
-          if (examItems.length > 0) {
-            nextItems = examItems
-            source = 'exam'
-          }
-        } catch (err) {
-          lastError = err instanceof Error ? err : new Error(t('flashcard.messages.load_failed'))
-        }
-
-        if (source === null) {
-          try {
-            const articleItems = await FlashcardApi.fetchArticleFlashcards(
-              backendBaseUrl,
-              tenantId,
-              targetDocumentId,
-            )
-            nextItems = articleItems
-            source = 'article'
-            lastError = null
-          } catch (err) {
-            lastError = err instanceof Error ? err : new Error(t('flashcard.messages.load_failed'))
-          }
-        }
-
-        if (lastError && (!nextItems || nextItems.length === 0)) {
-          throw lastError
-        }
-
-        setItems(nextItems)
-        setActiveSource(source)
-        setRevealedMap({})
-        if (nextItems.length === 0) {
-          setError(t('flashcard.messages.no_items'))
-        }
-      } catch (err) {
-        console.error('[flashcard-panel] fetch failed', err)
-        const msg = err instanceof Error ? err.message : t('flashcard.messages.load_failed')
-        setError(msg)
-        if (onToast) {
-          onToast(t('flashcard.toast.load_failed', { error: msg }), 'error')
-        }
-      } finally {
-        setLoading(false)
+    setReviewSubmitting(true)
+    try {
+      await FlashcardApi.submitReview(backendBaseUrl, tenantId, userId, card.cardId, score)
+      // 更新本地状态
+      const updated = [...items]
+      const newMastery = score === 0 ? 'struggling' : score === 1 ? 'reviewing' : 'mastered'
+      updated[currentIndex] = { ...card, masteryState: newMastery as FlashcardItem['masteryState'], lastScore: score }
+      setItems(updated)
+      // 自动翻到下一张
+      if (currentIndex < items.length - 1) {
+        setCurrentIndex(currentIndex + 1)
+        setRevealed(false)
+      } else {
+        onToast?.(t('flashcard.toast.round_complete'), 'success')
+        await loadStats()
       }
-    }, [
-      backendBaseUrl,
-      documentId,
-      disableFetchMessage,
-      ensureDocument,
-      onDocumentResolved,
-      onToast,
-      tenantId,
-    ])
+    } catch (err) {
+      onToast?.(t('flashcard.toast.review_failed'), 'error')
+    } finally {
+      setReviewSubmitting(false)
+    }
+  }, [items, currentIndex, tenantId, userId, backendBaseUrl, onToast, t, loadStats])
+
+  // ── Agent 升级 ────────────────────────────────────
+
+  const handleEscalate = useCallback(async () => {
+    const card = items[currentIndex]
+    if (!card || !tenantId || !userId) return
+
+    try {
+      const result = await FlashcardApi.agentEscalate(backendBaseUrl, tenantId, userId, card.cardId)
+      onToast?.(result.message, 'info')
+    } catch (err) {
+      onToast?.(t('flashcard.toast.escalate_failed'), 'error')
+    }
+  }, [items, currentIndex, tenantId, userId, backendBaseUrl, onToast, t])
+
+  // ── 初始加载 ──────────────────────────────────────
 
   useEffect(() => {
-    if (!tenantId || !documentId) {
+    if (!tenantId || !userId || !documentId) {
       setItems([])
-      setRevealedMap({})
-      setActiveSource(null)
+      setStats(null)
       setCurrentIndex(0)
+      setRevealed(false)
       return
     }
-    void loadFlashcards()
-  }, [tenantId, documentId, loadFlashcards])
+    void loadCards()
+    void loadStats()
+  }, [tenantId, userId, documentId, loadCards, loadStats])
 
-  useEffect(() => {
-    setCurrentIndex(0)
-    setRevealedMap({})
-  }, [items])
-
-  const handleToggleReveal = useCallback((key: string) => {
-    setRevealedMap((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }, [])
-
-  const handleGenerate = useCallback(() => {
-    void loadFlashcards()
-  }, [loadFlashcards])
-
-  const canGenerate = Boolean(tenantId)
-  const hasDeck = items.length > 0
-  const currentItem = hasDeck ? items[currentIndex] : null
-  const currentKey = currentItem ? getCardKey(currentItem, currentIndex) : null
-  const currentRevealed = currentKey ? revealedMap[currentKey] : false
+  // ── 导航 ──────────────────────────────────────────
 
   const goPrev = useCallback(() => {
-    if (!hasDeck) return
-    setCurrentIndex((prev) => (prev - 1 + items.length) % items.length)
-  }, [hasDeck, items.length])
+    if (items.length === 0) return
+    setCurrentIndex((p) => (p - 1 + items.length) % items.length)
+    setRevealed(false)
+  }, [items.length])
 
   const goNext = useCallback(() => {
-    if (!hasDeck) return
-    setCurrentIndex((prev) => (prev + 1) % items.length)
-  }, [hasDeck, items.length])
+    if (items.length === 0) return
+    setCurrentIndex((p) => (p + 1) % items.length)
+    setRevealed(false)
+  }, [items.length])
 
-  const revealCurrent = useCallback(() => {
-    if (!currentKey) return
-    setRevealedMap((prev) => ({
-      ...prev,
-      [currentKey]: !prev[currentKey],
-    }))
-  }, [currentKey])
+  const currentItem = items.length > 0 ? items[currentIndex] : null
 
-  const renderAnswerBadge = (item: FlashcardItem) => {
-    if (!item.backMarkdown) return null
-    const status = item.answerStatus || 'default'
-    const source = item.answerSource === 'ai' ? t('flashcard.badges.source_ai') : t('flashcard.badges.source_manual')
-    return (
-      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-        {status === 'ai_draft' ? t('flashcard.badges.answer_ai_draft') : t('flashcard.badges.answer_standard')}
-        <span className="text-[10px] text-emerald-500">{source}</span>
-      </span>
-    )
-  }
+  // ── 渲染 ──────────────────────────────────────────
 
   return (
     <div className="h-full w-full rounded-xl bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.08),_transparent_60%)] backdrop-blur flex flex-col">
+      {/* ── 顶栏 ── */}
       <div className="flex items-center justify-between px-6 py-4">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('flashcard.header.badge')}</div>
           <h2 className="text-xl font-semibold text-slate-900">{docTitle}</h2>
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="px-4 py-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-300"
-        >
-          {t('flashcard.header.back')}
-        </button>
-      </div>
-
-      <div className="px-6 py-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="text-sm text-slate-500">
-          {activeSource === 'article'
-            ? t('flashcard.info.article')
-            : activeSource === 'exam'
-              ? t('flashcard.info.exam')
-              : t('flashcard.info.default')}
-        </div>
-        {activeSource && (
-          <span
-            className={`px-3 py-1 text-xs rounded-full border ${
-              activeSource === 'article'
-                ? 'border-blue-200 bg-blue-50 text-blue-600'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            }`}
-          >
-            {t('flashcard.info.source_label', {
-              source:
-                activeSource === 'article'
-                  ? t('flashcard.info.source_article')
-                  : t('flashcard.info.source_exam'),
-            })}
-          </span>
-        )}
-      </div>
-
-      <div className="flex-1 px-6 py-6">
-        {disableFetchMessage && !documentId ? (
-          <div className="flex flex-col items-center justify-center text-center gap-4 text-slate-500 text-sm py-20 border border-dashed border-slate-200 rounded-lg">
-            <p>{disableFetchMessage}</p>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-full border border-slate-200 overflow-hidden text-xs">
             <button
               type="button"
-              onClick={handleGenerate}
-              disabled={!canGenerate || loading}
-              className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
+              onClick={() => {
+                if (mode !== 'all') {
+                  setMode('all')
+                  void loadCards('all')
+                }
+              }}
+              className={`px-3 py-1.5 transition-colors ${
+                mode === 'all'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-transparent text-slate-500 hover:bg-slate-50'
+              }`}
             >
-              {loading ? t('flashcard.buttons.generating') : t('flashcard.buttons.generate')}
+              {t('flashcard.mode.all')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (mode !== 'due') {
+                  setMode('due')
+                  void loadCards('due')
+                }
+              }}
+              className={`px-3 py-1.5 transition-colors ${
+                mode === 'due'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-transparent text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              {t('flashcard.mode.due')}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-4 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-slate-300 text-sm"
+          >
+            {t('flashcard.header.back')}
+          </button>
+        </div>
+      </div>
+
+      {/* ── 掌握统计条 ── */}
+      {stats && stats.total > 0 && (
+        <div className="px-6 pb-3 flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-slate-500">{t('flashcard.stats.total', { count: stats.total })}</span>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            {t('flashcard.stats.mastered', { count: stats.mastered })}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            {t('flashcard.stats.reviewing', { count: stats.reviewing })}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+            {t('flashcard.stats.struggling', { count: stats.struggling })}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+            {t('flashcard.stats.new_cards', { count: stats.neverReviewed })}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+            {t('flashcard.stats.due_today', { count: stats.dueToday })}
+          </span>
+        </div>
+      )}
+
+      {/* ── 主体区域 ── */}
+      <div className="flex-1 px-6 py-4 overflow-y-auto">
+        {/* 空态 / 加载 / 错误 */}
+        {!documentId && !loading ? (
+          <div className="flex flex-col items-center justify-center text-center gap-4 text-slate-500 text-sm py-20 border border-dashed border-slate-200 rounded-lg">
+            <p>{t('flashcard.messages.need_document')}</p>
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={!canOperate || generating}
+              className="px-5 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
+            >
+              {generating ? t('flashcard.buttons.generating') : t('flashcard.buttons.generate')}
             </button>
           </div>
         ) : loading ? (
-          <div className="text-center text-slate-500 text-sm py-20">{t('flashcard.states.loading')}</div>
-        ) : error ? (
-          <div className="text-center text-rose-500 text-sm py-20">{error}</div>
-        ) : items.length === 0 ? (
+          <div className="text-center text-slate-500 text-sm py-20">{generating ? t('flashcard.messages.generating_in_progress') : t('flashcard.states.loading')}</div>
+        ) : !loading && items.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center gap-4 text-slate-500 text-sm py-20 border border-dashed border-slate-200 rounded-lg">
-            <p>{t('flashcard.messages.no_items')}</p>
+            <p>{generating ? t('flashcard.messages.generating_in_progress') : error ?? t('flashcard.messages.no_items')}</p>
             <button
               type="button"
-              onClick={handleGenerate}
-              disabled={!canGenerate || loading}
-              className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
+              onClick={() => void handleGenerate()}
+              disabled={!canOperate || generating}
+              className="px-5 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
             >
-              {loading ? t('flashcard.buttons.generating') : t('flashcard.buttons.generate')}
+              {generating ? t('flashcard.buttons.generating') : t('flashcard.buttons.generate')}
             </button>
           </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-between">
+        ) : error && items.length > 0 ? (
+          <div className="flex flex-col items-center justify-center text-center gap-4 py-20">
+            <p className="text-rose-500 text-sm">{error}</p>
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={!canOperate || generating}
+              className="px-5 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
+            >
+              {generating ? t('flashcard.buttons.generating') : t('flashcard.buttons.generate')}
+            </button>
+          </div>
+        ) : currentItem ? (
+          <div className="h-full flex flex-col items-center justify-between gap-6">
+            {/* 导航 */}
             <div className="flex items-center gap-4 text-sm text-slate-500">
-              <button
-                type="button"
-                onClick={goPrev}
-                className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400"
-              >
+              <button type="button" onClick={goPrev} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               </button>
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('flashcard.states.question_label')}</div>
-              <span className="text-slate-700 font-semibold">
-                {currentIndex + 1}/{items.length}
-              </span>
-              <button
-                type="button"
-                onClick={goNext}
-                className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400"
-              >
+              <span className="text-slate-700 font-semibold">{currentIndex + 1}/{items.length}</span>
+              <button type="button" onClick={goNext} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
               </button>
             </div>
 
-            {currentItem && (
-              <div className="relative w-full max-w-3xl flex-1 flex items-center justify-center">
-                <div className="absolute inset-0 scale-95 translate-y-6 blur-2xl bg-white/40 rounded-[32px]"></div>
-                <div
-                  className="relative w-full bg-white border border-slate-200 rounded-[32px] shadow-2xl px-10 py-10 flex flex-col gap-6 transition-transform duration-500"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.15em] text-slate-400">#{currentItem.sequenceIndex + 1}</div>
-                      <h3 className="text-2xl font-semibold text-slate-900">{docTitle}</h3>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      {renderAnswerBadge(currentItem)}
-                      <button
-                        type="button"
-                        onClick={revealCurrent}
-                        className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-                          currentRevealed
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-400'
-                        }`}
-                      >
-                        {currentRevealed ? t('flashcard.buttons.hide_answer') : t('flashcard.buttons.show_answer')}
-                      </button>
-                    </div>
+            {/* 卡片 */}
+            <div className="relative w-full max-w-3xl flex-1 flex items-center justify-center">
+              <div className="absolute inset-0 scale-95 translate-y-6 blur-2xl bg-white/40 rounded-[32px]" />
+              <div className="relative w-full bg-white border border-slate-200 rounded-[32px] shadow-2xl px-10 py-8 flex flex-col gap-5">
+                {/* 卡头：知识点标签 + 掌握状态 */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className={`inline-block w-fit px-3 py-0.5 text-xs rounded-full border ${MASTERY_COLORS[currentItem.masteryState]}`}>
+                      {t(`flashcard.mastery.${currentItem.masteryState}`)}
+                    </span>
+                    <h3 className="text-lg font-semibold text-slate-900">{currentItem.conceptTag}</h3>
                   </div>
+                  {currentItem.confidence != null && (
+                    <span className="text-[10px] text-slate-400">
+                      {t('flashcard.card.confidence', { value: Math.round(currentItem.confidence * 100) })}
+                    </span>
+                  )}
+                </div>
 
-                  <div className="space-y-4">
-                    <MarkdownWithMath className="text-lg leading-relaxed" compact>
-                      {currentItem.frontMarkdown || t('flashcard.states.empty_front')}
+                {/* CUE（正面） */}
+                <div className="min-h-[80px]">
+                  <div className="text-xs uppercase tracking-[0.15em] text-slate-400 mb-2">{t('flashcard.card.cue_label')}</div>
+                  <MarkdownWithMath className="text-base leading-relaxed" compact>
+                    {currentItem.cue || t('flashcard.states.empty_front')}
+                  </MarkdownWithMath>
+                </div>
+
+                {/* 翻面按钮 */}
+                {!revealed && (
+                  <button
+                    type="button"
+                    onClick={() => setRevealed(true)}
+                    className="self-center px-6 py-2 rounded-full border border-slate-300 text-slate-600 hover:border-slate-500 text-sm font-medium transition-colors"
+                  >
+                    {t('flashcard.buttons.show_answer')}
+                  </button>
+                )}
+
+                {/* ANSWER（背面） */}
+                <div className={`transition-all duration-500 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none h-0 overflow-hidden'}`}>
+                  <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 shadow-inner">
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-300 mb-2">{t('flashcard.card.answer_label')}</div>
+                    <MarkdownWithMath className="text-base leading-relaxed text-white" compact>
+                      {currentItem.answer || t('flashcard.states.empty_answer')}
                     </MarkdownWithMath>
-                    {currentItem.legendImages?.length ? (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {currentItem.legendImages.map((src, idx) => (
-                          <div key={`${currentKey}-legend-${idx}`} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                            <img src={src} alt={`legend-${idx + 1}`} className="w-full h-32 object-contain" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
 
-                  <div className={`transition-all duration-500 ${currentRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
-                    <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 shadow-inner">
-                      <div className="text-xs uppercase tracking-[0.2em] text-slate-300 mb-2">
-                        {t('flashcard.states.answer_label')}
-                      </div>
-                      {currentItem.backMarkdown ? (
-                        <MarkdownWithMath className="text-base leading-relaxed text-white" compact>
-                          {currentItem.backMarkdown}
-                        </MarkdownWithMath>
-                      ) : (
-                        <p className="text-sm text-slate-200">{t('flashcard.states.empty_answer')}</p>
-                      )}
-                    </div>
+                  {/* 自评按钮组 */}
+                  <div className="mt-4 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      disabled={reviewSubmitting}
+                      onClick={() => void handleReview(0)}
+                      className="px-4 py-2 rounded-full bg-rose-500 text-white text-sm font-semibold shadow hover:bg-rose-600 disabled:opacity-60 transition-colors"
+                    >
+                      {t('flashcard.review.score_0')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewSubmitting}
+                      onClick={() => void handleReview(1)}
+                      className="px-4 py-2 rounded-full bg-amber-500 text-white text-sm font-semibold shadow hover:bg-amber-600 disabled:opacity-60 transition-colors"
+                    >
+                      {t('flashcard.review.score_1')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewSubmitting}
+                      onClick={() => void handleReview(2)}
+                      className="px-4 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow hover:bg-emerald-600 disabled:opacity-60 transition-colors"
+                    >
+                      {t('flashcard.review.score_2')}
+                    </button>
+                  </div>
+
+                  {/* Agent 升级入口 */}
+                  <div className="mt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => void handleEscalate()}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                    >
+                      {t('flashcard.review.ask_agent')}
+                    </button>
                   </div>
                 </div>
               </div>
-            )}
+            </div>
 
-            <div className="mt-8 flex items-center gap-3">
+            {/* 底部操作 */}
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleGenerate}
-                disabled={loading}
+                onClick={() => void handleGenerate(true)}
+                disabled={generating}
                 className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold shadow disabled:opacity-60"
               >
-                {loading ? t('flashcard.buttons.generating') : t('flashcard.buttons.refresh')}
+                {generating ? t('flashcard.buttons.generating') : t('flashcard.buttons.regenerate')}
               </button>
-              <div className="text-xs text-slate-500">
-                {activeSource === 'article'
-                  ? t('flashcard.info.footer_article')
-                  : t('flashcard.info.footer_exam')}
-              </div>
+              <button
+                type="button"
+                onClick={() => void loadCards()}
+                disabled={loading}
+                className="px-4 py-2 rounded-full border border-slate-200 text-slate-600 text-sm hover:border-slate-400 disabled:opacity-60"
+              >
+                {t('flashcard.buttons.refresh')}
+              </button>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
