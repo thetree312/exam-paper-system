@@ -1,5 +1,6 @@
 import React from 'react'
 import type { UserInfo } from '../types'
+import BrandIcon from './BrandIcon'
 
 interface AppHeaderProps {
   statusMessage: string
@@ -41,9 +42,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     >
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3 text-slate-900 dark:text-white">
-          <div className="size-8 bg-primary text-white rounded-lg flex items-center justify-center">
-            <span className="material-symbols-outlined text-[20px]">edit_document</span>
-          </div>
+          <BrandIcon />
           <h2 className="text-lg font-bold leading-tight tracking-tight">智卷通</h2>
         </div>
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />

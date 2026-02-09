@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import type { AuthMode } from '../types'
 import { validateEmail, validatePassword, validateDisplayName } from '../utils/validation'
+import BrandIcon from './BrandIcon'
 
 interface AuthScreenProps {
   authMode: AuthMode
@@ -80,8 +81,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 sm:p-8 border border-slate-200">
         <div className="flex items-center gap-3 mb-6">
-          <div className="size-9 rounded-xl bg-primary text-white flex items-center justify-center">
-            <span className="material-symbols-outlined text-[22px]">edit_document</span>
+          <div className="scale-110">
+            <BrandIcon />
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900">智卷通 · 试卷编辑器</h1>
