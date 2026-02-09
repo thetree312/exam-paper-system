@@ -24,6 +24,7 @@ from app.routers import (
     question_types,
     subjects,
     tags,
+    flashcards,
 )
 from app.glm_ocr import router as glm_ocr_router
 
@@ -133,3 +134,4 @@ app.include_router(question_types.router)
 app.include_router(subjects.router)
 app.include_router(tags.router)
 app.include_router(glm_ocr_router)
+app.include_router(flashcards.router)

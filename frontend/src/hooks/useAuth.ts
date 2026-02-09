@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AuthMode, UserInfo } from '../types'
 import { useAppStore } from '../store/appStore'
 import {
@@ -27,6 +28,7 @@ interface UseAuthReturn {
 }
 
 export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
+  const { t } = useTranslation('common')
   const storeUser = useAppStore((state) => state.user)
   const setStoreUser = useAppStore((state) => state.setUser)
 
@@ -105,12 +107,12 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         console.log('[auth] success', data.user)
       } catch (err) {
         console.error('[auth] failed', err)
-        setAuthError('登录/注册失败，请检查邮箱和密码')
+        setAuthError(t('auth.error.generic'))
       } finally {
         setAuthLoading(false)
       }
     },
-    [authMode, authEmail, authPassword, authDisplayName, backendBaseUrl],
+    [authMode, authEmail, authPassword, authDisplayName, backendBaseUrl, t],
   )
 
   const handleLogout = useCallback(() => {

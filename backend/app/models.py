@@ -377,6 +377,9 @@ class Question(Base):
     grading_predicted_answer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grading_reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grading_confidence: Mapped[Optional[float]] = mapped_column(nullable=True)
+    canonical_answer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    answer_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    answer_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     versions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

@@ -1,9 +1,11 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AgentSendPayload, AggregatedOcrItem, UploadedFileTab, UserInfo } from '../types'
 import { AgentWorkspacePanel } from './AgentWorkspacePanel'
 import { MindMapPanel } from '../features/mindmap/MindMapPanel'
+import { FlashcardPanel } from './FlashcardPanel'
 
-export type WorkspaceView = 'editor' | 'mindmap'
+export type WorkspaceView = 'editor' | 'mindmap' | 'flashcard'
 
 interface EditorWorkspaceShellProps {
   backendBaseUrl: string
@@ -30,7 +32,7 @@ interface EditorWorkspaceShellProps {
   previewScrollRef: React.RefObject<HTMLDivElement>
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
   /** 触发 GLM-OCR 全卷解析的回调，由上层 App 负责调用后端并更新题卡列表 */
-  onRunGlmOcr: () => void
+  onRunGlmOcr: () => Promise<number | null>
 }
 
 export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
@@ -59,24 +61,34 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
   onToast,
   onRunGlmOcr,
 }) => {
+  const { t } = useTranslation('common')
   return (
     <section className="flex-1 relative bg-background-light dark:bg-background-dark flex flex-col">
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex bg-white border border-slate-200 rounded-full shadow-lg p-1.5 gap-1">
         <button
           className="p-2 rounded-full text-slate-600"
           type="button"
-          title="文本"
-          onClick={onRunGlmOcr}
+          title={t('editor_workspace.text_button')}
+          onClick={() => {
+            void onRunGlmOcr()
+          }}
         >
           <span className="material-symbols-outlined text-[20px]">title</span>
         </button>
-        <button className="p-2 rounded-full text-slate-600" type="button" title="图片">
+        <button
+          className={`p-2 rounded-full text-slate-600 ${workspaceView === 'flashcard' ? 'bg-slate-200' : ''}`}
+          type="button"
+          title={t('editor_workspace.flashcard_button')}
+          onClick={() =>
+            onWorkspaceViewChange(workspaceView === 'flashcard' ? 'editor' : 'flashcard')
+          }
+        >
           <span className="material-symbols-outlined text-[20px]">image</span>
         </button>
         <button
           className={`p-2 rounded-full text-slate-600 ${workspaceView === 'mindmap' ? 'bg-slate-200' : ''}`}
           type="button"
-          title="思维导图"
+          title={t('editor_workspace.mindmap_button')}
           onClick={() => onWorkspaceViewChange(workspaceView === 'mindmap' ? 'editor' : 'mindmap')}
         >
           <span className="material-symbols-outlined text-[20px]">account_tree</span>
@@ -86,7 +98,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
             isAnswerMode ? 'bg-slate-900 text-white shadow-inner' : 'text-slate-600'
           }`}
           type="button"
-          title="答题模式"
+          title={t('editor_workspace.answer_mode_button')}
           onClick={onToggleAnswerMode}
         >
           <span className="material-symbols-outlined text-[18px]">edit_note</span>
@@ -96,10 +108,10 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-purple-600"
           type="button"
           onClick={onOpenAgentDrawer}
-          title="Copilot 对话"
+          title={t('editor_workspace.copilot_button')}
         >
           <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-          Copilot
+          {t('editor_workspace.copilot_button')}
         </button>
       </div>
 
@@ -130,14 +142,25 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
               }}
             />
           </div>
+        ) : workspaceView === 'flashcard' ? (
+          <FlashcardPanel
+            backendBaseUrl={backendBaseUrl}
+            documentId={agentDocumentId}
+            documentTitle={currentFile?.name ?? null}
+            user={user}
+            onBack={() => onWorkspaceViewChange('editor')}
+            onToast={onToast}
+            ensureDocument={onRunGlmOcr}
+            onDocumentResolved={onDocumentChange}
+          />
         ) : (
           <div className="bg-white w-full max-w-[800px] min-h-[900px] mx-auto shadow-sm border border-slate-200 rounded-sm p-12 flex flex-col gap-6">
             <div className="text-center border-b-2 border-slate-900 pb-6">
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">内容工作区</h1>
-              <p className="text-slate-500 font-medium">{sessionId ? `当前 Session #${sessionId}` : '尚未开始'}</p>
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">{t('editor_workspace.workspace_title')}</h1>
+              <p className="text-slate-500 font-medium">{sessionId ? t('editor_workspace.session_label', { sessionId }) : t('editor_workspace.session_not_started')}</p>
             </div>
 
-            <div className="text-sm text-slate-500 mb-2">识别结果</div>
+            <div className="text-sm text-slate-500 mb-2">{t('editor_workspace.recognition_results')}</div>
             <div className="space-y-6">
               <AgentWorkspacePanel
                 backendBaseUrl={backendBaseUrl}

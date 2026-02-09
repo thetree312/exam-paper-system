@@ -97,7 +97,7 @@ export const useConversation = (
           userId: s.user_id,
           documentId: s.document_id ?? null,
           viewId: s.view_id ?? null,
-          title: s.title || '新的会话',
+          title: s.title || '',
           lastMessagePreview: s.last_message_preview ?? null,
           messageCount: s.message_count,
           status: s.status,
@@ -118,7 +118,7 @@ export const useConversation = (
             userId: userId,
             documentId: documentId,
             viewId: null,
-            title: '新的会话',
+            title: '',
             lastMessagePreview: null,
             messageCount: 0,
             status: 'active',
@@ -179,7 +179,7 @@ export const useConversation = (
           userId: userId ?? 0,
           documentId: documentId,
           viewId: null,
-          title: '新的会话',
+          title: '',
           lastMessagePreview: null,
           messageCount: 0,
           status: 'active',
@@ -245,7 +245,7 @@ export const useConversation = (
 
         if (key === storeActiveConversationKey && firstUserMessage) {
           const snippet = firstUserMessage.content.trim().slice(0, 32)
-          if (!next.title || next.title === '新的会话') {
+          if (!next.title || next.title === '') {
             next.title = snippet || next.title
           }
         }
@@ -270,7 +270,7 @@ export const useConversation = (
       const now = Date.now()
       const meta: AgentConversationMeta = {
         key,
-        title: '新的会话',
+        title: '',
         sessionId: null,
         tenantId: tenantId ?? 0,
         userId: userId ?? 0,
@@ -395,7 +395,7 @@ export const useConversation = (
       const meta = storeConversations.find((conv) => conv.key === key)
       if (!meta) return
 
-      const nextTitle = title.trim() || '新的会话'
+      const nextTitle = title.trim() || ''
       setStoreConversations((prev) =>
         prev.map((conv) => (conv.key === key ? { ...conv, title: nextTitle } : conv)),
       )

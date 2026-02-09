@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { UploadedFileTab } from '../types'
 
 interface FileTabsBarProps {
@@ -80,6 +81,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
   isUploading,
   onCollapse,
 }) => {
+  const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -150,7 +152,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                         onCloseTab(index)
                       }
                     }}
-                    aria-label="关闭标签"
+                    aria-label={t('file_tabs.close_label')}
                   >
                     close
                   </span>
@@ -175,7 +177,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
             type="button"
             className="flex-shrink-0 inline-flex items-center justify-center px-1.5 h-8 text-[#647185] hover:text-[#4c586d] mr-[-8px]"
             onClick={onCollapse}
-            title="收起"
+            title={t('file_tabs.collapse_label')}
           >
             <span className="material-symbols-outlined text-[22px] leading-none">menu_open</span>
           </button>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { QuestionEditor } from '../QuestionEditor'
 
@@ -189,6 +190,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
   onToast,
 
 }) => {
+  const { t } = useTranslation('common')
 
   const {
 
@@ -330,17 +332,17 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
   const statusText = useMemo(() => {
 
-    if (isSyncing) return '同步中...'
+    if (isSyncing) return t('editor_workspace.syncing')
 
     if (lastSavedAt) {
 
       const time = new Date(lastSavedAt).toLocaleTimeString()
 
-      return `已保存 ${time}`
+      return t('editor_workspace.saved_at', { time })
 
     }
 
-    return documentId ? '已同步' : '未同步'
+    return documentId ? t('editor_workspace.synced') : t('editor_workspace.not_synced')
 
   }, [documentId, isSyncing, lastSavedAt])
 
@@ -836,7 +838,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
       <div className="text-slate-400 text-sm border border-dashed border-slate-200 rounded-lg p-4 text-center">
 
-        暂无识别内容
+        {t('editor_workspace.no_content')}
 
       </div>
 
@@ -854,17 +856,17 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
   > = {
 
-    pending: { label: '批改中', classes: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700 border border-amber-200', icon: 'schedule' },
+    pending: { label: t('editor_workspace.grading_status.pending'), classes: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700 border border-amber-200', icon: 'schedule' },
 
-    correct: { label: '回答正确', classes: 'border-emerald-200 bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200', icon: 'task_alt' },
+    correct: { label: t('editor_workspace.grading_status.correct'), classes: 'border-emerald-200 bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200', icon: 'task_alt' },
 
-    incorrect: { label: '回答错误', classes: 'border-rose-200 bg-rose-50', badge: 'bg-rose-100 text-rose-700 border border-rose-200', icon: 'close' },
+    incorrect: { label: t('editor_workspace.grading_status.incorrect'), classes: 'border-rose-200 bg-rose-50', badge: 'bg-rose-100 text-rose-700 border border-rose-200', icon: 'close' },
 
-    skipped: { label: '未作答', classes: 'border-slate-200 bg-slate-50', badge: 'bg-slate-100 text-slate-600 border border-slate-200', icon: 'hourglass_empty' },
+    skipped: { label: t('editor_workspace.grading_status.skipped'), classes: 'border-slate-200 bg-slate-50', badge: 'bg-slate-100 text-slate-600 border border-slate-200', icon: 'hourglass_empty' },
 
-    uncertain: { label: '待确认', classes: 'border-indigo-200 bg-indigo-50', badge: 'bg-indigo-100 text-indigo-700 border border-indigo-200', icon: 'help' },
+    uncertain: { label: t('editor_workspace.grading_status.uncertain'), classes: 'border-indigo-200 bg-indigo-50', badge: 'bg-indigo-100 text-indigo-700 border border-indigo-200', icon: 'help' },
 
-    error: { label: '批改失败', classes: 'border-orange-200 bg-orange-50', badge: 'bg-orange-100 text-orange-700 border border-orange-200', icon: 'warning' },
+    error: { label: t('editor_workspace.grading_status.error'), classes: 'border-orange-200 bg-orange-50', badge: 'bg-orange-100 text-orange-700 border border-orange-200', icon: 'warning' },
 
   }
 
@@ -878,7 +880,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
         <div className="flex items-center gap-2">
 
-          <span className="font-medium text-slate-600">同步状态：</span>
+          <span className="font-medium text-slate-600">{t('editor_workspace.sync_status')}</span>
 
           {statusText}
 
@@ -900,7 +902,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
           >
 
-            手动保存
+            {t('editor_workspace.manual_save')}
 
           </button>
 
@@ -918,7 +920,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
             >
 
-              {isGrading ? '批改中...' : '提交批改'}
+              {isGrading ? t('editor_workspace.grading_in_progress') : t('editor_workspace.submit_grading')}
 
             </button>
 
@@ -1192,13 +1194,13 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               <div className="flex items-center gap-2">
 
-                <span className="text-slate-500 text-sm font-medium">题目 #{index + 1}</span>
+                <span className="text-slate-500 text-sm font-medium">{t('editor_workspace.question_label', { index: index + 1 })}</span>
 
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">
 
                   <span className="material-symbols-outlined text-[14px]">description</span>
 
-                  page {item.page ?? '-'}
+                  {t('editor_workspace.page_label', { page: item.page ?? '-' })}
 
                 </span>
 
@@ -1208,7 +1210,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     <span className="material-symbols-outlined text-[14px]">stylus_note</span>
 
-                    {item.noteSource.title ? `来源：${item.noteSource.title}` : '来源：笔记/文档'}
+                    {item.noteSource.title ? `${t('editor_workspace.source_label')}${item.noteSource.title}` : `${t('editor_workspace.source_label')}${t('editor_workspace.source_note')}`}
 
                   </span>
 
@@ -1234,13 +1236,13 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     >
 
-                      上一题
+                      {t('editor_workspace.prev_question')}
 
                     </button>
 
                     <span className="font-medium text-slate-600">
 
-                      题卡 {activePageIndex + 1}/{totalPages}
+                      {t('editor_workspace.question_card', { current: activePageIndex + 1, total: totalPages })}
 
                     </span>
 
@@ -1256,7 +1258,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     >
 
-                      下一题
+                      {t('editor_workspace.next_question')}
 
                     </button>
 
@@ -1280,13 +1282,13 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     >
 
-                      新版
+                      {t('editor_workspace.version_new')}
 
                     </button>
 
                     <span className="font-medium text-slate-600">
 
-                      版本 {activeVersionIndex + 1}/{totalVersions}
+                      {t('editor_workspace.version_label', { current: activeVersionIndex + 1, total: totalVersions })}
 
                     </span>
 
@@ -1302,7 +1304,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     >
 
-                      旧版
+                      {t('editor_workspace.version_old')}
 
                     </button>
 
@@ -1334,7 +1336,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
 
-                    title="删除"
+                    title={t('editor_workspace.button_delete')}
 
                     onClick={() => onDeleteItem(item.id)}
 
@@ -1358,7 +1360,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       }`}
 
-                      title={isSplitting ? '智能拆题进行中' : '智能拆题'}
+                      title={isSplitting ? t('editor_workspace.button_split_in_progress') : t('editor_workspace.button_split')}
 
                       onClick={() => !isSplitting && onSplitItem(item, index)}
 
@@ -1386,7 +1388,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
 
-                    title="发送到 Copilot"
+                    title={t('editor_workspace.button_send_to_copilot')}
 
                     onClick={() =>
 
@@ -1436,7 +1438,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
 
-                    title="复制"
+                    title={t('editor_workspace.button_copy')}
 
                     onClick={() => navigator.clipboard.writeText(item.text)}
 
@@ -1460,7 +1462,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                 <span className="material-symbols-outlined text-[14px]">history</span>
 
-                正在查看历史版本，题干只读，可单独作答
+                {t('question_editor.viewing_history')}
 
               </div>
 

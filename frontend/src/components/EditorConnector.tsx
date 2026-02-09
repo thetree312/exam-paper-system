@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { EditorWorkspaceShell } from './EditorWorkspaceShell'
 import { FavoritesPage } from './FavoritesPage'
 import { useAppStore } from '../store/appStore'
@@ -31,6 +32,8 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
   const isExportDialogOpen = useAppStore((state) => state.isExportDialogOpen)
   const setIsExportDialogOpen = useAppStore((state) => state.setIsExportDialogOpen)
 
+  const { t } = useTranslation('common')
+
   const {
     fileTabs: _fileTabs,
     activeTabIndex: _activeTabIndex,
@@ -53,12 +56,12 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
   const handleAddFavoriteToEditor = React.useCallback(
     async (questionId: number) => {
       if (!user) {
-        onToast('请先登录', 'error')
+        onToast(t('app.toast.login_required'), 'error')
         return
       }
 
       try {
-        onToast('加载题目中...', 'info')
+        onToast(t('app.toast.favorite_loading'), 'info')
         const question = await getQuestion(questionId, user.tenant_id, backendBaseUrl)
 
         const newItem: AggregatedOcrItem = {
@@ -81,14 +84,14 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
 
         handleOcrItemUpdate(newItem.id, () => newItem)
         setAppView('editor')
-        onToast('题目已添加到编辑区', 'success')
+        onToast(t('app.toast.favorite_success'), 'success')
       } catch (err) {
         console.error('[add_favorite_to_editor] failed', err)
         const errorMsg = err instanceof Error ? err.message : '加载失败'
-        onToast(`加载失败: ${errorMsg}`, 'error')
+        onToast(t('app.toast.favorite_failed', { error: errorMsg }), 'error')
       }
     },
-    [user, backendBaseUrl, ocrItems.length, onToast, handleOcrItemUpdate, setAppView],
+    [user, backendBaseUrl, ocrItems.length, onToast, handleOcrItemUpdate, setAppView, t],
   )
 
   if (appView === 'favorites') {

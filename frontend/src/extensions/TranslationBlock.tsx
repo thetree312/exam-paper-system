@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
@@ -15,6 +16,7 @@ interface TranslationAttrs {
 }
 
 const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getPos }) => {
+  const { t } = useTranslation('common')
   const attrs = node.attrs as TranslationAttrs
   const scope = attrs.scope ?? 'sentence'
   const translation = attrs.translation ?? ''
@@ -22,7 +24,7 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
   const phonetic = attrs.phonetic ?? ''
   const example = attrs.example ?? ''
 
-  const label = scope === 'word' ? '单词释义' : '沉浸式翻译'
+  const label = scope === 'word' ? t('translation_block.word_label') : t('translation_block.sentence_label')
 
   const handleRemove = () => {
     if (!editor || typeof getPos !== 'function') {
@@ -53,8 +55,8 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
           <button
             type="button"
             className="translation-block-action"
-            title="朗读（即将支持）"
-            aria-label="朗读"
+            title={t('translation_block.speak_title')}
+            aria-label={t('translation_block.speak_title')}
             disabled
           >
             <span className="material-symbols-outlined text-[16px]">volume_up</span>
@@ -62,8 +64,8 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
           <button
             type="button"
             className="translation-block-action"
-            title="移除译文"
-            aria-label="移除译文"
+            title={t('translation_block.remove_title')}
+            aria-label={t('translation_block.remove_title')}
             onClick={handleRemove}
           >
             <span className="material-symbols-outlined text-[18px]">close</span>

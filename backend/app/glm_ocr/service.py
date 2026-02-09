@@ -393,8 +393,9 @@ class GlmOcrService:
 
         questions: List[Question] = []
         current_parts: List[str] = []
-        current_legends: List[str] = []
+        current_legends: List[Dict[str, Any]] = []
         current_page: Optional[int] = None
+        answer_lines: List[str] = []
 
         # 是否已经生成过至少一道题，用于区别卷首/中途出现的说明页
         has_started_questions = False
@@ -438,6 +439,20 @@ class GlmOcrService:
                 markdown[:80].replace("\n", " "),
             )
 
+        def looks_like_section_header(text: str) -> bool:
+            stripped = text.strip()
+            if not stripped:
+                return False
+            # 形如 “一、选择题” “二、填空题” 等
+            if re.match(r"^[#\s]*[一二三四五六七八九十]+[、\.．]", stripped):
+                return True
+            # 形如 “第Ⅰ卷” “第II卷” 等
+            if re.match(r"^第[一二三四五六七八九十0-9ⅠⅡⅢIVVVI]+卷", stripped):
+                return True
+            normalized = stripped.lstrip("#").strip()
+            section_prefixes = ["选择题", "填空题", "解答题", "本大题", "本题共"]
+            return any(normalized.startswith(prefix) for prefix in section_prefixes)
+
         total_pages = len(layout_pages)
         logger.info(
             "[glm_ocr.import] start document=%s pages=%s",
@@ -455,17 +470,19 @@ class GlmOcrService:
             # 若在已经开始出题之后，某一页包含明显的卷首/注意事项标题，则整页视为说明页，直接跳过
             if has_started_questions:
                 page_has_notice_title = False
+                page_contains_answer_kw = False
                 for b in blocks:
                     native_label_page = str(b.get("native_label") or "").lower()
                     text_page = str(b.get("content") or "")
+                    if any(kw in text_page for kw in ["参考答案", "题答案", "【答案】", "答案】", "答案："]):
+                        page_contains_answer_kw = True
                     if native_label_page in {"doc_title", "paragraph_title"} and (
                         "注意事项" in text_page
                         or "答题卡" in text_page
                         or "考试" in text_page
                     ):
                         page_has_notice_title = True
-                        break
-                if page_has_notice_title:
+                if page_has_notice_title and not page_contains_answer_kw:
                     logger.info(
                         "[glm_ocr.import] skip meta page page=%s after questions started",
                         page_num,
@@ -553,28 +570,19 @@ class GlmOcrService:
                                 current_parts.append("")
                             continue
 
-                        # 检测「参考答案/答案/题答案」等关键字，一旦进入答案区，不再生成题目
-                        if any(kw in stripped for kw in ["参考答案", "答案解析", "【答案】", "题答案"]):
+                        hit_answer_kw = any(
+                            kw in stripped for kw in ["参考答案", "答案解析", "【答案】", "题答案"]
+                        )
+                        if hit_answer_kw and not in_answer_section:
                             in_answer_section = True
                             logger.debug(
                                 "[glm_ocr.import] enter answer section page=%s line=%s",
                                 page_num,
                                 stripped[:60],
                             )
-                            continue
 
-                        # 检测说明结束、正式题目开始的信号：选择题/填空题/解答题/本大题 等
-                        if in_notice_section and any(
-                            kw in stripped
-                            for kw in [
-                                "选择题",
-                                "填空题",
-                                "解答题",
-                                "本大题",
-                                "第Ⅰ卷",
-                                "第Ⅱ卷",
-                            ]
-                        ):
+                        # 检测说明结束、正式题目开始的信号：需要是明确的小节标题
+                        if in_notice_section and looks_like_section_header(stripped):
                             in_notice_section = False
                             logger.debug(
                                 "[glm_ocr.import] leave notice section page=%s line=%s",
@@ -583,8 +591,10 @@ class GlmOcrService:
                             )
                             continue
 
-                        # 在注意事项或答案区内的任何内容都丢弃
-                        if in_notice_section or in_answer_section:
+                        if in_notice_section and not in_answer_section:
+                            continue
+                        if in_answer_section:
+                            answer_lines.append(stripped)
                             continue
 
                         # 题型标题 / 分节行：例如 "一、选择题" "二、填空题" "【本题共..." 等
@@ -661,6 +671,78 @@ class GlmOcrService:
 
         flush_current()
 
+        answer_map: Dict[int, str] = {}
+        last_no: Optional[int] = None
+
+        def _add_answer(no: int, text: str) -> None:
+            t = text.strip()
+            if not t:
+                return
+            prev = answer_map.get(no)
+            if prev:
+                answer_map[no] = prev + "\n" + t
+            else:
+                answer_map[no] = t
+
+        header_re = re.compile(r"^[\[【]?(第\s*)?(?P<no>\d+)\s*(题)?\s*答案[】\]]?\s*$")
+        value_re = re.compile(r"^[\[【]?答案[】\]]?\s*[:：]?\s*(?P<ans>.+)$")
+        inline_re = re.compile(
+            r"^\s*(第\s*)?(?P<no>\d+)\s*(题)?\s*[\.．、:：）)]?\s*(?:(?:答案|Ans|ANS)\s*[:：]?)?\s*(?P<rest>.*)$"
+        )
+
+        for line in answer_lines:
+            s = line.strip()
+            if not s:
+                continue
+            header_match = header_re.match(s)
+            if header_match:
+                try:
+                    last_no = int(header_match.group("no"))
+                except (TypeError, ValueError):
+                    continue
+                continue
+
+            value_match = value_re.match(s)
+            if value_match and last_no is not None:
+                _add_answer(last_no, value_match.group("ans"))
+                continue
+
+            m_ans = inline_re.match(s)
+            if m_ans:
+                no_str = m_ans.group("no") or ""
+                try:
+                    last_no = int(no_str)
+                except ValueError:
+                    continue
+                rest = m_ans.group("rest") or ""
+                rest = re.sub(r"^[\[【]?答案[】\]]?\s*[:：]?\s*", "", rest).strip()
+                _add_answer(last_no, rest)
+                continue
+
+            if last_no is not None:
+                _add_answer(last_no, s)
+
+        if answer_map:
+            if len(questions) == 1 and 1 not in answer_map and answer_map:
+                only = next(iter(answer_map.values()))
+                q0 = questions[0]
+                existing = (getattr(q0, "canonical_answer", None) or "").strip()
+                if not existing:
+                    q0.canonical_answer = only
+                    q0.answer_status = "complete"
+                    q0.answer_source = "ocr"
+            else:
+                for idx, q in enumerate(questions, start=1):
+                    ans = answer_map.get(idx)
+                    if not ans:
+                        continue
+                    existing = (getattr(q, "canonical_answer", None) or "").strip()
+                    if existing:
+                        continue
+                    q.canonical_answer = ans
+                    q.answer_status = "complete"
+                    q.answer_source = "ocr"
+
         if not questions:
             markdown_fallback = str(glm_result.get("md_results") or "").strip()
             if not markdown_fallback:
@@ -726,6 +808,30 @@ class GlmOcrService:
         document.ocr_layout_cache = self._dump_json(glm_result)
         document.ocr_cache_generated_at = datetime.utcnow()
         document.ocr_cache_model = model
+
+    def dump_glm_result(self, *, glm_result: Dict[str, Any], tenant_id: int, document: Document | None) -> None:
+        """Persist raw GLM-OCR payload to tmp/glm_ocr_dumps for进一步排查。"""
+
+        if document is None:
+            return
+
+        try:
+            dump_root = Path(__file__).resolve().parents[2] / "tmp" / "glm_ocr_dumps"
+            dump_root.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+            filename = f"tenant{tenant_id}_document{document.id}_{timestamp}.json"
+            payload = {
+                "tenant_id": tenant_id,
+                "document_id": document.id,
+                "generated_at": datetime.utcnow().isoformat(),
+                "glm_result": glm_result,
+            }
+            (dump_root / filename).write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.exception("[glm_ocr.dump] failed to persist glm result", exc_info=True)
 
     def _strip_html_tags(self, text: str) -> str:
         return re.sub(r"<[^>]+>", "", text)

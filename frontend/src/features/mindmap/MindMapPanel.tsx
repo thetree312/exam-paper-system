@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ReactFlowProvider } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -38,6 +39,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   onBack,
   onNavigateToQuestion,
 }) => {
+  const { t } = useTranslation('common')
   const [mode, setMode] = useState<'document' | 'file'>(() => (documentId ? 'document' : 'file'))
   const [layoutStyle, setLayoutStyle] = useState<MindMapLayoutStyle>('xmind')
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set())
@@ -74,7 +76,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
 
   const showQuestionAnchors = mode === 'document'
   const hasGraph = editableNodes.length > 0
-  const primaryButtonLabel = isLoading ? '生成中...' : hasGraph ? '重新生成' : '生成图谱'
+  const primaryButtonLabel = isLoading ? t('mindmap.generating') : hasGraph ? t('mindmap.regenerate') : t('mindmap.generate')
 
   const canUseDocument = Boolean(documentId)
   const canUseFile = Boolean(fileId)
@@ -181,8 +183,8 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
         <p>
           {!user
-            ? '请先登录以查看知识图谱'
-            : '请先在左侧上传文件，或在编辑区生成一份试卷文档后再使用思维导图'}
+            ? t('mindmap.login_required')
+            : t('mindmap.no_source')}
         </p>
       </div>
     )
@@ -204,9 +206,9 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50 pr-44">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Knowledge Map</p>
-          <h2 className="text-xl font-semibold text-slate-900">知识点思维导图</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{t('mindmap_panel.title')}</h2>
           {data?.cached && (
-            <span className="text-xs text-emerald-600 font-semibold">已使用缓存</span>
+            <span className="text-xs text-emerald-600 font-semibold">{t('mindmap_panel.cached')}</span>
           )}
         </div>
       </header>
@@ -232,13 +234,13 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         )}
         {error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-rose-600 text-sm gap-3">
-            <p>加载失败：{error}</p>
+            <p>{t('mindmap_panel.load_failed', { error })}</p>
             <button
               type="button"
               className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-600 hover:bg-rose-50"
               onClick={refresh}
             >
-              重试
+              {t('mindmap_panel.retry')}
             </button>
           </div>
         )}
@@ -247,11 +249,11 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             <p className="text-sm">
               {mode === 'document'
                 ? canUseDocument
-                  ? '当前基于编辑区文档，还未生成知识图谱，点击下方按钮开始提炼。'
-                  : '当前尚未生成试卷文档，请先在编辑区完成一次同步，或切换为“上传文件”模式。'
+                  ? t('mindmap_panel.document_ready')
+                  : t('mindmap_panel.document_not_ready')
                 : canUseFile
-                  ? '当前基于左侧上传的原始文件，还未生成知识图谱，点击下方按钮开始提炼。'
-                  : '当前没有检测到正在预览的文件，请先在左侧上传文件。'}
+                  ? t('mindmap_panel.file_ready')
+                  : t('mindmap_panel.file_not_ready')}
             </p>
             <button
               type="button"
@@ -259,7 +261,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
               onClick={refresh}
               disabled={!canGenerateCurrent}
             >
-              立即生成
+              {t('mindmap_panel.generate_now')}
             </button>
           </div>
         )}

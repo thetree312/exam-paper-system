@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Editor } from '@tiptap/react'
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -183,20 +184,20 @@ const computeSelectionCoords = (editor: Editor, from: number, to: number) => {
   }
 }
 
-const formatQuotaMessage = (quota?: TranslationQuotaInfo | null) => {
+const formatQuotaMessage = (quota?: TranslationQuotaInfo | null, t?: (key: string, params?: Record<string, any>) => string) => {
   if (!quota) return null
   if (quota.limit == null) {
-    return '订阅用户可无限次使用沉浸式翻译'
+    return t?.('question_editor.translation_quota_unlimited') ?? '订阅用户可无限次使用沉浸式翻译'
   }
   const remaining = typeof quota.remaining === 'number' ? Math.max(quota.remaining, 0) : null
   const limit = quota.limit
   const resetLabel = quota.reset_at
-    ? `，将在 ${new Date(quota.reset_at).toLocaleTimeString()} 重置`
+    ? t?.('question_editor.quota_reset', { time: new Date(quota.reset_at).toLocaleTimeString() }) ?? `，将在 ${new Date(quota.reset_at).toLocaleTimeString()} 重置`
     : ''
   if (remaining == null) {
-    return `免费额度上限 ${limit} 次${resetLabel}`
+    return t?.('question_editor.quota_limit', { limit, resetLabel }) ?? `免费额度上限 ${limit} 次${resetLabel}`
   }
-  return `免费额度：剩余 ${remaining}/${limit} 次${resetLabel}`
+  return t?.('question_editor.quota_remaining', { remaining, limit, resetLabel }) ?? `免费额度：剩余 ${remaining}/${limit} 次${resetLabel}`
 }
 
 const insertTranslationBlockNode = (
@@ -748,6 +749,7 @@ export const QuestionEditor: React.FC<QuestionEditorProps> = ({
   readOnly = false,
   translationContext,
 }) => {
+  const { t } = useTranslation('common')
   const lastValueRef = useRef<string | null>(null)
   const isSettingContentRef = useRef(false)
   const isInternalChangeRef = useRef(false)
@@ -1132,7 +1134,7 @@ export const QuestionEditor: React.FC<QuestionEditorProps> = ({
       if (err?.name === 'AbortError') {
         return
       }
-      let message = '翻译服务出错，请稍后再试'
+      let message = t('question_editor.translation_error')
       if (err instanceof TranslationApiError) {
         message = err.message
       }

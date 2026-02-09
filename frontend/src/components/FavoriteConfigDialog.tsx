@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { FavoriteConfig } from '../types'
 import { getQuestionTypes, createQuestionType } from '../services/questionTypesApi'
 import { getSubjects, createSubject } from '../services/subjectsApi'
@@ -168,6 +169,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
   tenantId,
   onToast,
 }) => {
+  const { t } = useTranslation('common')
   // 数据加载状态
   const [isLoading, setIsLoading] = useState(false)
   const [questionTypeOptions, setQuestionTypeOptions] = useState<string[]>([])
@@ -219,7 +221,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
       .catch((err) => {
         console.error('[FavoriteConfigDialog] load data failed', err)
         if (!cancelled) {
-          onToast?.('加载数据失败', 'error')
+          onToast?.(t('favorite_config.errors.load_failed'), 'error')
         }
       })
       .finally(() => {
@@ -300,7 +302,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
       onClose()
     } catch (err) {
       console.error('[FavoriteConfigDialog] confirm failed', err)
-      const errorMsg = err instanceof Error ? err.message : '操作失败'
+      const errorMsg = err instanceof Error ? err.message : t('favorite_config.errors.operation_failed')
       onToast?.(errorMsg, 'error')
     } finally {
       setIsSubmitting(false)
@@ -323,7 +325,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         {/* 标题 */}
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">配置收藏</h2>
+          <h2 className="text-lg font-semibold">{t('favorite_config.title')}</h2>
           <button
             onClick={handleClose}
             className="text-gray-500 hover:text-gray-700"
@@ -336,19 +338,19 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
         {/* 内容 */}
         <div className="p-6 space-y-6">
           {isLoading ? (
-            <div className="text-center py-8 text-gray-500">加载中...</div>
+            <div className="text-center py-8 text-gray-500">{t('favorite_config.loading')}</div>
           ) : (
             <>
               {/* 题型选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  题型
+                  {t('favorite_config.question_type_label')}
                 </label>
                 <SelectWithCustomEntry
                   value={selectedQuestionType}
                   onChange={setSelectedQuestionType}
                   options={questionTypeOptions}
-                  placeholder="选择或输入题型..."
+                  placeholder={t('favorite_config.question_type_placeholder')}
                   disabled={isSubmitting}
                 />
               </div>
@@ -356,13 +358,13 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
               {/* 科目选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  科目
+                  {t('favorite_config.subject_label')}
                 </label>
                 <SelectWithCustomEntry
                   value={selectedSubject}
                   onChange={setSelectedSubject}
                   options={subjectOptions}
-                  placeholder="选择或输入科目..."
+                  placeholder={t('favorite_config.subject_placeholder')}
                   disabled={isSubmitting}
                 />
               </div>
@@ -370,7 +372,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
               {/* 标签选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  知识点标签
+                  {t('favorite_config.tags_label')}
                 </label>
                 <div className="space-y-3">
                   {/* 已有标签列表 */}
@@ -404,7 +406,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
                       type="text"
                       value={newTagInput}
                       onChange={(e) => setNewTagInput(e.target.value)}
-                      placeholder="输入新知识点标签"
+                      placeholder={t('favorite_config.tags_custom_placeholder')}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={isSubmitting}
                       onKeyDown={(e) => {
@@ -428,7 +430,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
             className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
             disabled={isSubmitting || isLoading}
           >
-            取消
+            {t('favorite_config.buttons.cancel')}
           </button>
           <button
             type="button"
@@ -436,7 +438,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             disabled={isSubmitting || isLoading}
           >
-            {isSubmitting ? '保存中...' : '确认'}
+            {isSubmitting ? t('favorite_config.buttons.confirming') : t('favorite_config.buttons.confirm')}
           </button>
         </div>
       </div>

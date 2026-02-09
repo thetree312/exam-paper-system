@@ -1,0 +1,420 @@
+{
+  "app": {
+    "title": "智卷通",
+    "subtitle": "试卷编辑器",
+    "status": {
+      "upload_prompt": "请上传素材以开始识别",
+      "login_required": "请先登录后再上传",
+      "logged_in": "已登录：{{email}}",
+      "tab_placeholder": "请在该标签中上传文件",
+      "uploading": "正在上传...",
+      "unsupported_file": "当前仅支持图片、PDF 或 Word 预览",
+      "append_image": "新图片已追加，正在生成预览...",
+      "preview_generating": "上传完成，正在生成预览...",
+      "upload_failed": "上传失败，请稍后重试",
+      "selection_missing": "请先上传素材并框选区域",
+      "session_missing": "会话不存在，请重新上传",
+      "selection_cross_upload": "选区跨越不同上传，请分开识别",
+      "selection_invalid": "选区无效，请重新框选",
+      "ocr_running": "识别中...",
+      "ocr_done": "识别完成",
+      "ocr_failed": "识别失败，请稍后重试",
+      "split_running": "智能拆题中...",
+      "split_failed_keep": "智能拆题失败，保持原题目不变",
+      "split_done": "智能拆题完成",
+      "split_failed": "智能拆题失败，请稍后重试",
+      "grading_none": "没有可批改的题目",
+      "grading_running": "批改中...",
+      "grading_done": "批改完成",
+      "grading_failed": "批改失败，请稍后重试",
+      "export_none": "没有可导出的题目",
+      "export_running": "正在导出 Word...",
+      "export_done": "导出完成",
+      "export_failed": "导出失败，请稍后重试",
+      "glm_done": "GLM-OCR 全卷解析完成，题卡已加载"
+    },
+    "toast": {
+      "login_required": "请先登录",
+      "upload_required": "请先上传试卷并等待预览就绪",
+      "glm_invoking": "正在调用 GLM-OCR 进行全卷解析…",
+      "glm_empty": "GLM-OCR 未返回任何题目",
+      "glm_success": "已导入 {{count}} 道题",
+      "glm_failed": "GLM-OCR 解析失败：{{error}}",
+      "favorite_loading": "加载题目中...",
+      "favorite_success": "题目已添加到编辑区",
+      "favorite_failed": "加载失败：{{error}}",
+      "split_in_progress": "已有拆题任务在运行，请稍后",
+      "split_success": "智能拆题完成，生成 {{count}} 道题",
+      "split_failed": "智能拆题失败，请稍后重试"
+    },
+    "buttons": {
+      "export": "导出",
+      "logout": "退出登录",
+      "login": "登录",
+      "register": "注册并登录"
+    },
+    "labels": {
+      "tenant": "租户编码",
+      "language": "语言"
+    }
+  },
+  "auth": {
+    "logo_title": "智卷通 · 试卷编辑器",
+    "logo_subtitle": "先登录，再上传试卷进行框选识别",
+    "tabs": {
+      "login": "登录",
+      "register": "注册"
+    },
+    "fields": {
+      "email": "邮箱",
+      "password": "密码",
+      "display_name": "昵称（可选）"
+    },
+    "placeholders": {
+      "email": "you@example.com",
+      "password": "至少 8 位，包含字母和数字",
+      "display_name": "显示在右上角的名称"
+    },
+    "submit": {
+      "login": "登录",
+      "register": "注册并登录",
+      "loading": "处理中..."
+    },
+    "footnote": "已为后续微信 / Google 登录预留账号绑定结构，当前仅支持邮箱密码。",
+    "error": {
+      "generic": "登录/注册失败，请检查邮箱和密码"
+    },
+    "validation": {
+      "email_required": "邮箱不能为空",
+      "email_too_long": "邮箱长度不能超过 254 个字符",
+      "email_invalid": "邮箱格式不正确",
+      "password_required": "密码不能为空",
+      "password_too_short": "密码长度至少为 8 位",
+      "password_too_long": "密码长度不能超过 128 位",
+      "password_weak": "密码必须包含字母和数字",
+      "display_name_too_long": "昵称不能超过 100 个字符",
+      "display_name_invalid": "昵称不能包含 HTML 标签"
+    }
+  },
+  "flashcard": {
+    "header": {
+      "badge": "闪卡",
+      "back": "返回编辑区"
+    },
+    "document": {
+      "untitled": "未命名文档"
+    },
+    "messages": {
+      "login_required": "请先登录后查看闪卡。",
+      "need_document": "点击“生成闪卡”即可导入并生成。",
+      "load_failed": "闪卡加载失败",
+      "load_failed_with_reason": "闪卡加载失败：{{reason}}",
+      "no_items": "当前文档尚未生成闪卡，点击下方按钮即可立即生成。"
+    },
+    "info": {
+      "article": "已根据文档内容自动生成复习闪卡。",
+      "exam": "已加载题目与标准答案，适合逐题练习。",
+      "default": "闪卡将依据当前文档自动生成。",
+      "source_label": "数据来源：{{source}}",
+      "source_article": "文章概览",
+      "source_exam": "题目记录",
+      "footer_article": "基于文章内容生成，可用于概览式复习。",
+      "footer_exam": "基于题目记录，可用于逐题刷题。"
+    },
+    "buttons": {
+      "generate": "生成闪卡",
+      "generating": "生成中...",
+      "show_answer": "显示答案",
+      "hide_answer": "隐藏答案",
+      "refresh": "刷新闪卡"
+    },
+    "states": {
+      "loading": "闪卡加载中...",
+      "question_label": "题目",
+      "answer_label": "答案",
+      "empty_answer": "暂无答案",
+      "empty_front": "（题干为空）"
+    },
+    "badges": {
+      "answer_ai_draft": "AI 草稿",
+      "answer_standard": "标准答案",
+      "source_ai": "AI",
+      "source_manual": "人工"
+    },
+    "toast": {
+      "load_failed": "闪卡加载失败：{{error}}"
+    }
+  },
+  "source_panel": {
+    "upload": {
+      "uploading": "上传中...",
+      "idle": "上传新素材"
+    },
+    "collapsed": {
+      "expand": "展开预览面板",
+      "favorites": "我的收藏"
+    }
+  },
+  "selection": {
+    "toolbar": {
+      "add": "添加到编辑器",
+      "clear": "清除",
+      "exclude": "排除区域",
+      "legend": "图例提取"
+    },
+    "page_label": "第 {{page}} 页",
+    "preview": {
+      "loading": "正在生成预览，请稍候...",
+      "failed": "预览生成失败，请稍后重试或联系管理员",
+      "unsupported": "当前文件暂不支持预览",
+      "no_file": "暂无内容，请先上传文件",
+      "alt_page": "预览页 {{page}}"
+    }
+  },
+  "question_type": {
+    "placeholder": "选择题型",
+    "custom_option": "自定义题型…",
+    "custom_placeholder": "输入自定义题型",
+    "loading": "题型加载中…"
+  },
+  "question": {
+    "legend": {
+      "generic": "图例 {{index}}",
+      "option": "{{label}} 图 {{index}}"
+    },
+    "status": {
+      "selected": "已选择：{{label}}",
+      "hint": "点击选项即可作答"
+    },
+    "matching": {
+      "paragraphs": "段落",
+      "statements": "匹配句子",
+      "linked": "已连线：{{targets}}",
+      "selected_paragraph": "选中段落：{{id}}",
+      "unselected": "尚未选择段落",
+      "clear": "清除"
+    },
+    "mcq": {
+      "heading": "选择答案"
+    }
+  },
+  "user_menu": {
+    "tenant": "租户：{{tenant}}",
+    "stats": {
+      "title": "使用统计",
+      "documents": "处理的试卷",
+      "favorites": "收藏题目",
+      "monthly": "本月用量"
+    },
+    "actions": {
+      "favorites": "查看收藏",
+      "logout": "退出登录"
+    }
+  },
+  "translation": {
+    "retry": "重试翻译",
+    "loading_word": "正在翻译词汇",
+    "loading_sentence": "正在翻译句子"
+  },
+  "validation": {
+    "file_type": "不支持的文件类型，仅支持图片、PDF 和 Word 文档",
+    "file_too_large": "文件大小不能超过 {{size}}MB",
+    "file_empty": "文件不能为空"
+  },
+  "language": {
+    "label": "语言",
+    "zh": "中文",
+    "en": "English"
+  },
+  "favorite_config": {
+    "title": "配置收藏",
+    "subtitle": "请选择题型、科目和知识点标签",
+    "loading": "加载中...",
+    "question_type_label": "题型",
+    "question_type_placeholder": "选择或输入题型...",
+    "subject_label": "科目",
+    "subject_placeholder": "选择或输入科目...",
+    "tags_label": "知识点标签",
+    "tags_custom_placeholder": "输入新知识点标签",
+    "tags_custom_input": "输入自定义值...",
+    "buttons": {
+      "cancel": "取消",
+      "confirm": "确认",
+      "confirming": "保存中..."
+    },
+    "errors": {
+      "load_failed": "加载数据失败",
+      "operation_failed": "操作失败"
+    }
+  },
+  "export": {
+    "title": "导出设置",
+    "subtitle": "请选择导出模板后开始导出",
+    "template_label": "导出模板",
+    "template_default": "默认样式",
+    "buttons": {
+      "cancel": "取消",
+      "export": "开始导出",
+      "exporting": "导出中..."
+    }
+  },
+  "translation_block": {
+    "word_label": "单词释义",
+    "sentence_label": "沉浸式翻译",
+    "speak_title": "朗读（即将支持）",
+    "remove_title": "移除译文"
+  },
+  "editor_workspace": {
+    "text_button": "文本",
+    "flashcard_button": "闪卡",
+    "mindmap_button": "思维导图",
+    "answer_mode_button": "答题模式",
+    "copilot_button": "Copilot 对话",
+    "workspace_title": "内容工作区",
+    "session_label": "当前 Session #{{sessionId}}",
+    "session_not_started": "尚未开始",
+    "recognition_results": "识别结果",
+    "no_content": "暂无识别内容",
+    "sync_status": "同步状态：",
+    "syncing": "同步中...",
+    "saved_at": "已保存 {{time}}",
+    "synced": "已同步",
+    "not_synced": "未同步",
+    "manual_save": "手动保存",
+    "submit_grading": "提交批改",
+    "grading_in_progress": "批改中...",
+    "question_label": "题目 #{{index}}",
+    "page_label": "page {{page}}",
+    "source_label": "来源：",
+    "source_note": "笔记/文档",
+    "prev_question": "上一题",
+    "question_card": "题卡 {{current}}/{{total}}",
+    "next_question": "下一题",
+    "version_new": "新版",
+    "version_label": "版本 {{current}}/{{total}}",
+    "version_old": "旧版",
+    "button_delete": "删除",
+    "button_split": "智能拆题",
+    "button_split_in_progress": "智能拆题进行中",
+    "button_send_to_copilot": "发送到 Copilot",
+    "button_copy": "复制",
+    "grading_status": {
+      "pending": "批改中",
+      "correct": "回答正确",
+      "incorrect": "回答错误",
+      "skipped": "未作答",
+      "uncertain": "待确认",
+      "error": "批改失败"
+    }
+  },
+  "question_type_select": {
+    "placeholder": "选择题型",
+    "custom_option": "自定义题型…",
+    "custom_placeholder": "输入自定义题型",
+    "loading": "题型加载中…"
+  },
+  "file_tabs": {
+    "close_label": "关闭标签",
+    "collapse_label": "收起"
+  },
+  "mindmap": {
+    "generating": "生成中...",
+    "regenerate": "重新生成",
+    "generate": "生成图谱",
+    "login_required": "请先登录以查看知识图谱",
+    "no_source": "请先在左侧上传文件，或在编辑区生成一份试卷文档后再使用思维导图",
+    "document_mode_ready": "当前基于编辑区文档，还未生成知识图谱，点击下方按钮开始提炼。",
+    "document_mode_not_ready": "当前尚未生成试卷文档，请先在编辑区完成一次同步，或切换为\"上传文件\"模式。",
+    "file_mode_ready": "当前基于左侧上传的原始文件，还未生成知识图谱，点击下方按钮开始提炼。",
+    "file_mode_not_ready": "当前没有检测到正在预览的文件，请先在左侧上传文件。",
+    "document_label": "编辑区内容",
+    "file_label": "上传文件",
+    "grid_layout": "总览网格模式",
+    "hierarchy_layout": "知识脉络模式",
+    "xmind_layout": "xmind 模式"
+  },
+  "question_editor": {
+    "translation_quota_unlimited": "订阅用户可无限次使用沉浸式翻译",
+    "translation_error": "翻译服务出错，请稍后再试",
+    "quota_limit": "免费额度上限 {{limit}} 次{{resetLabel}}",
+    "quota_remaining": "免费额度：剩余 {{remaining}}/{{limit}} 次{{resetLabel}}",
+    "quota_reset": "，将在 {{time}} 重置",
+    "viewing_history": "正在查看历史版本，题干只读，可单独作答"
+  },
+  "agent_chat": {
+    "greeting_night_title": "夜深了",
+    "greeting_night_1": "夜深人静的时候，喝口温水再继续也不迟。",
+    "greeting_night_2": "凌晨的空气适合装下一点小小的灵感。",
+    "greeting_night_3": "夜猫子专属时段：安静得连思绪都能发光。",
+    "greeting_morning_title": "早安",
+    "greeting_morning_1": "向太阳借点能量，我们慢慢展开计划。",
+    "greeting_morning_2": "早起的脑袋最清醒，记得把灵感随手记下。",
+    "greeting_morning_3": "给自己一口热饮，再用好奇心开启这一天。",
+    "greeting_afternoon_title": "下午好",
+    "greeting_afternoon_1": "冷笑话：电脑为什么会累？因为它一直在\"处理器\"。",
+    "greeting_afternoon_2": "午后小困就走走路，再把想法告诉我。",
+    "greeting_afternoon_3": "学习小贴士：把问题分段写下来，灵感更容易浮现。",
+    "greeting_evening_title": "晚上好",
+    "greeting_evening_1": "冷笑话：铅笔为什么瘦？因为它总在削自己。",
+    "greeting_evening_2": "晚风最适合慢下来整理思路。",
+    "greeting_evening_3": "夜晚是反刍知识的好时候，先写下一两个问题吧。",
+    "input_placeholder": "不懂的尽管问我哦",
+    "new_conversation": "新对话",
+    "new_conversation_aria": "新建会话",
+    "question_type_label": "题型",
+    "question_type_placeholder": "选择或输入题型",
+    "cancel": "取消",
+    "creating_question_type": "题型创建中…",
+    "submitting": "提交中…",
+    "confirm": "确认",
+    "form_title": "AI Copilot · 批量出题配置",
+    "user_default_name": "我",
+    "thinking": "正在整理思路…",
+    "conversation_history_title": "对话历史",
+    "conversation_history_empty": "暂无历史会话",
+    "conversation_default_title": "新的会话",
+    "conversation_delete_aria": "删除会话"
+  },
+  "mindmap_node_editor": {
+    "description_label": "描述（剩余 {{remaining}} 字）",
+    "edit_node": "编辑节点",
+    "name_label": "名称",
+    "type_label": "类型",
+    "source_label": "来源 / 位置",
+    "parent_id_label": "父节点 ID",
+    "view_question": "查看题目",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "mindmap_node_types": {
+    "topic": "主题",
+    "subtopic": "分组",
+    "concept": "知识点",
+    "detail": "细化",
+    "sub_detail": "深化",
+    "stage": "阶段",
+    "timeline": "时间线",
+    "question_ref": "题目",
+    "example": "例子",
+    "default": "节点"
+  },
+  "mindmap_toolbar": {
+    "document_mode": "编辑区内容",
+    "file_mode": "上传文件",
+    "xmind_layout": "XMind 风格",
+    "hierarchy_layout": "知识脉络",
+    "grid_layout": "总览网格",
+    "save_mindmap": "保存思维导图"
+  },
+  "mindmap_panel": {
+    "title": "知识点思维导图",
+    "cached": "已使用缓存",
+    "load_failed": "加载失败：{{error}}",
+    "retry": "重试",
+    "generate_now": "立即生成",
+    "document_ready": "当前基于编辑区文档，还未生成知识图谱，点击下方按钮开始提炼。",
+    "document_not_ready": "当前尚未生成试卷文档，请先在编辑区完成一次同步，或切换为\"上传文件\"模式。",
+    "file_ready": "当前基于左侧上传的原始文件，还未生成知识图谱，点击下方按钮开始提炼。",
+    "file_not_ready": "当前没有检测到正在预览的文件，请先在左侧上传文件。"
+  }
+}

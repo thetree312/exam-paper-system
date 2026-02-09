@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AppHeader } from './components/AppHeader'
 import { AuthScreen } from './components/AuthScreen'
 import { EditorWorkspaceShell } from './components/EditorWorkspaceShell'
@@ -7,7 +8,13 @@ import { ExportTemplateDialog } from './components/ExportTemplateDialog'
 import { FavoritesPage } from './components/FavoritesPage'
 import { PreviewPaneShell } from './components/PreviewPaneShell'
 import { getQuestion } from './services/questionApi'
-import type { AggregatedOcrItem, AgentSendPayload, UploadedFileTab } from './types'
+import type {
+  AggregatedOcrItem,
+  AgentSendPayload,
+  StatusMessageKey,
+  StatusMessageSetter,
+  UploadedFileTab,
+} from './types'
 import { useAuth } from './hooks/useAuth'
 import { useFileUpload } from './hooks/useFileUpload'
 import { useOcrManager } from './hooks/useOcrManager'
@@ -29,6 +36,8 @@ const App: React.FC = () => {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const toastTimerRef = useRef<number | null>(null)
 
+  const { t } = useTranslation('common')
+
   const {
     user,
     authMode,
@@ -49,7 +58,13 @@ const App: React.FC = () => {
     handleLogout,
   } = useAuth(backendBaseUrl)
 
-  const [statusMessage, setStatusMessage] = useState('请上传素材以开始识别')
+  const [statusMessageKey, setStatusMessageKey] = useState<StatusMessageKey>('upload_prompt')
+  const [statusValues, setStatusValues] = useState<Record<string, string | number> | undefined>()
+
+  const setStatusMessage: StatusMessageSetter = (key, values) => {
+    setStatusMessageKey(key)
+    setStatusValues(values)
+  }
 
   const {
     fileTabs,
@@ -79,7 +94,11 @@ const App: React.FC = () => {
     rememberPreviewScroll,
   } = useFileUpload(backendBaseUrl, user, setStatusMessage)
 
-  const [toastState, setToastState] = useState<{ id: number; message: string; type: 'info' | 'success' | 'error' } | null>(null)
+  const [toastState, setToastState] = useState<{
+    id: number
+    message: string
+    type: 'info' | 'success' | 'error'
+  } | null>(null)
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) {
@@ -88,16 +107,21 @@ const App: React.FC = () => {
     }
   }, [])
 
-  const showToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
-    const payload = { id: Date.now(), message, type }
-    setToastState(payload)
-    if (toastTimerRef.current) {
-      window.clearTimeout(toastTimerRef.current)
-    }
-    toastTimerRef.current = window.setTimeout(() => {
-      setToastState((current) => (current?.id === payload.id ? null : current))
-    }, 4000)
-  }, [])
+  const showToast = useCallback(
+    (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+      const payload = { id: Date.now(), message, type }
+      setToastState(payload)
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current)
+      }
+      toastTimerRef.current = window.setTimeout(() => {
+        setToastState((current) => (current?.id === payload.id ? null : current))
+      }, 4000)
+    },
+    [],
+  )
+
+  const renderedStatusMessage = t(`app.status.${statusMessageKey}`, statusValues)
 
   const [agentDocumentId, setAgentDocumentId] = useState<number | null>(null)
   const {
@@ -127,7 +151,7 @@ const App: React.FC = () => {
   >(null)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isAnswerMode, setIsAnswerMode] = useState(false)
-  const [workspaceView, setWorkspaceView] = useState<'editor' | 'mindmap'>('editor')
+  const [workspaceView, setWorkspaceView] = useState<'editor' | 'mindmap' | 'flashcard'>('editor')
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const {
     leftPaneRef,
@@ -288,9 +312,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      setStatusMessage(`已登录：${user.email}`)
+      setStatusMessage('logged_in', { email: user.email })
     } else {
-      setStatusMessage('请先登录后再上传素材')
+      setStatusMessage('login_required')
     }
   }, [user])
 
@@ -299,13 +323,13 @@ const App: React.FC = () => {
     setFileTabs([])
     setActiveTabIndex(-1)
     setOcrItems([])
-    setStatusMessage('请先登录后再上传素材')
+    setStatusMessage('login_required')
     setIsUserMenuOpen(false)
   }, [handleLogout])
 
   const handleSelectionAddClick = useCallback(() => {
     if (!sessionId || !activeFile) {
-      setStatusMessage('会话不存在，请重新上传')
+      setStatusMessage('session_missing')
       return
     }
     void handleAddToEditor(sessionId, activeFile, selectionSnapshotRef.current)
@@ -322,18 +346,18 @@ const App: React.FC = () => {
     void handleSubmitGrading(currentFile, agentDocumentId, user)
   }, [agentDocumentId, currentFile, handleSubmitGrading, user])
 
-  const handleRunGlmOcr = useCallback(async () => {
+  const handleRunGlmOcr = useCallback(async (): Promise<number | null> => {
     if (!user) {
-      showToast('请先登录', 'error')
-      return
+      showToast(t('app.toast.login_required'), 'error')
+      return null
     }
     if (!currentFile || !sessionId) {
-      showToast('请先上传试卷并等待预览就绪', 'error')
-      return
+      showToast(t('app.toast.upload_required'), 'error')
+      return null
     }
 
     try {
-      showToast('正在调用 GLM-OCR 进行全卷解析…', 'info')
+      showToast(t('app.toast.glm_invoking'), 'info')
       const url = `${backendBaseUrl}/api/glm-ocr/sessions/${sessionId}/import?tenant_id=${user.tenant_id}&user_id=${user.id}`
       const resp = await fetch(url, { method: 'POST' })
       if (!resp.ok) {
@@ -343,7 +367,7 @@ const App: React.FC = () => {
       const data = (await resp.json()) as { document_id: number; question_ids: number[] }
       const { document_id: documentId, question_ids: questionIds } = data
       if (!questionIds || questionIds.length === 0) {
-        showToast('GLM-OCR 未返回任何题目', 'error')
+        showToast(t('app.toast.glm_empty'), 'error')
         return
       }
 
@@ -378,13 +402,15 @@ const App: React.FC = () => {
       })
 
       setOcrItems((prev) => [...prev, ...newItems])
-      setStatusMessage('GLM-OCR 全卷解析完成，题卡已加载到编辑区')
-      showToast(`已导入 ${newItems.length} 道题`, 'success')
+      setStatusMessage('glm_done')
+      showToast(t('app.toast.glm_success', { count: newItems.length }), 'success')
       setAppView('editor')
+      return documentId
     } catch (err) {
       console.error('[glm_ocr_import] failed', err)
       const msg = err instanceof Error ? err.message : '未知错误'
-      showToast(`GLM-OCR 解析失败：${msg}`, 'error')
+      showToast(t('app.toast.glm_failed', { error: msg }), 'error')
+      return null
     }
   }, [
     backendBaseUrl,
@@ -401,12 +427,12 @@ const App: React.FC = () => {
   const handleAddFavoriteToEditor = useCallback(
     async (questionId: number) => {
       if (!user) {
-        showToast('请先登录', 'error')
+        showToast(t('app.toast.login_required'), 'error')
         return
       }
 
       try {
-        showToast('加载题目中...', 'info')
+        showToast(t('app.toast.favorite_loading'), 'info')
         const question = await getQuestion(questionId, user.tenant_id, backendBaseUrl)
         
         const newItem: AggregatedOcrItem = {
@@ -429,14 +455,14 @@ const App: React.FC = () => {
         
         setOcrItems((prev) => [...prev, newItem])
         setAppView('editor')
-        showToast('题目已添加到编辑区', 'success')
+        showToast(t('app.toast.favorite_success'), 'success')
       } catch (err) {
         console.error('[add_favorite_to_editor] failed', err)
         const errorMsg = err instanceof Error ? err.message : '加载失败'
-        showToast(`加载失败: ${errorMsg}`, 'error')
+        showToast(t('app.toast.favorite_failed', { error: errorMsg }), 'error')
       }
     },
-    [user, backendBaseUrl, ocrItems.length, showToast],
+    [user, backendBaseUrl, ocrItems.length, showToast, t],
   )
 
   const handleSendQuestionToAgent = useCallback((payload: AgentSendPayload) => {
@@ -475,7 +501,7 @@ const App: React.FC = () => {
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col">
       <AppHeader
-        statusMessage={statusMessage}
+        statusMessage={renderedStatusMessage}
         isUploading={isUploading}
         isExtracting={isExtracting}
         onExportClick={() => setIsExportDialogOpen(true)}

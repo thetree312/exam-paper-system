@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   AggregatedOcrItem,
   ExportQuestionPayload,
@@ -7,6 +8,7 @@ import type {
   ExportWordRequestPayload,
   UserInfo,
 } from '../types'
+import type { StatusMessageSetter } from '../types'
 
 interface ExportTemplateDialogProps {
   open: boolean
@@ -15,7 +17,7 @@ interface ExportTemplateDialogProps {
   ocrItems: AggregatedOcrItem[]
   documentTitle: string | null
   user: UserInfo | null
-  onStatusMessage: (message: string) => void
+  onStatusMessage: StatusMessageSetter
 }
 
 export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
@@ -27,6 +29,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
   user,
   onStatusMessage,
 }) => {
+  const { t } = useTranslation('common')
   const [templates, setTemplates] = useState<ExportTemplateInfo[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -54,7 +57,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
   const handleSubmit = useCallback(async () => {
     if (!user) return
     if (!ocrItems.length) {
-      onStatusMessage('没有可导出的题目')
+      onStatusMessage('export_none')
       return
     }
 
@@ -82,7 +85,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
       .filter((q): q is ExportQuestionPayload => q !== null)
 
     if (!questions.length) {
-      onStatusMessage('没有可导出的题目')
+      onStatusMessage('export_none')
       return
     }
 
@@ -94,7 +97,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
 
     try {
       setIsLoading(true)
-      onStatusMessage('正在导出 Word...')
+      onStatusMessage('export_running')
       const resp = await fetch(`${backendBaseUrl}/api/export/word`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,21 +113,21 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${title || '导出试卷'}.docx`
+      a.download = `${title || t('export.title')}.docx`
       document.body.appendChild(a)
       a.click()
       a.remove()
       window.URL.revokeObjectURL(url)
 
-      onStatusMessage('导出完成')
+      onStatusMessage('export_done')
       onClose()
     } catch (err) {
       console.error('[export] failed', err)
-      onStatusMessage('导出失败，请稍后重试')
+      onStatusMessage('export_failed')
     } finally {
       setIsLoading(false)
     }
-  }, [backendBaseUrl, documentTitle, ocrItems, onClose, onStatusMessage, selectedKey, user])
+  }, [backendBaseUrl, documentTitle, ocrItems, onClose, onStatusMessage, selectedKey, user, t])
 
   if (!open) return null
 
@@ -133,8 +136,8 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">导出设置</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">请选择导出模板后开始导出</p>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{t('export.title')}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('export.subtitle')}</p>
           </div>
           <button
             type="button"
@@ -147,14 +150,14 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
         </div>
 
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-          导出模板
+          {t('export.template_label')}
           <select
             className="mt-1 w-full h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             value={selectedKey ?? ''}
             onChange={(e) => setSelectedKey(e.target.value || null)}
             disabled={isLoading}
           >
-            <option value="">默认样式</option>
+            <option value="">{t('export.template_default')}</option>
             {templates.map((tpl) => (
               <option key={tpl.key} value={tpl.key}>
                 {tpl.name}
@@ -170,7 +173,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
             onClick={onClose}
             disabled={isLoading}
           >
-            取消
+            {t('export.buttons.cancel')}
           </button>
           <button
             type="button"
@@ -178,7 +181,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
             onClick={handleSubmit}
             disabled={isLoading}
           >
-            {isLoading ? '导出中...' : '开始导出'}
+            {isLoading ? t('export.buttons.exporting') : t('export.buttons.export')}
           </button>
         </div>
       </div>

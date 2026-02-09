@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MarkdownWithMath } from '../MarkdownWithMath'
 import { parseMatchingAnswerMap, serializeAnswerMap } from './utils'
 import type { ParagraphMatchingParseResult } from './utils'
@@ -19,6 +20,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
   onChange,
   disabled = false,
 }) => {
+  const { t } = useTranslation('common')
   const answerMap = useMemo(() => parseMatchingAnswerMap(value), [value])
   const [focusedParagraph, setFocusedParagraph] = useState<string | null>(null)
   const [isDesktop, setIsDesktop] = useState<boolean>(
@@ -133,7 +135,9 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
               : ''
           }`}
         >
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">段落</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            {t('question.matching.paragraphs')}
+          </div>
           {data.paragraphs.map((paragraph) => {
             const linkedStatements = paragraphToStatements[paragraph.id] ?? []
             const isHighlighted =
@@ -158,7 +162,9 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                   </span>
                   {linkedStatements.length > 0 && (
                     <span className="text-xs text-sky-700">
-                      已连线：{linkedStatements.join(', ')}
+                      {t('question.matching.linked', {
+                        targets: linkedStatements.join(', '),
+                      })}
                     </span>
                   )}
                 </div>
@@ -176,7 +182,9 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
               : ''
           }`}
         >
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">匹配句子</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            {t('question.matching.statements')}
+          </div>
           {data.statements.map((statement) => {
             const assigned = answerMap[statement.id] ?? null
             return (
@@ -193,10 +201,10 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                     </span>
                     {assigned ? (
                       <span className="text-xs font-medium text-emerald-700">
-                        选中段落：{assigned}
+                        {t('question.matching.selected_paragraph', { id: assigned })}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500">尚未选择段落</span>
+                      <span className="text-xs text-slate-500">{t('question.matching.unselected')}</span>
                     )}
                   </div>
                   <button
@@ -205,7 +213,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                     onClick={() => handleClear(statement.id)}
                     disabled={disabled || !assigned}
                   >
-                    清除
+                    {t('question.matching.clear')}
                   </button>
                 </div>
                 <MarkdownWithMath disableMath className="text-sm text-slate-700 leading-relaxed">

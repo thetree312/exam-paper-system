@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { UploadedFileTab, SessionStatus, UserInfo } from '../types'
+import type { UploadedFileTab, SessionStatus, StatusMessageSetter, UserInfo } from '../types'
 import { useAppStore } from '../store/appStore'
 
 interface UseFileUploadReturn {
@@ -40,7 +40,7 @@ const deriveTabStatus = (pageStatuses?: UploadedFileTab['status'][]): UploadedFi
 export const useFileUpload = (
   backendBaseUrl: string,
   user: UserInfo | null,
-  onStatusMessage: (msg: string) => void,
+  onStatusMessage: StatusMessageSetter,
 ): UseFileUploadReturn => {
   const storeFileTabs = useAppStore((state) => state.fileTabs)
   const setStoreFileTabs = useAppStore((state) => state.setFileTabs)
@@ -203,7 +203,7 @@ export const useFileUpload = (
     }
     setStoreFileTabs((prev) => [...prev, newTab])
     setStoreActiveTabIndex(storeFileTabs.length)
-    onStatusMessage('请在该标签中上传文件')
+    onStatusMessage('tab_placeholder')
   }, [storeFileTabs.length, onStatusMessage, setStoreFileTabs, setStoreActiveTabIndex])
 
   const handleTabSelect = useCallback(
@@ -258,12 +258,12 @@ export const useFileUpload = (
       if (!file) return
 
       if (!user) {
-        onStatusMessage('请先登录后再上传文件')
+        onStatusMessage('login_required')
         return
       }
 
       setIsUploading(true)
-      onStatusMessage('正在上传...')
+      onStatusMessage('uploading')
 
       console.log('[upload] start', {
         name: file.name,
@@ -284,7 +284,7 @@ export const useFileUpload = (
       ) {
         previewType = 'word'
       } else {
-        onStatusMessage('当前只支持图片、PDF 或 Word 预览')
+        onStatusMessage('unsupported_file')
       }
 
       const formData = new FormData()
@@ -334,7 +334,7 @@ export const useFileUpload = (
               }
             }),
           )
-          onStatusMessage('新图片已追加，正在生成预览...')
+          onStatusMessage('append_image')
         } else {
           // 新建或占位符替换（图片/PDF/Word）
           const pages = (data.preview_pages ?? []).map(normalizeUrl).filter(Boolean) as string[]
@@ -361,19 +361,19 @@ export const useFileUpload = (
               })
             )
             setStoreActiveTabIndex(storeActiveTabIndex)
-            onStatusMessage('上传完成，正在生成预览...')
+            onStatusMessage('preview_generating')
           } else {
             const nextIndex = storeFileTabs.length
             setStoreFileTabs((prev) => [...prev, newTab])
             setStoreActiveTabIndex(nextIndex)
-            onStatusMessage('上传完成，正在生成预览...')
+            onStatusMessage('preview_generating')
           }
         }
 
         console.log('[upload] success session', data.session_id)
       } catch (err) {
         console.error('[upload] failed', err)
-        onStatusMessage('上传失败，请稍后重试')
+        onStatusMessage('upload_failed')
       } finally {
         setIsUploading(false)
         if (inputEl) {

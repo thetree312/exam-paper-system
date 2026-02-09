@@ -47,8 +47,8 @@ interface AppState {
   setIsPreviewCollapsed: (collapsed: boolean) => void
   isAnswerMode: boolean
   setIsAnswerMode: (mode: boolean) => void
-  workspaceView: 'editor' | 'mindmap'
-  setWorkspaceView: (view: 'editor' | 'mindmap') => void
+  workspaceView: 'editor' | 'mindmap' | 'flashcard'
+  setWorkspaceView: (view: 'editor' | 'mindmap' | 'flashcard') => void
   appView: 'editor' | 'favorites'
   setAppView: (view: 'editor' | 'favorites') => void
   leftWidth: number

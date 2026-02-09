@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileTabsBar } from './FileTabsBar'
 import { SelectionPane } from './SelectionPane'
 import { FavoritesPage } from './FavoritesPage'
@@ -16,6 +17,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
   onStatusMessage,
   onToast,
 }) => {
+  const { t } = useTranslation('common')
   const user = useAppStore((state) => state.user)
   const isPreviewCollapsed = useAppStore((state) => state.isPreviewCollapsed)
   const setIsPreviewCollapsed = useAppStore((state) => state.setIsPreviewCollapsed)
@@ -99,7 +101,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
               disabled={isUploading}
             >
               <span className="material-symbols-outlined text-[18px]">upload_file</span>
-              {isUploading ? '上传中...' : '上传新素材'}
+              {isUploading ? t('source_panel.upload.uploading') : t('source_panel.upload.idle')}
             </button>
             <input
               ref={fileInputRef}
@@ -133,7 +135,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
               setIsPreviewCollapsed(false)
               setAppView('editor')
             }}
-            title="展开"
+            title={t('source_panel.collapsed.expand')}
           >
             <span className="material-symbols-outlined text-[20px]">menu</span>
           </button>
@@ -143,7 +145,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
               type="button"
               className="w-10 h-10 flex items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
               onClick={() => setAppView('favorites')}
-              title="我的收藏"
+              title={t('source_panel.collapsed.favorites')}
             >
               <span
                 className="material-symbols-outlined text-[22px]"

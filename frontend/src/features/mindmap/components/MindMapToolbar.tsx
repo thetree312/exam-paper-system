@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { MindMapLayoutStyle } from './MindMapFlow'
 
 export interface MindMapToolbarProps {
@@ -34,19 +35,20 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
   onSave,
   saveDisabled,
 }) => {
+  const { t } = useTranslation('common')
   const modeOptions: Array<{
     key: 'document' | 'file'
     icon: string
     label: string
     disabled: boolean
   }> = [
-    { key: 'document', icon: 'contextual_token_add', label: '编辑区内容', disabled: !canUseDocument },
-    { key: 'file', icon: 'article', label: '上传文件', disabled: !canUseFile },
+    { key: 'document', icon: 'contextual_token_add', label: t('mindmap_toolbar.document_mode'), disabled: !canUseDocument },
+    { key: 'file', icon: 'article', label: t('mindmap_toolbar.file_mode'), disabled: !canUseFile },
   ]
   const layoutOptions: Array<{ key: MindMapLayoutStyle; icon: string; title: string }> = [
-    { key: 'xmind', icon: 'schema', title: 'XMind 风格' },
-    { key: 'hierarchy', icon: 'account_tree', title: '知识脉络' },
-    { key: 'grid', icon: 'family_history', title: '总览网格' },
+    { key: 'xmind', icon: 'schema', title: t('mindmap_toolbar.xmind_layout') },
+    { key: 'hierarchy', icon: 'account_tree', title: t('mindmap_toolbar.hierarchy_layout') },
+    { key: 'grid', icon: 'family_history', title: t('mindmap_toolbar.grid_layout') },
   ]
 
   const activeModeIndex = modeOptions.findIndex((opt) => opt.key === mode)
@@ -131,7 +133,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             <span className="material-symbols-outlined text-[16px] leading-none">refresh</span>
           </button>
           {showSave && (
-            <button type="button" title="保存思维导图" onClick={onSave} disabled={saveDisabled} className={actionButtonClasses}>
+            <button type="button" title={t('mindmap_toolbar.save_mindmap')} onClick={onSave} disabled={saveDisabled} className={actionButtonClasses}>
               <span className="material-symbols-outlined text-[16px] leading-none">save</span>
             </button>
           )}

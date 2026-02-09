@@ -38,17 +38,19 @@ const DEPTH_COLORS: Array<{ border: string; badge: string; bg: string }> = [
 ]
 
 // type 到 badge 文字的映射（仅用于显示，不影响布局）
-const TYPE_LABELS: Record<string, string> = {
-  topic: '主题',
-  subtopic: '分组',
-  concept: '知识点',
-  detail: '细化',
-  sub_detail: '深化',
-  stage: '阶段',
-  timeline: '时间线',
-  question_ref: '题目',
-  example: '例子',
-  default: '节点',
+// 注意：这些标签应该通过 i18n 获取，但为了避免在渲染时频繁调用 hook，
+// 我们在这里保留英文作为备用，实际的本地化应该在组件中处理
+const TYPE_LABELS_EN: Record<string, string> = {
+  topic: 'Topic',
+  subtopic: 'Group',
+  concept: 'Concept',
+  detail: 'Detail',
+  sub_detail: 'Sub-detail',
+  stage: 'Stage',
+  timeline: 'Timeline',
+  question_ref: 'Question',
+  example: 'Example',
+  default: 'Node',
 }
 
 // 计算真实树深度（基于 parentId 链，而非 type）
@@ -252,7 +254,7 @@ const MindMapNodeComponent: React.FC<NodeProps<MindMapNodeData>> = ({ data, sele
   const questions = raw.data?.questionIds ?? []
   const description = raw.data?.description || raw.data?.source || ''
   const showQuestions = showQuestionAnchors && questions.length > 0
-  const typeLabel = TYPE_LABELS[raw.type ?? 'default'] ?? TYPE_LABELS.default
+  const typeLabel = TYPE_LABELS_EN[raw.type ?? 'default'] ?? TYPE_LABELS_EN.default
 
   const renderHandles = () => {
     if (isCenter) {

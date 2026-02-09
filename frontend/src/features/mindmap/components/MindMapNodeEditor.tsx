@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { MindMapNodePayload } from '../../types'
 import { NODE_TYPE_OPTIONS, getDescriptionLimit } from '../constants'
 
@@ -10,6 +11,7 @@ interface MindMapNodeEditorProps {
 }
 
 const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, onSubmit, onNavigate }) => {
+  const { t } = useTranslation('common')
   const [label, setLabel] = React.useState('')
   const [type, setType] = React.useState('concept')
   const [description, setDescription] = React.useState('')
@@ -60,7 +62,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">编辑节点</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('mindmap_node_editor.edit_node')}</p>
             <h3 className="text-base font-semibold text-slate-900">{node.label}</h3>
           </div>
           <button
@@ -76,7 +78,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
           className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 flex flex-col gap-3 text-[13px]"
         >
         <label className="flex flex-col gap-1 text-[12px] text-slate-600">
-          名称
+          {t('mindmap_node_editor.name_label')}
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -84,7 +86,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
           />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-slate-600">
-          类型
+          {t('mindmap_node_editor.type_label')}
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
@@ -98,7 +100,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
           </select>
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-slate-600">
-          描述（剩余 {remaining} 字）
+          {t('mindmap_node_editor.description_label', { remaining })}
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value.slice(0, limit))}
@@ -107,7 +109,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
           />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-slate-600">
-          来源 / 位置
+          {t('mindmap_node_editor.source_label')}
           <input
             value={source}
             onChange={(e) => setSource(e.target.value)}
@@ -115,7 +117,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
           />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-slate-600">
-          父节点 ID
+          {t('mindmap_node_editor.parent_id_label')}
           <input
             value={parentId ?? ''}
             onChange={(e) => setParentId(e.target.value.trim() === '' ? null : e.target.value)}
@@ -128,7 +130,7 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
               onClick={() => onNavigate?.(node)}
               className="px-3 py-1.5 rounded-full border border-slate-200 text-[12px] text-slate-600 hover:border-slate-400"
             >
-              查看题目
+              {t('mindmap_node_editor.view_question')}
             </button>
             <div className="flex items-center gap-2">
               <button
@@ -136,13 +138,13 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
                 onClick={onClose}
                 className="px-3 py-1.5 rounded-full border border-slate-200 text-[12px] text-slate-600 hover:border-slate-400"
               >
-                取消
+                {t('mindmap_node_editor.cancel')}
               </button>
               <button
                 type="submit"
                 className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[12px] shadow-lg hover:bg-slate-800"
               >
-                保存
+                {t('mindmap_node_editor.save')}
               </button>
             </div>
           </div>

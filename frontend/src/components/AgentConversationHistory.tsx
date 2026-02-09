@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AgentConversationMeta } from '../types'
 
 interface AgentConversationHistoryProps {
@@ -20,6 +21,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
   onDeleteConversation,
   onRenameConversation,
 }) => {
+  const { t } = useTranslation()
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
 
@@ -43,11 +45,11 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
     <div className="w-full bg-white border-b border-neutral-200 shadow-sm">
       <div className="p-2 space-y-1 max-h-[360px] overflow-y-auto custom-scrollbar relative">
         <div className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-neutral-400 font-bold sticky top-0 bg-white/95 backdrop-blur-md z-10 border-b border-neutral-50 mb-1 text-left">
-          对话历史 ({visibleConversations.length})
+          {t('agent_chat.conversation_history_title')} ({visibleConversations.length})
         </div>
         <div className="space-y-1">
           {visibleConversations.length === 0 && (
-            <div className="px-4 py-4 text-xs text-neutral-400 text-center">暂无历史会话</div>
+            <div className="px-4 py-4 text-xs text-neutral-400 text-center">{t('agent_chat.conversation_history_empty')}</div>
           )}
           {visibleConversations.map((conv) => {
             const isActive = conv.key === activeConversationKey
@@ -81,13 +83,13 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                           onChange={(e) => setEditingTitle(e.target.value)}
                           onBlur={() => {
                             const title = editingTitle.trim()
-                            onRenameConversation(conv.key, title || conv.title || '新的会话')
+                            onRenameConversation(conv.key, title || '')
                             setEditingKey(null)
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               const title = editingTitle.trim()
-                              onRenameConversation(conv.key, title || conv.title || '新的会话')
+                              onRenameConversation(conv.key, title || '')
                               setEditingKey(null)
                             } else if (e.key === 'Escape') {
                               setEditingKey(null)
@@ -103,10 +105,10 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                           onDoubleClick={(e) => {
                             e.stopPropagation()
                             setEditingKey(conv.key)
-                            setEditingTitle(conv.title || '新的会话')
+                            setEditingTitle(conv.title || '')
                           }}
                         >
-                          {conv.title || '新的会话'}
+                          {conv.title || t('agent_chat.conversation_default_title')}
                         </span>
                       )}
                     </div>
@@ -119,7 +121,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                     onDeleteConversation(conv.key)
                   }}
                   className="text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 ml-2 transition-opacity pointer-events-auto"
-                  aria-label="删除会话"
+                  aria-label={t('agent_chat.conversation_delete_aria')}
                 >
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />

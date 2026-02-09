@@ -1,0 +1,446 @@
+{
+  "app": {
+    "title": "PaperCraft",
+    "subtitle": "Exam Builder",
+    "status": {
+      "upload_prompt": "Please upload materials to start",
+      "login_required": "Please sign in before uploading",
+      "logged_in": "Signed in as {{email}}",
+      "tab_placeholder": "Upload a file within this tab",
+      "uploading": "Uploading…",
+      "unsupported_file": "Only images, PDF or Word files are supported",
+      "append_image": "Image appended, generating preview…",
+      "preview_generating": "Upload finished, generating preview…",
+      "upload_failed": "Upload failed, please retry later",
+      "selection_missing": "Please upload and draw a selection first",
+      "session_missing": "Session missing, please re-upload",
+      "selection_cross_upload": "Selection spans different uploads, please split it",
+      "selection_invalid": "Selection invalid, please try again",
+      "ocr_running": "Recognizing…",
+      "ocr_done": "Recognition complete",
+      "ocr_failed": "Recognition failed, please retry",
+      "split_running": "Smart split in progress…",
+      "split_failed_keep": "Smart split failed, original question kept",
+      "split_done": "Smart split done",
+      "split_failed": "Smart split failed, please retry",
+      "grading_none": "No question available for grading",
+      "grading_running": "Grading…",
+      "grading_done": "Grading completed",
+      "grading_failed": "Grading failed, please retry",
+      "export_none": "No question available for export",
+      "export_running": "Exporting Word…",
+      "export_done": "Export finished",
+      "export_failed": "Export failed, please retry",
+      "glm_done": "GLM-OCR finished, questions loaded"
+    },
+    "toast": {
+      "login_required": "Please sign in first",
+      "upload_required": "Upload the paper and wait for preview first",
+      "glm_invoking": "Running GLM-OCR for the full paper…",
+      "glm_empty": "GLM-OCR returned no question",
+      "glm_success": "Imported {{count}} questions",
+      "glm_failed": "GLM-OCR failed: {{error}}",
+      "favorite_loading": "Loading question…",
+      "favorite_success": "Question added to editor",
+      "favorite_failed": "Load failed: {{error}}",
+      "split_in_progress": "Smart split already running",
+      "split_success": "Smart split created {{count}} questions",
+      "split_failed": "Smart split failed, please retry"
+    },
+    "buttons": {
+      "export": "Export",
+      "logout": "Sign out",
+      "login": "Sign in",
+      "register": "Register & sign in"
+    },
+    "labels": {
+      "tenant": "Tenant",
+      "language": "Language"
+    }
+  },
+  "auth": {
+    "logo_title": "PaperCraft · Exam Builder",
+    "logo_subtitle": "Sign in to upload and capture papers",
+    "tabs": {
+      "login": "Sign in",
+      "register": "Sign up"
+    },
+    "fields": {
+      "email": "Email",
+      "password": "Password",
+      "display_name": "Display name (optional)"
+    },
+    "placeholders": {
+      "email": "you@example.com",
+      "password": "At least 8 chars with letters and numbers",
+      "display_name": "Shown in the header"
+    },
+    "submit": {
+      "login": "Sign in",
+      "register": "Register & sign in",
+      "loading": "Processing…"
+    },
+    "footnote": "Account binding for WeChat / Google is reserved; currently email+password only.",
+    "error": {
+      "generic": "Login or registration failed, please check your credentials"
+    },
+    "validation": {
+      "email_required": "Email is required",
+      "email_too_long": "Email must not exceed 254 characters",
+      "email_invalid": "Email format is invalid",
+      "password_required": "Password is required",
+      "password_too_short": "Password must be at least 8 characters",
+      "password_too_long": "Password must not exceed 128 characters",
+      "password_weak": "Password must contain both letters and numbers",
+      "display_name_too_long": "Display name must not exceed 100 characters",
+      "display_name_invalid": "Display name cannot contain HTML tags"
+    }
+  },
+  "flashcard": {
+    "header": {
+      "badge": "Flashcards",
+      "back": "Back to editor"
+    },
+    "document": {
+      "untitled": "Untitled document"
+    },
+    "messages": {
+      "login_required": "Sign in to view flashcards.",
+      "need_document": "Click “Generate flashcards” to import and build them.",
+      "load_failed": "Failed to load flashcards",
+      "load_failed_with_reason": "Failed to load flashcards: {{reason}}",
+      "no_items": "This document has no flashcards yet—click the button below to generate them."
+    },
+    "info": {
+      "article": "Flashcards were generated automatically from the document content.",
+      "exam": "Question-answer cards loaded for step-by-step practice.",
+      "default": "Flashcards will be generated from the current document.",
+      "source_label": "Source: {{source}}",
+      "source_article": "Article overview",
+      "source_exam": "Question records",
+      "footer_article": "Generated from article context for overview-style review.",
+      "footer_exam": "Based on question records for drill practice."
+    },
+    "buttons": {
+      "generate": "Generate flashcards",
+      "generating": "Generating…",
+      "show_answer": "Show answer",
+      "hide_answer": "Hide answer",
+      "refresh": "Refresh deck"
+    },
+    "states": {
+      "loading": "Loading flashcards…",
+      "question_label": "Question",
+      "answer_label": "Answer",
+      "empty_answer": "No answer yet",
+      "empty_front": "(Question stem is empty)"
+    },
+    "badges": {
+      "answer_ai_draft": "AI draft",
+      "answer_standard": "Standard answer",
+      "source_ai": "AI",
+      "source_manual": "Manual"
+    },
+    "toast": {
+      "load_failed": "Flashcard load failed: {{error}}"
+    }
+  },
+  "source_panel": {
+    "upload": {
+      "uploading": "Uploading…",
+      "idle": "Upload new material"
+    },
+    "collapsed": {
+      "expand": "Expand preview pane",
+      "favorites": "My favorites"
+    }
+  },
+  "selection": {
+    "toolbar": {
+      "add": "Add to editor",
+      "clear": "Clear",
+      "exclude": "Exclude region",
+      "legend": "Legend capture"
+    },
+    "page_label": "Page {{page}}",
+    "preview": {
+      "loading": "Generating preview, please wait…",
+      "failed": "Preview failed, please retry or contact support",
+      "unsupported": "This file type cannot be previewed yet",
+      "no_file": "No file selected, upload one first",
+      "alt_page": "Preview page {{page}}"
+    }
+  },
+  "question_type": {
+    "placeholder": "Select a question type",
+    "custom_option": "Custom question type…",
+    "custom_placeholder": "Enter custom question type",
+    "loading": "Question types loading…"
+  },
+  "question": {
+    "legend": {
+      "generic": "Figure {{index}}",
+      "option": "{{label}} figure {{index}}"
+    },
+    "status": {
+      "selected": "Selected: {{label}}",
+      "hint": "Click an option to answer"
+    },
+    "matching": {
+      "paragraphs": "Paragraphs",
+      "statements": "Statements",
+      "linked": "Linked: {{targets}}",
+      "selected_paragraph": "Selected paragraph: {{id}}",
+      "unselected": "No paragraph selected",
+      "clear": "Clear"
+    },
+    "mcq": {
+      "heading": "Choose an answer"
+    }
+  },
+  "user_menu": {
+    "tenant": "Tenant: {{tenant}}",
+    "stats": {
+      "title": "Usage stats",
+      "documents": "Processed papers",
+      "favorites": "Favorites",
+      "monthly": "Monthly usage"
+    },
+    "actions": {
+      "favorites": "View favorites",
+      "logout": "Sign out"
+    }
+  },
+  "translation": {
+    "retry": "Retry translation",
+    "loading_word": "Translating word",
+    "loading_sentence": "Translating sentence"
+  },
+  "favorites": {
+    "title": "Saved questions",
+    "subtitle": "Manage your curated questions. Review, organize, or export them as papers.",
+    "search_placeholder": "Search by keyword or ID…",
+    "refresh": "Refresh",
+    "loading": "Loading favorites…",
+    "empty_title": "No saved questions yet",
+    "empty_desc": "Start bookmarking the questions you like.",
+    "empty_desc_search": "No matching question found",
+    "back": "Back to editor",
+    "quota_label": "Storage usage",
+    "page_label": "Page {{page}}",
+    "sequence_label": "Question #{{index}}",
+    "toolbar": {
+      "add": "Add to editor",
+      "remove": "Remove favorite"
+    },
+    "meta": {
+      "added": "Added {{date}}"
+    },
+    "toast": {
+      "load_failed": "Failed to load favorites",
+      "removed": "Favorite removed",
+      "remove_failed": "Failed to remove favorite"
+    }
+  },
+  "validation": {
+    "file_type": "Unsupported file type, images / PDF / Word only",
+    "file_too_large": "File must not exceed {{size}}MB",
+    "file_empty": "File cannot be empty"
+  },
+  "language": {
+    "label": "Language",
+    "zh": "中文",
+    "en": "English"
+  },
+  "favorite_config": {
+    "title": "Configure Favorite",
+    "subtitle": "Select question type, subject, and knowledge tags",
+    "loading": "Loading...",
+    "question_type_label": "Question Type",
+    "question_type_placeholder": "Select or enter question type...",
+    "subject_label": "Subject",
+    "subject_placeholder": "Select or enter subject...",
+    "tags_label": "Knowledge Tags",
+    "tags_custom_placeholder": "Enter new knowledge tag",
+    "tags_custom_input": "Enter custom value...",
+    "buttons": {
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "confirming": "Saving..."
+    },
+    "errors": {
+      "load_failed": "Failed to load data",
+      "operation_failed": "Operation failed"
+    }
+  },
+  "export": {
+    "title": "Export Settings",
+    "subtitle": "Select an export template to begin",
+    "template_label": "Export Template",
+    "template_default": "Default Style",
+    "buttons": {
+      "cancel": "Cancel",
+      "export": "Start Export",
+      "exporting": "Exporting..."
+    }
+  },
+  "translation_block": {
+    "word_label": "Word Definition",
+    "sentence_label": "Immersive Translation",
+    "speak_title": "Speak (Coming Soon)",
+    "remove_title": "Remove Translation"
+  },
+  "editor_workspace": {
+    "text_button": "Text",
+    "flashcard_button": "Flashcard",
+    "mindmap_button": "Mind Map",
+    "answer_mode_button": "Answer Mode",
+    "copilot_button": "Copilot Chat",
+    "workspace_title": "Content Workspace",
+    "session_label": "Current Session #{{sessionId}}",
+    "session_not_started": "Not started",
+    "recognition_results": "Recognition Results",
+    "no_content": "No recognition content",
+    "sync_status": "Sync Status:",
+    "syncing": "Syncing...",
+    "saved_at": "Saved at {{time}}",
+    "synced": "Synced",
+    "not_synced": "Not synced",
+    "manual_save": "Manual Save",
+    "submit_grading": "Submit Grading",
+    "grading_in_progress": "Grading...",
+    "question_label": "Question #{{index}}",
+    "page_label": "page {{page}}",
+    "source_label": "Source:",
+    "source_note": "Note/Document",
+    "prev_question": "Previous",
+    "question_card": "Card {{current}}/{{total}}",
+    "next_question": "Next",
+    "version_new": "New",
+    "version_label": "Version {{current}}/{{total}}",
+    "version_old": "Old",
+    "button_delete": "Delete",
+    "button_split": "Smart Split",
+    "button_split_in_progress": "Smart split in progress",
+    "button_send_to_copilot": "Send to Copilot",
+    "button_copy": "Copy",
+    "grading_status": {
+      "pending": "Grading",
+      "correct": "Correct",
+      "incorrect": "Incorrect",
+      "skipped": "Skipped",
+      "uncertain": "Uncertain",
+      "error": "Grading Failed"
+    }
+  },
+  "question_type_select": {
+    "placeholder": "Select question type",
+    "custom_option": "Custom question type…",
+    "custom_placeholder": "Enter custom question type",
+    "loading": "Loading question types…"
+  },
+  "file_tabs": {
+    "close_label": "Close tab",
+    "collapse_label": "Collapse"
+  },
+  "mindmap": {
+    "generating": "Generating...",
+    "regenerate": "Regenerate",
+    "generate": "Generate Graph",
+    "login_required": "Please sign in to view knowledge graph",
+    "no_source": "Please upload a file on the left or generate a paper document in the editor first",
+    "document_mode_ready": "Currently based on editor document, knowledge graph not yet generated, click the button below to start extraction.",
+    "document_mode_not_ready": "No paper document generated yet, please complete a sync in the editor first, or switch to \"Upload File\" mode.",
+    "file_mode_ready": "Currently based on the uploaded file on the left, knowledge graph not yet generated, click the button below to start extraction.",
+    "file_mode_not_ready": "No file preview detected, please upload a file on the left first.",
+    "document_label": "Editor Content",
+    "file_label": "Upload File",
+    "grid_layout": "Grid Overview Mode",
+    "hierarchy_layout": "Knowledge Hierarchy Mode",
+    "xmind_layout": "XMind Mode"
+  },
+  "question_editor": {
+    "translation_quota_unlimited": "Subscribers can use immersive translation unlimited times",
+    "translation_error": "Translation service error, please try again later",
+    "quota_limit": "Free quota limit {{limit}} times{{resetLabel}}",
+    "quota_remaining": "Free quota: {{remaining}}/{{limit}} times remaining{{resetLabel}}",
+    "quota_reset": ", will reset at {{time}}",
+    "viewing_history": "Viewing historical version, question stem is read-only, can answer separately"
+  },
+  "agent_chat": {
+    "greeting_night_title": "Late Night",
+    "greeting_night_1": "When it's quiet at night, take a sip of warm water and continue.",
+    "greeting_night_2": "The early morning air is perfect for capturing small inspirations.",
+    "greeting_night_3": "Night owl hours: so quiet your thoughts can glow.",
+    "greeting_morning_title": "Good Morning",
+    "greeting_morning_1": "Borrow some energy from the sun, let's unfold our plans slowly.",
+    "greeting_morning_2": "The early morning mind is clearest, remember to jot down inspirations.",
+    "greeting_morning_3": "Give yourself a warm drink, then open the day with curiosity.",
+    "greeting_afternoon_title": "Good Afternoon",
+    "greeting_afternoon_1": "Cold joke: Why does a computer get tired? Because it's always \"processing\".",
+    "greeting_afternoon_2": "Afternoon slump? Take a walk and share your thoughts with me.",
+    "greeting_afternoon_3": "Learning tip: Write down problems in segments, inspiration flows easier.",
+    "greeting_evening_title": "Good Evening",
+    "greeting_evening_1": "Cold joke: Why is a pencil thin? Because it's always sharpening itself.",
+    "greeting_evening_2": "Evening breeze is perfect for slowing down and organizing thoughts.",
+    "greeting_evening_3": "Night is a good time to reflect on knowledge, start by writing a question or two.",
+    "input_placeholder": "Feel free to ask me anything",
+    "new_conversation": "New Conversation",
+    "new_conversation_aria": "New conversation",
+    "question_type_label": "Question Type",
+    "question_type_placeholder": "Select or enter question type",
+    "cancel": "Cancel",
+    "creating_question_type": "Creating question type…",
+    "submitting": "Submitting…",
+    "confirm": "Confirm",
+    "form_title": "AI Copilot · Batch Question Generation",
+    "user_default_name": "Me",
+    "thinking": "Organizing thoughts…",
+    "conversation_history_title": "Conversation History",
+    "conversation_history_empty": "No conversation history",
+    "conversation_default_title": "New Conversation",
+    "conversation_delete_aria": "Delete conversation"
+  },
+  "mindmap_node_editor": {
+    "description_label": "Description ({{remaining}} characters remaining)",
+    "edit_node": "Edit Node",
+    "name_label": "Name",
+    "type_label": "Type",
+    "source_label": "Source / Location",
+    "parent_id_label": "Parent Node ID",
+    "view_question": "View Question",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "mindmap_node_types": {
+    "topic": "Topic",
+    "subtopic": "Group",
+    "concept": "Concept",
+    "detail": "Detail",
+    "sub_detail": "Sub-detail",
+    "stage": "Stage",
+    "timeline": "Timeline",
+    "question_ref": "Question",
+    "example": "Example",
+    "default": "Node"
+  },
+  "mindmap_toolbar": {
+    "document_mode": "Editor Content",
+    "file_mode": "Upload File",
+    "xmind_layout": "XMind Style",
+    "hierarchy_layout": "Knowledge Hierarchy",
+    "grid_layout": "Grid Overview",
+    "save_mindmap": "Save Mind Map"
+  },
+  "mindmap_panel": {
+    "title": "Knowledge Mind Map",
+    "cached": "Using cache",
+    "load_failed": "Load failed: {{error}}",
+    "retry": "Retry",
+    "generate_now": "Generate Now",
+    "document_ready": "Currently based on editor document, knowledge graph not yet generated, click the button below to start extraction.",
+    "document_not_ready": "No paper document generated yet, please complete a sync in the editor first, or switch to \"Upload File\" mode.",
+    "file_ready": "Currently based on the uploaded file on the left, knowledge graph not yet generated, click the button below to start extraction.",
+    "file_not_ready": "No file preview detected, please upload a file on the left first."
+  }
+}

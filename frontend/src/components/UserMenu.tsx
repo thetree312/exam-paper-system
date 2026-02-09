@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { UserInfo } from '../types'
 
 interface UserMenuProps {
@@ -23,6 +24,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   onLogout,
   onNavigateToFavorites,
 }) => {
+  const { t } = useTranslation('common')
   const [stats] = useState<UserStats>({
     processedDocuments: 128,
     favoriteQuestions: 45,
@@ -49,7 +51,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               <p className="text-sm text-slate-500 truncate">{user.email}</p>
               <div className="flex items-center gap-1 mt-1">
                 <span className="material-symbols-outlined text-[14px] text-slate-400">business</span>
-                <p className="text-xs text-slate-500">租户：{user.tenant_code ?? `#${user.tenant_id}`}</p>
+                <p className="text-xs text-slate-500">{t('user_menu.tenant', { tenant: user.tenant_code ?? `#${user.tenant_id}` })}</p>
               </div>
             </div>
           </div>
@@ -59,7 +61,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         <div className="p-4 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-[18px] text-slate-600">bar_chart</span>
-            <p className="text-sm font-semibold text-slate-700">使用统计</p>
+            <p className="text-sm font-semibold text-slate-700">{t('user_menu.stats.title')}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-50 rounded-lg p-3">

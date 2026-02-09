@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { UploadedFileTab, UserInfo } from '../types'
 import { FileTabsBar } from './FileTabsBar'
 import { SelectionPane } from './SelectionPane'
@@ -73,6 +74,7 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   onToast,
   onAddFavoriteToEditor,
 }) => {
+  const { t } = useTranslation()
   return (
     <aside
       className="bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col relative"
@@ -113,7 +115,7 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
               disabled={isUploading}
             >
               <span className="material-symbols-outlined text-[18px]">upload_file</span>
-              {isUploading ? '上传中...' : '上传新素材'}
+              {isUploading ? t('source_panel.upload.uploading') : t('source_panel.upload.idle')}
             </button>
             <input
               ref={fileInputRef}

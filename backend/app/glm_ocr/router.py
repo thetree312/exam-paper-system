@@ -101,6 +101,7 @@ async def import_exam_from_session(
         document=document,
         force_refresh=force_refresh,
     )
+    service.dump_glm_result(glm_result=glm_result, tenant_id=tenant_id, document=document)
 
     questions = service.import_exam_as_questions(
         db=db,

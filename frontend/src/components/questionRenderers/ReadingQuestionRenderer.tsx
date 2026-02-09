@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MarkdownWithMath } from '../MarkdownWithMath'
 import { parseReadingAnswerMap, serializeAnswerMap } from './utils'
 import type { ReadingParseResult } from './utils'
@@ -18,6 +19,7 @@ export const ReadingQuestionRenderer: React.FC<ReadingQuestionRendererProps> = (
   legendImages,
   disabled = false,
 }) => {
+  const { t } = useTranslation('common')
   const answerMap = useMemo(() => parseReadingAnswerMap(value), [value])
 
   const handleToggle = (questionId: string, optionLabel: string) => {
@@ -41,7 +43,7 @@ export const ReadingQuestionRenderer: React.FC<ReadingQuestionRendererProps> = (
               <img
                 key={idx}
                 src={src}
-                alt={`图例 ${idx + 1}`}
+                alt={t('question.legend.generic', { index: idx + 1 })}
                 className="max-w-full h-auto rounded border border-slate-200"
               />
             ))}
@@ -88,7 +90,9 @@ export const ReadingQuestionRenderer: React.FC<ReadingQuestionRendererProps> = (
                 })}
               </div>
               <div className="text-xs text-slate-500">
-                {selected ? `已选择：${selected}` : '点击选项即可作答'}
+                {selected
+                  ? t('question.status.selected', { label: selected })
+                  : t('question.status.hint')}
               </div>
             </section>
           )

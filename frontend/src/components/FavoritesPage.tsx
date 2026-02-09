@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getFavorites, getFavoriteQuota, removeFavorite } from '../services/favoritesApi'
 import { MarkdownWithMath } from './MarkdownWithMath'
 import AnimatedHeartButton from './AnimatedHeartButton'
@@ -63,6 +64,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
   onBack,
   onAddToEditor,
 }) => {
+  const { t, i18n } = useTranslation('common')
   const [favorites, setFavorites] = useState<QuestionFavorite[]>([])
   const [quota, setQuota] = useState<FavoriteQuotaResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -86,12 +88,12 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
         setQuota(quotaResp)
       } catch (err) {
         console.error('[favorites] load failed', err)
-        onToast?.('加载收藏列表失败', 'error')
+        onToast?.(t('favorites.toast.load_failed'), 'error')
       } finally {
         setIsLoading(false)
       }
     },
-    [backendBaseUrl, user.tenant_id, user.id, pageSize, onToast],
+    [backendBaseUrl, user.tenant_id, user.id, pageSize, onToast, t],
   )
 
   useEffect(() => {
@@ -105,18 +107,18 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
       setRemovingId(questionId)
       try {
         await removeFavorite(backendBaseUrl, user.tenant_id, user.id, questionId)
-        onToast?.('已取消收藏', 'success')
+        onToast?.(t('favorites.toast.removed'), 'success')
         
         // 重新加载当前页
         await loadFavorites(currentPage)
       } catch (err) {
         console.error('[favorites] remove failed', err)
-        onToast?.('取消收藏失败', 'error')
+        onToast?.(t('favorites.toast.remove_failed'), 'error')
       } finally {
         setRemovingId(null)
       }
     },
-    [backendBaseUrl, user.tenant_id, user.id, currentPage, loadFavorites, onToast, removingId],
+    [backendBaseUrl, user.tenant_id, user.id, currentPage, loadFavorites, onToast, removingId, t],
   )
 
   const handlePageChange = useCallback((page: number) => {
@@ -128,7 +130,8 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr)
-      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+      const locale = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US'
+      return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
     } catch {
       return dateStr
     }
@@ -149,14 +152,16 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
           {/* Title Section */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-16">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3 tracking-tight">收藏题库</h1>
+              <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3 tracking-tight">{t('favorites.title')}</h1>
               <p className="text-base text-slate-500 font-light max-w-lg">
-                管理您的个人精选题目。您可以在此复习、整理或导出为试卷。
+                {t('favorites.subtitle')}
               </p>
             </div>
             {quota && (
               <div className="flex flex-col items-start md:items-end gap-1">
-                <div className="text-[13px] font-medium text-slate-500 uppercase tracking-wider">Storage Usage</div>
+                <div className="text-[13px] font-medium text-slate-500 uppercase tracking-wider">
+                  {t('favorites.quota_label')}
+                </div>
                 <div className="text-2xl font-mono font-medium text-slate-900">
                   {quota.current_count}{' '}
                   <span className="text-slate-300 text-lg">/</span>{' '}
@@ -177,7 +182,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </span>
                 <input
                   className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-[15px] placeholder-slate-400 text-slate-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black shadow-sm transition-all"
-                  placeholder="搜索题目关键词、ID..."
+                  placeholder={t('favorites.search_placeholder')}
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -189,7 +194,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                   onClick={() => loadFavorites(currentPage)}
                 >
                   <span className="material-symbols-outlined text-[20px]">refresh</span>
-                  <span>刷新</span>
+                  <span>{t('favorites.refresh')}</span>
                 </button>
               </div>
             </div>
@@ -198,7 +203,12 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
           {/* Loading State */}
           {isLoading && (
             <div className="flex items-center justify-center py-20">
-              <span className="material-symbols-outlined text-[32px] animate-spin text-slate-400">progress_activity</span>
+              <span
+                className="material-symbols-outlined text-[32px] animate-spin text-slate-400"
+                aria-label={t('favorites.loading')}
+              >
+                progress_activity
+              </span>
             </div>
           )}
 
@@ -206,16 +216,16 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
           {!isLoading && filteredFavorites.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <span className="material-symbols-outlined text-[64px] text-slate-300 mb-4">star_border</span>
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">暂无收藏题目</h3>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">{t('favorites.empty_title')}</h3>
               <p className="text-slate-500 mb-6">
-                {searchQuery ? '没有找到匹配的题目' : '开始收藏您喜欢的题目吧'}
+                {searchQuery ? t('favorites.empty_desc_search') : t('favorites.empty_desc')}
               </p>
               {onBack && (
                 <button
                   onClick={onBack}
                   className="px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-medium"
                 >
-                  返回题库
+                  {t('favorites.back')}
                 </button>
               )}
             </div>
@@ -249,18 +259,24 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                         <div className="flex gap-2">
                           {favorite.question.page && (
                             <>
-                              <span className="text-[13px] text-slate-600">第 {favorite.question.page} 页</span>
+                              <span className="text-[13px] text-slate-600">
+                                {t('favorites.page_label', { page: favorite.question.page })}
+                              </span>
                               <span className="text-[13px] text-slate-400">/</span>
                             </>
                           )}
-                          <span className="text-[13px] text-slate-600">序号 {favorite.question.sequence_index + 1}</span>
+                          <span className="text-[13px] text-slate-600">
+                            {t('favorites.sequence_label', {
+                              index: favorite.question.sequence_index + 1,
+                            })}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {onAddToEditor && (
                           <button
                             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-blue-50 text-blue-600 hover:text-blue-700 transition-colors"
-                            title="添加到编辑区"
+                            title={t('favorites.toolbar.add')}
                             onClick={() => onAddToEditor(favorite.question_id)}
                           >
                             <span className="material-symbols-outlined text-[20px]">forms_add_on</span>
@@ -297,7 +313,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                           <img
                             key={idx}
                             src={img}
-                            alt={`图例 ${idx + 1}`}
+                            alt={t('question.legend.generic', { index: idx + 1 })}
                             className="max-w-[200px] max-h-[150px] rounded-lg border border-slate-200"
                           />
                         ))}
@@ -337,7 +353,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
 
                     <div className="mt-6 flex items-center justify-between pt-4 border-t border-dashed border-slate-100">
                       <span className="text-[11px] text-slate-400 font-mono tracking-wide uppercase">
-                        Added {formatDate(favorite.created_at)}
+                        {t('favorites.meta.added', { date: formatDate(favorite.created_at) })}
                       </span>
                     </div>
                   </article>

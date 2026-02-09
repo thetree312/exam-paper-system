@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -29,6 +30,7 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
   disabled = false,
   legendImages = [],
 }) => {
+  const { t } = useTranslation('common')
   const answerMap: FillBlankAnswerMap = useMemo(
     () => parseFillBlankAnswer(value, parsed.totalBlanks),
     [value, parsed.totalBlanks],
@@ -109,7 +111,7 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
           <img
             key={`${keyPrefix}-fig-${localKey}`}
             src={src}
-            alt={`图例 ${idx + 1}`}
+            alt={t('question.legend.generic', { index: idx + 1 })}
             className="inline-block max-w-full h-auto align-middle mx-1 rounded border border-slate-200"
           />,
         )

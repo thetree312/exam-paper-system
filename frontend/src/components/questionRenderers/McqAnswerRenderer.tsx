@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MarkdownWithMath } from '../MarkdownWithMath'
 
 interface McqOption {
@@ -42,6 +43,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
   onChange,
   disabled = false,
 }) => {
+  const { t } = useTranslation('common')
   const selected = (value || '').trim().toUpperCase()
 
   const { optionMeta, headerLegends } = useMemo(() => {
@@ -127,7 +129,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
               <img
                 key={idx}
                 src={src}
-                alt={`图例 ${idx + 1}`}
+                alt={t('question.legend.generic', { index: idx + 1 })}
                 className="max-w-full h-auto rounded border border-slate-200"
               />
             ))}
@@ -136,7 +138,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-slate-500">选择答案</div>
+        <div className="text-xs font-semibold text-slate-500">{t('question.mcq.heading')}</div>
         <div className="grid gap-2 sm:grid-cols-2">
           {optionMeta.map(({ option, images, textWithoutFigs, isImageOnly }) => {
             const isSelected = selected === option.label.toUpperCase()
@@ -176,7 +178,10 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                         <img
                           key={idx}
                           src={src}
-                          alt={`${option.label} 图 ${idx + 1}`}
+                          alt={t('question.legend.option', {
+                            label: option.label,
+                            index: idx + 1,
+                          })}
                           className="max-w-full h-auto rounded border border-slate-200"
                         />
                       ))}
@@ -188,7 +193,9 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
           })}
         </div>
         <div className="text-xs text-slate-500">
-          {selected ? `已选择：${selected}` : '点击选项即可作答'}
+          {selected
+            ? t('question.status.selected', { label: selected })
+            : t('question.status.hint')}
         </div>
       </div>
     </div>

@@ -9,21 +9,21 @@
  */
 export function validateEmail(email: string): { valid: boolean; error?: string } {
   if (!email || email.trim().length === 0) {
-    return { valid: false, error: '邮箱不能为空' }
+    return { valid: false, error: 'auth.validation.email_required' }
   }
 
   const trimmed = email.trim()
   
   // 基本长度检查
   if (trimmed.length > 254) {
-    return { valid: false, error: '邮箱长度不能超过 254 个字符' }
+    return { valid: false, error: 'auth.validation.email_too_long' }
   }
 
   // RFC 5322 简化版正则
   const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
   
   if (!emailRegex.test(trimmed)) {
-    return { valid: false, error: '邮箱格式不正确' }
+    return { valid: false, error: 'auth.validation.email_invalid' }
   }
 
   return { valid: true }
@@ -34,15 +34,15 @@ export function validateEmail(email: string): { valid: boolean; error?: string }
  */
 export function validatePassword(password: string): { valid: boolean; error?: string } {
   if (!password || password.length === 0) {
-    return { valid: false, error: '密码不能为空' }
+    return { valid: false, error: 'auth.validation.password_required' }
   }
 
   if (password.length < 8) {
-    return { valid: false, error: '密码长度至少为 8 位' }
+    return { valid: false, error: 'auth.validation.password_too_short' }
   }
 
   if (password.length > 128) {
-    return { valid: false, error: '密码长度不能超过 128 位' }
+    return { valid: false, error: 'auth.validation.password_too_long' }
   }
 
   // 检查是否包含至少一个字母和一个数字
@@ -50,7 +50,7 @@ export function validatePassword(password: string): { valid: boolean; error?: st
   const hasNumber = /[0-9]/.test(password)
 
   if (!hasLetter || !hasNumber) {
-    return { valid: false, error: '密码必须包含字母和数字' }
+    return { valid: false, error: 'auth.validation.password_weak' }
   }
 
   return { valid: true }
@@ -68,12 +68,12 @@ export function validateDisplayName(name: string): { valid: boolean; error?: str
   const trimmed = name.trim()
 
   if (trimmed.length > 100) {
-    return { valid: false, error: '昵称不能超过 100 个字符' }
+    return { valid: false, error: 'auth.validation.display_name_too_long' }
   }
 
   // 防止 XSS：不允许 HTML 标签
   if (/<[^>]*>/g.test(trimmed)) {
-    return { valid: false, error: '昵称不能包含 HTML 标签' }
+    return { valid: false, error: 'auth.validation.display_name_invalid' }
   }
 
   return { valid: true }

@@ -1,11 +1,61 @@
 export type AuthMode = 'login' | 'register'
 
+export type StatusMessageKey =
+  | 'upload_prompt'
+  | 'login_required'
+  | 'logged_in'
+  | 'tab_placeholder'
+  | 'uploading'
+  | 'unsupported_file'
+  | 'append_image'
+  | 'preview_generating'
+  | 'upload_failed'
+  | 'selection_missing'
+  | 'session_missing'
+  | 'selection_cross_upload'
+  | 'selection_invalid'
+  | 'ocr_running'
+  | 'ocr_done'
+  | 'ocr_failed'
+  | 'split_running'
+  | 'split_failed_keep'
+  | 'split_done'
+  | 'split_failed'
+  | 'grading_none'
+  | 'grading_running'
+  | 'grading_done'
+  | 'grading_failed'
+  | 'export_none'
+  | 'export_running'
+  | 'export_done'
+  | 'export_failed'
+  | 'glm_done'
+
+export type StatusMessageSetter = (
+  key: StatusMessageKey,
+  values?: Record<string, string | number>,
+) => void
+
 export interface UserInfo {
   id: number
   tenant_id: number
   email: string
   display_name: string
 }
+
+export interface FlashcardItem {
+  questionId: number | null
+  documentId: number
+  sequenceIndex: number
+  page?: number | null
+  frontMarkdown: string
+  backMarkdown?: string | null
+  legendImages: string[]
+  answerStatus?: string | null
+  answerSource?: string | null
+}
+
+export type FlashcardMode = 'exam' | 'article'
 
 export interface PageSelectionSegment {
   page: number

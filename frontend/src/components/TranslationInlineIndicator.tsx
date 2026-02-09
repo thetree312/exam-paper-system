@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { TranslationScope } from '../types'
 
@@ -21,6 +22,7 @@ export const TranslationInlineIndicator: React.FC<TranslationInlineIndicatorProp
   scope,
   onRetry,
 }) => {
+  const { t } = useTranslation('common')
   if (!active || status === 'idle') return null
 
   const isError = status === 'error'
@@ -35,12 +37,15 @@ export const TranslationInlineIndicator: React.FC<TranslationInlineIndicatorProp
           type="button"
           className="translation-inline-indicator__error-btn"
           onClick={onRetry}
-          aria-label="重试翻译"
+          aria-label={t('translation.retry')}
         >
           <span className="material-symbols-outlined translation-inline-indicator__error-icon">error</span>
         </button>
       ) : (
-        <span className="translation-inline-indicator__spinner" aria-label={`正在翻译${scope === 'word' ? '词汇' : '句子'}`} />
+        <span
+          className="translation-inline-indicator__spinner"
+          aria-label={scope === 'word' ? t('translation.loading_word') : t('translation.loading_sentence')}
+        />
       )}
     </div>
   )

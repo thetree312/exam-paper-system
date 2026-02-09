@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface QuestionTypeSelectFieldProps {
   label?: string
@@ -17,13 +18,16 @@ export const QuestionTypeSelectField: React.FC<QuestionTypeSelectFieldProps> = (
   label,
   value,
   options,
-  placeholder = '选择题型',
+  placeholder,
   disabled,
   isLoading,
   error,
   onChange,
 }) => {
+  const { t } = useTranslation('common')
   const optionSet = useMemo(() => new Set(options), [options])
+  const defaultPlaceholder = t('question_type_select.placeholder')
+  const finalPlaceholder = placeholder ?? defaultPlaceholder
   const [isCustomMode, setIsCustomMode] = useState(() => Boolean(value) && !optionSet.has(value))
   const [customValue, setCustomValue] = useState(() => (isCustomMode ? value : ''))
 
@@ -67,13 +71,13 @@ export const QuestionTypeSelectField: React.FC<QuestionTypeSelectFieldProps> = (
           onChange={(e) => handleSelectChange(e.target.value)}
           className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
         >
-          <option value="">{placeholder}</option>
+          <option value="">{finalPlaceholder}</option>
           {options.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
             </option>
           ))}
-          <option value={CUSTOM_VALUE}>自定义题型…</option>
+          <option value={CUSTOM_VALUE}>{t('question_type_select.custom_option')}</option>
         </select>
         {isCustomMode && (
           <input
@@ -81,12 +85,12 @@ export const QuestionTypeSelectField: React.FC<QuestionTypeSelectFieldProps> = (
             value={customValue}
             disabled={disabled}
             onChange={(e) => handleCustomChange(e.target.value)}
-            placeholder="输入自定义题型"
+            placeholder={t('question_type_select.custom_placeholder')}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
           />
         )}
       </div>
-      {isLoading && <span className="text-[11px] text-slate-400">题型加载中…</span>}
+      {isLoading && <span className="text-[11px] text-slate-400">{t('question_type_select.loading')}</span>}
       {error && <span className="text-[11px] text-red-500">{error}</span>}
     </div>
   )}

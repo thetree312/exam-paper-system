@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   AggregatedOcrItem,
   AgUiEvent,
@@ -11,6 +12,7 @@ import type {
   UserInfo,
   RegionPayload,
   LegendRegionPayload,
+  StatusMessageSetter,
 } from '../types'
 import { useAppStore } from '../store/appStore'
 import { requestGrading, requestSplitQuestions, deleteQuestion as deleteQuestionApi } from '../services/agentApi'
@@ -54,10 +56,11 @@ interface UseOcrManagerReturn {
 
 export const useOcrManager = (
   backendBaseUrl: string,
-  onStatusMessage: (msg: string) => void,
+  onStatusMessage: StatusMessageSetter,
   onToast: (message: string, type: 'info' | 'success' | 'error') => void,
   agentDocumentId: number | null,
 ): UseOcrManagerReturn => {
+  const { t } = useTranslation('common')
   const storeOcrItems = useAppStore((state) => state.ocrItems)
   const setStoreOcrItems = useAppStore((state) => state.setOcrItems)
   const currentUser = useAppStore((state) => state.user)
@@ -80,7 +83,7 @@ export const useOcrManager = (
   const handleAddToEditor = useCallback(
     async (sessionId: number | null, activeFile: any, snapshot: SelectionSnapshot | null) => {
       if (!snapshot || !snapshot.selection || snapshot.selection.segments.length === 0) {
-        onStatusMessage('请先上传素材并框选区域')
+        onStatusMessage('selection_missing')
         return
       }
       const { selection } = snapshot
@@ -95,12 +98,12 @@ export const useOcrManager = (
       )
 
       if (uniqueSessionIds.length === 0) {
-        onStatusMessage('会话不存在，请重新上传')
+        onStatusMessage('session_missing')
         return
       }
 
       if (uniqueSessionIds.length > 1) {
-        onStatusMessage('当前选区跨越了不同上传的图片，请分开选择后再识别')
+        onStatusMessage('selection_cross_upload')
         return
       }
 
@@ -108,7 +111,7 @@ export const useOcrManager = (
 
       const regions = snapshot.buildRegionsPayload()
       if (!regions || regions.length === 0) {
-        onStatusMessage('选区无效，请重新框选')
+        onStatusMessage('selection_invalid')
         return
       }
 
@@ -121,7 +124,7 @@ export const useOcrManager = (
       }
 
       setIsExtracting(true)
-      onStatusMessage('识别中...')
+      onStatusMessage('ocr_running')
       console.log('[ocr] request', payload)
 
       try {
@@ -150,7 +153,7 @@ export const useOcrManager = (
         }
 
         if (!sessionId || !activeFile) {
-          onStatusMessage('识别完成')
+          onStatusMessage('ocr_done')
           return
         }
 
@@ -195,13 +198,13 @@ export const useOcrManager = (
         }
 
         setStoreOcrItems((prev) => [...prev, ...enriched])
-        onStatusMessage('识别完成')
+        onStatusMessage('ocr_done')
         snapshot.clearSelection?.()
         selectionSnapshotRef.current = null
         console.log('[ocr] success items', data.items.length)
       } catch (err) {
         console.error('[ocr] failed', err)
-        onStatusMessage('识别失败，请稍后重试')
+        onStatusMessage('ocr_failed')
       } finally {
         setIsExtracting(false)
       }
@@ -279,7 +282,7 @@ export const useOcrManager = (
     async (target: AggregatedOcrItem, _index: number, user: UserInfo | null) => {
       if (!user) return
       if (splittingItemId) {
-        onToast('已有拆题任务正在进行，请稍后', 'info')
+        onToast(t('app.toast.split_in_progress'), 'info')
         return
       }
       const sourceText = (target.originalText || target.text || '').trim()
@@ -287,8 +290,8 @@ export const useOcrManager = (
 
       try {
         setSplittingItemId(target.id)
-        onStatusMessage('智能拆题中...')
-        onToast('智能拆题处理中，预计需要数秒...', 'info')
+        onStatusMessage('split_running')
+        onToast(t('app.toast.split_in_progress'), 'info')
         const resp = await requestSplitQuestions(backendBaseUrl, {
           tenantId: user.tenant_id,
           userId: user.id,
@@ -299,8 +302,8 @@ export const useOcrManager = (
 
         const questions = resp.questions && resp.questions.length > 0 ? resp.questions : null
         if (!questions) {
-          onStatusMessage('智能拆题失败，保持原题目不变')
-          onToast('智能拆题失败，原题目保持不变', 'error')
+          onStatusMessage('split_failed_keep')
+          onToast(t('app.toast.split_failed'), 'error')
           return
         }
 
@@ -334,12 +337,12 @@ export const useOcrManager = (
 
           return [...before, ...nextItems, ...after]
         })
-        onStatusMessage('智能拆题完成')
-        onToast(`智能拆题完成，生成 ${questions.length} 道题`, 'success')
+        onStatusMessage('split_done')
+        onToast(t('app.toast.split_success', { count: questions.length }), 'success')
       } catch (err) {
         console.error('[split-questions] failed', err)
-        onStatusMessage('智能拆题失败，请稍后重试')
-        onToast('智能拆题失败，请稍后重试', 'error')
+        onStatusMessage('split_failed')
+        onToast(t('app.toast.split_failed'), 'error')
       } finally {
         setSplittingItemId(null)
       }
@@ -351,11 +354,11 @@ export const useOcrManager = (
     async (currentFile: any, agentDocumentId: number | null, user: UserInfo | null) => {
       if (!user) return
       if (!ocrItemsRef.current.length) {
-        onStatusMessage('没有可批改的题目')
+        onStatusMessage('grading_none')
         return
       }
       setIsGrading(true)
-      onStatusMessage('批改中...')
+      onStatusMessage('grading_running')
       setStoreOcrItems((prev) =>
         prev.map((item) => ({
           ...item,
@@ -407,10 +410,10 @@ export const useOcrManager = (
             }
           }),
         )
-        onStatusMessage('批改完成')
+        onStatusMessage('grading_done')
       } catch (err) {
         console.error('[grading] failed', err)
-        onStatusMessage('批改失败，请稍后重试')
+        onStatusMessage('grading_failed')
         setStoreOcrItems((prev) =>
           prev.map((item) =>
             item.grading?.status === 'pending'

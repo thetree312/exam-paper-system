@@ -1,8 +1,30 @@
-export const OPTION_REGEX = /^([A-J])[\.:、．\)\]）]+\s*(.*)$/i
+export const OPTION_REGEX = /^([A-J])[\.:、．\)\]]+\s*(.*)$/i
 
 const READING_QUESTION_REGEX = /^(\d{1,3})[\s\.:、．\)\]]+(.+)$/
-const MATCHING_PARAGRAPH_REGEX = /^([A-Z])[\)\.：:]\s*(.*)$/
-const MATCHING_STATEMENT_REGEX = /^(\d{1,3})[\)\.：:]\s*(.*)$/
+const MATCHING_PARAGRAPH_REGEX = /^([A-Z])[\)\.:：]\s*(.*)$/
+const MATCHING_STATEMENT_REGEX = /^(\d{1,3})[\)\.:：]\s*(.*)$/
+
+const SECTION_BREAK_KEYWORDS = [
+  '选择答案',
+  '填空题',
+  '解答题',
+  '本大题共',
+  'choose answer',
+  'fill in the blank',
+  'fill-in-the-blank',
+  'short answer',
+  'questions',
+]
+
+const HARD_CUT_MARKERS = [
+  '## ',
+  '三、填空题',
+  '本大题共',
+  '选择答案',
+  '### ',
+  'fill in the blanks',
+  'choose answer',
+]
 
 export interface ReadingOption {
   label: string

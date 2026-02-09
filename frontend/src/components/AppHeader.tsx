@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { UserInfo } from '../types'
 import BrandIcon from './BrandIcon'
 
@@ -27,6 +28,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onLogout,
   rightOffset = 0,
 }) => {
+  const { t, i18n } = useTranslation('common')
+  const currentLang = i18n.language === 'en' ? 'en' : 'zh'
   const headerStyle =
     rightOffset > 0
       ? {
@@ -34,6 +37,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           transition: 'padding-right 200ms ease',
         }
       : undefined
+
+  const switchLanguage = (lang: 'zh' | 'en') => {
+    if (lang === currentLang) return
+    void i18n.changeLanguage(lang)
+  }
 
   return (
     <header
@@ -43,11 +51,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3 text-slate-900 dark:text-white">
           <BrandIcon />
-          <h2 className="text-lg font-bold leading-tight tracking-tight">智卷通</h2>
+          <h2 className="text-lg font-bold leading-tight tracking-tight">{t('app.title')}</h2>
         </div>
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
         <div className="flex flex-col">
-          <h1 className="text-slate-900 dark:text-white text-sm font-bold leading-none">试卷编辑器</h1>
+          <h1 className="text-slate-900 dark:text-white text-sm font-bold leading-none">{t('app.subtitle')}</h1>
           <p className="text-[#4c739a] text-xs flex items-center gap-1 mt-1">
             <span className="material-symbols-outlined text-[12px]">
               {isUploading || isExtracting ? 'sync' : 'cloud_done'}
@@ -57,15 +65,31 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
+        <div className="flex items-center text-xs font-semibold rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <button
+            type="button"
+            className={`px-2 py-1 transition-colors ${currentLang === 'zh' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
+            onClick={() => switchLanguage('zh')}
+          >
+            {t('language.zh')}
+          </button>
+          <button
+            type="button"
+            className={`px-2 py-1 transition-colors ${currentLang === 'en' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
+            onClick={() => switchLanguage('en')}
+          >
+            {t('language.en')}
+          </button>
+        </div>
         <button
           className="flex items-center gap-2 h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition-colors"
           type="button"
           onClick={onExportClick}
           disabled={isUploading}
-          title="导出"
+          title={t('app.buttons.export')}
         >
           <span className="material-symbols-outlined text-[20px]">ios_share</span>
-          导出
+          {t('app.buttons.export')}
         </button>
         <div className="relative" ref={userMenuRef}>
           <button
@@ -88,14 +112,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   <p className="text-xs text-slate-500">{user.email}</p>
                 </div>
               </div>
-              <div className="text-xs text-slate-400 mb-3">租户编码：{user.tenant_code ?? `#${user.tenant_id}`}</div>
+              <div className="text-xs text-slate-400 mb-3">
+                {t('app.labels.tenant')}：{user.tenant_code ?? `#${user.tenant_id}`}
+              </div>
               <button
                 type="button"
                 className="w-full h-9 rounded-lg bg-slate-900 text-white text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
                 onClick={onLogout}
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
-                退出登录
+                {t('app.buttons.logout')}
               </button>
             </div>
           )}

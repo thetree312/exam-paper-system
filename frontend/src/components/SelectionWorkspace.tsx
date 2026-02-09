@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   PageSelectionSegment,
   SelectionBox,
@@ -45,6 +46,7 @@ const SelectionToolbar: React.FC<{
   onToggleExclude,
   onToggleLegend,
 }) => {
+  const { t } = useTranslation('common')
   return (
     <div
       className="absolute right-0 -top-3 translate-y-[-100%] flex items-center"
@@ -57,7 +59,7 @@ const SelectionToolbar: React.FC<{
           className="size-8 min-w-8 inline-flex items-center justify-center rounded-full hover:bg-slate-800 active:scale-95 transition disabled:opacity-50"
           onClick={onAddClick}
           disabled={isExtracting}
-          title="添加到编辑器"
+          title={t('selection.toolbar.add')}
         >
           <span className="material-symbols-outlined text-[18px]">note_add</span>
         </button>
@@ -65,7 +67,7 @@ const SelectionToolbar: React.FC<{
           type="button"
           className="size-8 min-w-8 inline-flex items-center justify-center rounded-full hover:bg-slate-800 active:scale-95 transition"
           onClick={onClearClick}
-          title="清除"
+          title={t('selection.toolbar.clear')}
         >
           <span className="material-symbols-outlined text-[18px]">close</span>
         </button>
@@ -76,7 +78,7 @@ const SelectionToolbar: React.FC<{
             isExclusionMode ? 'bg-slate-800 text-slate-50' : 'hover:bg-slate-800'
           }`}
           onClick={onToggleExclude}
-          title="排除区域"
+          title={t('selection.toolbar.exclude')}
         >
           <span className="material-symbols-outlined text-[18px]">do_not_disturb_on</span>
         </button>
@@ -86,7 +88,7 @@ const SelectionToolbar: React.FC<{
             isLegendMode ? 'bg-slate-800 text-slate-50' : 'hover:bg-slate-800'
           }`}
           onClick={onToggleLegend}
-          title="图例提取"
+          title={t('selection.toolbar.legend')}
         >
           <span className="material-symbols-outlined text-[18px]">image</span>
         </button>
@@ -193,6 +195,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
   onToggleLegend,
   onRemoveLegend,
 }) => {
+  const { t } = useTranslation('common')
   const renderPages = () => {
     if (previewSources.length > 0 && activeStatus === 'ready') {
       const firstSegment = selection?.segments[0]
@@ -213,14 +216,14 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
           >
             <div className="absolute top-3 left-3 z-10 bg-white/80 backdrop-blur rounded-full px-3 py-1 text-xs font-medium text-slate-700 flex items-center gap-2 shadow">
               <span className="material-symbols-outlined text-[16px]">description</span>
-              第 {page} 页
+              {t('selection.page_label', { page })}
             </div>
             <img
               ref={(el) => {
                 imageRefs.current[page] = el
               }}
               src={src}
-              alt={`预览页 ${page}`}
+              alt={t('selection.preview.alt_page', { page })}
               className="w-full h-auto block select-none"
               draggable={false}
             />
@@ -284,7 +287,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
         return (
           <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
             <span className="material-symbols-outlined text-[40px] animate-spin">sync</span>
-            <p className="text-sm font-medium">正在生成预览，请稍候...</p>
+            <p className="text-sm font-medium">{t('selection.preview.loading')}</p>
           </div>
         )
       }
@@ -293,7 +296,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
         return (
           <div className="flex flex-col items-center justify-center h-[500px] text-red-400 gap-3">
             <span className="material-symbols-outlined text-[40px]">error</span>
-            <p className="text-sm font-medium">预览生成失败，请稍后重试或联系管理员</p>
+            <p className="text-sm font-medium">{t('selection.preview.failed')}</p>
           </div>
         )
       }
@@ -303,7 +306,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
       <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
         <span className="material-symbols-outlined text-[40px]">upload_file</span>
         <p className="text-sm font-medium">
-          {previewType === null ? '当前文件暂不支持预览' : '暂无内容，请先上传文件'}
+          {previewType === null ? t('selection.preview.unsupported') : t('selection.preview.no_file')}
         </p>
       </div>
     )

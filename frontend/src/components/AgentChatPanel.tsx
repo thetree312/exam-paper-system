@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAgentChat } from '../hooks/useAgentChat'
 import { useConversation } from '../hooks'
 import type { AgentRunContext, AgentSendPayload, AgUiEvent, UserInfo } from '../types'
@@ -130,6 +131,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onAppendTokenConsumed,
   onDocumentResolved,
 }) => {
+  const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [inputHeight, setInputHeight] = useState(36)
   const [hitlFormUi, setHitlFormUi] = useState<any | null>(null)
@@ -447,47 +449,47 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
     if (hour < 6) {
       return {
-        title: '夜深了',
+        title: t('agent_chat.greeting_night_title'),
         subtitle: pick([
-          '夜深人静的时候，喝口温水再继续也不迟。',
-          '凌晨的空气适合装下一点小小的灵感。',
-          '夜猫子专属时段：安静得连思绪都能发光。',
+          t('agent_chat.greeting_night_1'),
+          t('agent_chat.greeting_night_2'),
+          t('agent_chat.greeting_night_3'),
         ]),
         animation: workingCatAnimation,
       }
     }
     if (hour < 12) {
       return {
-        title: '早安',
+        title: t('agent_chat.greeting_morning_title'),
         subtitle: pick([
-          '向太阳借点能量，我们慢慢展开计划。',
-          '早起的脑袋最清醒，记得把灵感随手记下。',
-          '给自己一口热饮，再用好奇心开启这一天。',
+          t('agent_chat.greeting_morning_1'),
+          t('agent_chat.greeting_morning_2'),
+          t('agent_chat.greeting_morning_3'),
         ]),
         animation: workingCatAnimation,
       }
     }
     if (hour < 18) {
       return {
-        title: '下午好',
+        title: t('agent_chat.greeting_afternoon_title'),
         subtitle: pick([
           '冷笑话：电脑为什么会累？因为它一直在“处理器”。',
-          '午后小困就走走路，再把想法告诉我。',
-          '学习小贴士：把问题分段写下来，灵感更容易浮现。',
+          t('agent_chat.greeting_afternoon_2'),
+          t('agent_chat.greeting_afternoon_3'),
         ]),
         animation: noInternetAnimation,
       }
     }
     return {
-      title: '晚上好',
+      title: t('agent_chat.greeting_evening_title'),
       subtitle: pick([
-        '冷笑话：铅笔为什么瘦？因为它总在削自己。',
-        '晚风最适合慢下来整理思路。',
-        '夜晚是反刍知识的好时候，先写下一两个问题吧。',
+        t('agent_chat.greeting_evening_1'),
+        t('agent_chat.greeting_evening_2'),
+        t('agent_chat.greeting_evening_3'),
       ]),
       animation: workingCatAnimation,
     }
-  }, [])
+  }, [t])
 
   const handleReset = useCallback(() => {
     resetChat()
@@ -543,11 +545,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         return (
           <div className="flex gap-3 flex-row-reverse text-right">
             <div className="h-9 w-9 rounded-full shrink-0 inline-flex items-center justify-center bg-slate-200 text-slate-600">
-              {user.display_name?.slice(0, 1) || '我'}
+              {user.display_name?.slice(0, 1) || t('agent_chat.user_default_name')}
             </div>
             <div className="max-w-[72%] rounded-2xl px-4 py-3 bg-slate-100 text-slate-800 shadow-sm">
               <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
-                {user.display_name || '我'}
+                {user.display_name || t('agent_chat.user_default_name')}
               </div>
               <MarkdownWithMath>{msg.content}</MarkdownWithMath>
             </div>
@@ -573,7 +575,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           value={input}
           onChange={setInput}
           onKeyDown={handleKeyDown}
-          placeholder="不懂的尽管问我哦"
+          placeholder={t('agent_chat.input_placeholder')}
           inputHeight={inputHeight}
           onHeightChange={setInputHeight}
           sendButtonSize={sendButtonSize}
@@ -585,7 +587,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       </form>
     )
   },
-    [canSend, error, handleKeyDown, handleSend, input, inputHeight, sendButtonSize, isLoading],
+    [canSend, error, handleKeyDown, handleSend, input, inputHeight, sendButtonSize, isLoading, t],
   )
 
   return (
@@ -609,7 +611,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
             >
               <span className="text-sm font-semibold text-neutral-900 truncate">
-                {activeConversation?.title || '新对话'}
+                {(activeConversation?.title && activeConversation.title !== '新的会话') ? activeConversation.title : t('agent_chat.new_conversation')}
               </span>
               <svg
                 className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`}
@@ -624,7 +626,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             <button
               onClick={handleStartNewConversation}
               className="text-neutral-400 hover:text-neutral-900 p-2 hover:bg-neutral-100 rounded-full transition-colors"
-              aria-label="新建会话"
+              aria-label={t('agent_chat.new_conversation_aria')}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -666,7 +668,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
-                                    AI Copilot · 批量出题配置
+                                    {t('agent_chat.form_title')}
                                   </div>
                                   <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm px-4 py-3">
                                     {hitlFormUi?.title && (
@@ -702,10 +704,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                             return (
                                               <QuestionTypeSelectField
                                                 key={field.id}
-                                                label={field.label || '题型'}
+                                                label={field.label || t('agent_chat.question_type_label')}
                                                 value={value}
                                                 options={questionTypeOptions}
-                                                placeholder={field.placeholder || '选择或输入题型'}
+                                                placeholder={field.placeholder || t('agent_chat.question_type_placeholder')}
                                                 disabled={isSubmittingHitlForm || isQuestionTypeEnsuring}
                                                 isLoading={questionTypeOptionsLoading}
                                                 error={questionTypeOptionsError || undefined}
@@ -741,7 +743,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                           onClick={handleHitlCancel}
                                           disabled={isSubmittingHitlForm}
                                         >
-                                          取消
+                                          {t('agent_chat.cancel')}
                                         </button>
                                         <button
                                           type="submit"
@@ -749,10 +751,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                           className="px-3 py-1.5 rounded-full text-xs bg-slate-900 text-white disabled:opacity-60"
                                         >
                                           {isQuestionTypeEnsuring
-                                            ? '题型创建中…'
+                                            ? t('agent_chat.creating_question_type')
                                             : isSubmittingHitlForm
-                                              ? '提交中…'
-                                              : hitlFormUi?.submit?.label || '确认'}
+                                              ? t('agent_chat.submitting')
+                                              : hitlFormUi?.submit?.label || t('agent_chat.confirm')}
                                         </button>
                                       </div>
                                     </form>
@@ -771,7 +773,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                           <div className="flex-1 min-w-0">
                             <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">AI Copilot</div>
                             <div className="flex flex-col gap-2 text-sm text-slate-500">
-                              <span className="font-medium text-slate-600">正在整理思路…</span>
+                              <span className="font-medium text-slate-600">{t('agent_chat.thinking')}</span>
                               <span className="flex items-center gap-1.5" aria-label="thinking animation">
                                 <span
                                   className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
