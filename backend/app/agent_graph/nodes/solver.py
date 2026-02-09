@@ -14,7 +14,7 @@ from ..helpers import _append_token_usage_event, _latest_user_snapshot_from_stat
 
 from ..prompt_slots import _build_slot_prompt
 
-from ..prompts import SOLVER_BASE_PROMPT
+from ..prompts import get_solver_base_prompt
 
 from ..runtime import SKILL_MANAGER, logger
 
@@ -437,13 +437,15 @@ def solver_node(state: AgentState) -> AgentState:
 
     state_for_prompt["doc_context"] = doc_ctx_raw
 
+    base_prompt = get_solver_base_prompt(state.get("preferred_language"))
+
     messages = _build_slot_prompt(
 
         state=state_for_prompt,
 
         node_name="solver",
 
-        instruction=SOLVER_BASE_PROMPT,
+        instruction=base_prompt,
 
         slot_payload=slot_payload,
 

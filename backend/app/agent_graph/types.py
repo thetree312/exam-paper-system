@@ -136,6 +136,7 @@ class AgentState(TypedDict, total=False):
     tenant_id: int
     user_id: int
     ui_context: str
+    preferred_language: str | None
     session_id: int | None
     messages: Annotated[List[AgentMessageEntry], _append_messages]
     base_messages: List[AgentMessageEntry]

@@ -34,7 +34,7 @@ from ..prompt_slots import _build_slot_prompt
 
 
 
-from ..prompts import SOLVER_BASE_PROMPT
+from ..prompts import get_solver_base_prompt
 
 
 
@@ -566,6 +566,10 @@ def solver_reply_node(state: AgentState) -> AgentState:
 
 
 
+    base_prompt = get_solver_base_prompt(state.get("preferred_language"))
+
+
+
     messages = _build_slot_prompt(
 
 
@@ -578,7 +582,7 @@ def solver_reply_node(state: AgentState) -> AgentState:
 
 
 
-        instruction=SOLVER_BASE_PROMPT,
+        instruction=base_prompt,
 
 
 

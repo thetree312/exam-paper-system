@@ -6,7 +6,7 @@ from langgraph.types import interrupt
 
 from ...db import SessionLocal
 from ...services.question_type_service import QuestionTypeService
-from ..prompts import COLLECT_BATCH_CONFIG_SKILL_PROMPT
+from ..prompts import get_collect_batch_config_prompt
 from ..runtime import logger
 from ..stream_registry import _get_stream_handler
 from ..types import AgentState
@@ -157,10 +157,50 @@ def batch_config_node(state: AgentState) -> AgentState:
         for name in question_type_names
     ]
 
+    lang = (state.get("preferred_language") or "zh").lower()
+    is_en = lang.startswith("en")
+
+    if is_en:
+        title = "Batch question settings"
+        label_count = "Number of questions"
+        label_difficulty = "Difficulty"
+        label_similarity = "Similarity to original question"
+        label_question_type = "Question type"
+        label_reason_other = "Other notes"
+        submit_label = "Start generation"
+        difficulty_options = [
+            {"value": "easy", "label": "Easy"},
+            {"value": "medium", "label": "Medium"},
+            {"value": "hard", "label": "Hard"},
+        ]
+        similarity_options = [
+            {"value": "high", "label": "High"},
+            {"value": "medium", "label": "Medium"},
+            {"value": "low", "label": "Low"},
+        ]
+    else:
+        title = "批量出题设置"
+        label_count = "题目数量"
+        label_difficulty = "难度"
+        label_similarity = "与原题相似度"
+        label_question_type = "题型"
+        label_reason_other = "其他说明"
+        submit_label = "开始出题"
+        difficulty_options = [
+            {"value": "easy", "label": "容易"},
+            {"value": "medium", "label": "中等"},
+            {"value": "hard", "label": "较难"},
+        ]
+        similarity_options = [
+            {"value": "high", "label": "高"},
+            {"value": "medium", "label": "中"},
+            {"value": "low", "label": "低"},
+        ]
+
     form_spec = {
         "type": "form",
         "id": "batch-question-config",
-        "title": "批量出题设置",
+        "title": title,
         "meta": {
             "reason": reason,
             "missing_fields": missing_fields,
@@ -169,7 +209,7 @@ def batch_config_node(state: AgentState) -> AgentState:
             {
                 "id": "count",
                 "type": "number",
-                "label": "题目数量",
+                "label": label_count,
                 "min": 1,
                 "max": 5,
                 "default": 3,
@@ -177,40 +217,37 @@ def batch_config_node(state: AgentState) -> AgentState:
             {
                 "id": "difficulty",
                 "type": "select",
-                "label": "难度",
-                "options": [
-                    {"value": "easy", "label": "容易"},
-                    {"value": "medium", "label": "中等"},
-                    {"value": "hard", "label": "较难"},
-                ],
+                "label": label_difficulty,
+                "options": difficulty_options,
                 "default": "medium",
             },
             {
                 "id": "similarity",
                 "type": "select",
-                "label": "与原题相似度",
-                "options": [
-                    {"value": "high", "label": "高"},
-                    {"value": "medium", "label": "中"},
-                    {"value": "low", "label": "低"},
-                ],
+                "label": label_similarity,
+                "options": similarity_options,
                 "default": "medium",
             },
             {
                 "id": "question_type",
                 "type": "select",
-                "label": "题型",
+                "label": label_question_type,
                 "options": question_type_options,
                 "placeholder": "选择或输入题型",
                 "default": "",
                 "allowCustom": True,
             },
+            {
+                "id": "reason_other",
+                "type": "textarea",
+                "label": label_reason_other,
+            },
         ],
         "submit": {
-            "label": "开始出题",
+            "label": submit_label,
             "actionId": "batch-question-config.submit",
         },
-        "prompt": COLLECT_BATCH_CONFIG_SKILL_PROMPT,
+        "prompt": get_collect_batch_config_prompt(state.get("preferred_language")),
     }
 
     _log_subgraph_event(

@@ -14,6 +14,7 @@ export function useMindMapGraph(
   source: MindMapSourceRef | null,
   tenantId: number | null,
   userId: number | null,
+  preferredLanguage?: 'zh' | 'en',
 ): UseMindMapGraphResult {
   const [data, setData] = useState<MindMapGraphResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -54,6 +55,7 @@ export function useMindMapGraph(
         tenantId: tenantId!,
         userId: userId ?? null,
         signal: controller.signal,
+        preferredLanguage,
       },
     )
       .then((resp) => {
@@ -77,7 +79,7 @@ export function useMindMapGraph(
           setIsLoading(false)
         }
       })
-  }, [backendBaseUrl, source, tenantId, userId])
+  }, [backendBaseUrl, source, tenantId, userId, preferredLanguage])
 
   useEffect(() => {
     // 每次 source / tenant 变化或重新挂载时，先尝试从 sessionStorage 中恢复缓存，避免重复请求

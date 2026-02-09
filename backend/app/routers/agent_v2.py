@@ -95,6 +95,7 @@ class AgentRunRequest(BaseModel):
     note_focus: Optional[NoteFocusPayload] = None
     view_id: Optional[str] = None
     session_id: Optional[int] = None
+    preferred_language: Optional[str] = None
 
 
 class AgentResumeRequest(BaseModel):
@@ -172,6 +173,7 @@ class GradeRunRequest(BaseModel):
     document_id: int | None = None
     title: str | None = None
     questions: List[GradeQuestionPayload]
+    preferred_language: str | None = None
 
 
 class GradeQuestionResult(BaseModel):
@@ -220,6 +222,7 @@ class MindMapRequest(BaseModel):
     mode: Literal["document", "file"] = "document"
     document_id: Optional[int] = None
     file_id: Optional[int] = None
+    preferred_language: Optional[str] = None
 
 
 class MindMapNode(BaseModel):
@@ -869,24 +872,48 @@ def _generate_mindmap_core(payload: MindMapRequest, db: Session) -> MindMapRespo
         '\n}'
     )
 
-    system_prompt = (
-        "你是一个知识点提炼专家，负责将整份文档（试卷、讲义、学习笔记等）整理为知识点思维导图。"
-        "\n\n请严格按如下 JSON 结构输出，仅输出 JSON 本身，不要包含 ``` 等 Markdown 包裹："
-        "\n" + json_template +
-        "\n分层要求（根据文档复杂度自适应）："
-        "\n- 简单文档（知识点 < 10 个）：生成 3-4 层。"
-        "\n- 中等文档（知识点 10-30 个）：生成 4 层。"
-        "\n- 复杂文档（知识点 > 30 个）：生成 4-5 层。"
-        "\n- 第 1 层：root（文档主题）。"
-        "\n- 第 2 层：结构性分组（章节/单元/主题簇），2-7 个节点。"
-        "\n- 第 3 层：具体知识点，每个分组下 2-8 个。"
-        "\n- 第 4 层（可选）：知识点的细化要点（type: detail）。"
-        "\n- 第 5 层（可选）：对第 4 层的进一步细化（type: sub_detail），仅在必要时。"
-        "\n- 禁止把大量知识点直接挂在 root。"
-        "\n- 每一对 parent_id 关系都必须在 edges 中有对应的边。"
-        "\n- type 可使用：topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example。"
-        "\n- 严禁输出除 JSON 以外的任何文字，严禁使用 ```json 或 ``` 包裹。"
-    )
+    _lang = (getattr(payload, "preferred_language", None) or "zh").lower()
+    _is_en = _lang.startswith("en")
+
+    if _is_en:
+        system_prompt = (
+            "You are a knowledge extraction expert. Your job is to organize an entire document (exam paper, lecture notes, study notes, etc.) into a knowledge-point mind map."
+            "\n\nOutput strictly in the following JSON structure. Output only the JSON itself, without ``` or any Markdown wrapping:"
+            "\n" + json_template +
+            "\nLayering requirements (adapt to document complexity):"
+            "\n- Simple documents (< 10 knowledge points): generate 3-4 layers."
+            "\n- Medium documents (10-30 knowledge points): generate 4 layers."
+            "\n- Complex documents (> 30 knowledge points): generate 4-5 layers."
+            "\n- Layer 1: root (document theme)."
+            "\n- Layer 2: structural groups (chapters/units/topic clusters), 2-7 nodes."
+            "\n- Layer 3: specific knowledge points, 2-8 per group."
+            "\n- Layer 4 (optional): refined details of knowledge points (type: detail)."
+            "\n- Layer 5 (optional): further refinement of layer 4 (type: sub_detail), only when necessary."
+            "\n- Do not hang many knowledge points directly under root."
+            "\n- Every parent_id relationship must have a corresponding edge in edges."
+            "\n- type can be: topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example."
+            "\n- All node labels and descriptions must be in English."
+            "\n- Output ONLY JSON, no extra text. Do NOT use ```json or ``` wrapping."
+        )
+    else:
+        system_prompt = (
+            "你是一个知识点提炼专家，负责将整份文档（试卷、讲义、学习笔记等）整理为知识点思维导图。"
+            "\n\n请严格按如下 JSON 结构输出，仅输出 JSON 本身，不要包含 ``` 等 Markdown 包裹："
+            "\n" + json_template +
+            "\n分层要求（根据文档复杂度自适应）："
+            "\n- 简单文档（知识点 < 10 个）：生成 3-4 层。"
+            "\n- 中等文档（知识点 10-30 个）：生成 4 层。"
+            "\n- 复杂文档（知识点 > 30 个）：生成 4-5 层。"
+            "\n- 第 1 层：root（文档主题）。"
+            "\n- 第 2 层：结构性分组（章节/单元/主题簇），2-7 个节点。"
+            "\n- 第 3 层：具体知识点，每个分组下 2-8 个。"
+            "\n- 第 4 层（可选）：知识点的细化要点（type: detail）。"
+            "\n- 第 5 层（可选）：对第 4 层的进一步细化（type: sub_detail），仅在必要时。"
+            "\n- 禁止把大量知识点直接挂在 root。"
+            "\n- 每一对 parent_id 关系都必须在 edges 中有对应的边。"
+            "\n- type 可使用：topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example。"
+            "\n- 严禁输出除 JSON 以外的任何文字，严禁使用 ```json 或 ``` 包裹。"
+        )
 
     user_parts: list[str] = []
     title = None
@@ -1278,6 +1305,7 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
         "tenant_id": payload.tenant_id,
         "user_id": payload.user_id,
         "ui_context": payload.ui_context,
+        "preferred_language": payload.preferred_language,
         "messages": messages,
         "base_messages": messages,
         "session_profile": session_profile,
@@ -1462,7 +1490,7 @@ def delete_question(payload: DeleteQuestionRequest, db: Session = Depends(get_db
     return {"ok": True}
 
 
-GRADING_SYSTEM_PROMPT = (
+GRADING_SYSTEM_PROMPT_ZH = (
     "你是一个严格的数学/理科阅卷老师，负责对单道题的作答进行机器阅卷。"
     "你会拿到：题目原文、（可选的）图像文字描述、以及学生答案。"
     "你的任务是：先在可见的 reasoning 中完整推理出该题的正确答案，再根据该最终推理结论，给出结构化的 JSON 判定结果。"
@@ -1481,7 +1509,7 @@ GRADING_SYSTEM_PROMPT = (
     "   - 学生未作答在上游已处理，这里不会出现 judgement='skipped' 的场景。"
     "4. reasoning 内容需覆盖：求解过程 + 正确答案 + 学生答案为何被判为当前 judgement，并避免无意义的来回修改。"
     "5. 在 reasoning 的最后一行必须使用固定格式总结："
-    "   “最终结论：正确答案是 {correct_answer}，学生答案是 {student_answer}，判定为 {正确/错误/无法确定}。”"
+    "   最终结论：正确答案是 {correct_answer}，学生答案是 {student_answer}，判定为 {正确/错误/无法确定}。"
     "   其中 {correct_answer}、{student_answer}、{判定为…} 均需与 JSON 字段完全一致。"
     "6. confidence 为 0~1 之间的小数，表示你对当前判定的主观把握程度（例如 0.95）。"
     "7. reasoning 不宜过长，通常 8~12 行推理即可，确保逻辑清晰。"
@@ -1491,6 +1519,45 @@ GRADING_SYSTEM_PROMPT = (
     "- judgement 取值只能是: 'correct', 'incorrect', 'skipped', 'uncertain' 之一（小写）。"
     '示例 JSON：{"predicted_answer": "C", "judgement": "incorrect", "confidence": 0.87, "reasoning": "……最终结论：正确答案是 C，学生答案是 A，判定为 错误。"}'
 )
+
+GRADING_SYSTEM_PROMPT_EN = (
+    "You are a strict math/science grading teacher responsible for machine-grading a single question."
+    " You will receive: the original question text, (optionally) image descriptions, and the student's answer."
+    " Your task: first derive the correct answer in the visible reasoning, then produce a structured JSON verdict."
+    "\n\n[Grading Rules (must follow)]"
+    "\n1. In reasoning, use English to reason step-by-step and concisely. You may do at most one brief recheck, but do not repeatedly overturn previous conclusions. You must clearly state:"
+    "\n   - Your final correct_answer (e.g., the correct answer is C, or the correct answer is 1);"
+    "\n   - Whether the student's answer equals correct_answer, and therefore whether the student is correct/incorrect/uncertain."
+    "\n2. After reasoning, fill in the JSON:"
+    "\n   - predicted_answer must equal the correct answer you gave at the end of reasoning;"
+    "\n   - judgement must be consistent with the last line of reasoning (only 'correct', 'incorrect', 'skipped', 'uncertain');"
+    "\n   - It is strictly forbidden for reasoning's final conclusion to contradict the JSON predicted_answer or judgement."
+    "\n3. Strictly compare student_answer with correct_answer:"
+    "\n   - If clearly comparable and identical, judgement must be 'correct';"
+    "\n   - If clearly comparable and different, judgement must be 'incorrect';"
+    "\n   - If insufficient information or multiple/no solutions, judgement must be 'uncertain';"
+    "\n   - Unanswered cases are handled upstream; 'skipped' will not appear here."
+    "\n4. reasoning must cover: solution process + correct answer + why the student's answer received the current judgement."
+    "\n5. The last line of reasoning must use this fixed format:"
+    '\n   "Final conclusion: the correct answer is {correct_answer}, the student answer is {student_answer}, verdict is {correct/incorrect/uncertain}."'
+    "\n   where {correct_answer}, {student_answer}, {verdict} must exactly match the JSON fields."
+    "\n6. confidence is a decimal between 0 and 1 representing your subjective certainty (e.g., 0.95)."
+    "\n7. reasoning should not be too long; typically 8-12 lines of reasoning, ensuring clear logic."
+    "\n\n[Output Requirements]"
+    "\n- The final reply must contain only one JSON object, no extra text, comments, or Markdown."
+    "\n- JSON fields must be complete and only include: predicted_answer, judgement, confidence, reasoning."
+    "\n- judgement can only be: 'correct', 'incorrect', 'skipped', 'uncertain' (lowercase)."
+    '\nExample JSON: {"predicted_answer": "C", "judgement": "incorrect", "confidence": 0.87, "reasoning": "…Final conclusion: the correct answer is C, the student answer is A, verdict is incorrect."}'
+)
+
+GRADING_SYSTEM_PROMPT = GRADING_SYSTEM_PROMPT_ZH
+
+
+def _get_grading_prompt(preferred_language: str | None) -> str:
+    lang = (preferred_language or "zh").lower()
+    if lang.startswith("en"):
+        return GRADING_SYSTEM_PROMPT_EN
+    return GRADING_SYSTEM_PROMPT_ZH
 
 
 def _parse_json_response(payload: str) -> dict:
@@ -1682,8 +1749,9 @@ def grade_document(payload: GradeRunRequest, db: Session = Depends(get_db)) -> G
         )
         user_prompt = "\n".join(user_prompt_lines)
 
+        grading_prompt = _get_grading_prompt(payload.preferred_language)
         messages = [
-            {"role": "system", "content": GRADING_SYSTEM_PROMPT},
+            {"role": "system", "content": grading_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -2085,6 +2153,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 "tenant_id": payload.tenant_id,
                 "user_id": payload.user_id,
                 "ui_context": payload.ui_context,
+                "preferred_language": payload.preferred_language,
                 # 将当前会话 ID 一并写入状态，便于图在结束时将完整
                 # 对话历史持久化到 agent_messages / agent_sessions。
                 "session_id": session_id,

@@ -286,7 +286,7 @@
     "flashcard_button": "闪卡",
     "mindmap_button": "思维导图",
     "answer_mode_button": "答题模式",
-    "copilot_button": "Copilot 对话",
+    "copilot_button": "Ordis 对话",
     "workspace_title": "内容工作区",
     "session_label": "当前 Session #{{sessionId}}",
     "session_not_started": "尚未开始",
@@ -313,7 +313,7 @@
     "button_delete": "删除",
     "button_split": "智能拆题",
     "button_split_in_progress": "智能拆题进行中",
-    "button_send_to_copilot": "发送到 Copilot",
+    "button_send_to_copilot": "发送到 Ordis",
     "button_copy": "复制",
     "grading_status": {
       "pending": "批改中",

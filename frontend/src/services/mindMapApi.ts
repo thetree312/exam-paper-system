@@ -13,12 +13,13 @@ export interface MindMapFetchOptions {
   signal?: AbortSignal
   tenantId: number
   userId?: number | null
+  preferredLanguage?: 'zh' | 'en'
 }
 
 export async function fetchMindMapGraph(
   baseUrl: string,
   source: MindMapSourceRef,
-  { tenantId, userId, signal }: MindMapFetchOptions,
+  { tenantId, userId, signal, preferredLanguage }: MindMapFetchOptions,
 ): Promise<MindMapGraphResponse> {
   const payload: Record<string, unknown> = {
     tenant_id: tenantId,
@@ -27,6 +28,7 @@ export async function fetchMindMapGraph(
     source_id: source.sourceId,
     kind: source.kind ?? 'knowledge',
     force: false,
+    preferred_language: preferredLanguage,
   }
 
   const resp = await fetch(`${baseUrl}/api/mindmaps/generate`, {

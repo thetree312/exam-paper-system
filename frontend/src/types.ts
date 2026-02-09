@@ -306,6 +306,7 @@ export interface AgentRunRequest {
   documentId?: number | null
   messages: AgentRunMessage[]
   noteFocus?: AgentNoteFocus | null
+  preferredLanguage?: 'zh' | 'en'
   /** 会话视图 ID，用于同一文档下区分不同编辑视图/标签的 Agent 会话 */
   viewId?: string | null
   /** 后端分配的 Agent 会话 ID，用于跨请求复用同一 LangGraph 线程 */
@@ -533,6 +534,7 @@ export interface GradeRunRequest {
   documentId?: number | null
   title?: string | null
   questions: GradeQuestionPayload[]
+  preferredLanguage?: 'zh' | 'en'
 }
 
 export interface GradeQuestionResult {

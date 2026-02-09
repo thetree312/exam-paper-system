@@ -131,7 +131,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onAppendTokenConsumed,
   onDocumentResolved,
 }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [input, setInput] = useState('')
   const [inputHeight, setInputHeight] = useState(36)
   const [hitlFormUi, setHitlFormUi] = useState<any | null>(null)
@@ -146,6 +146,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   const batchMeta = appendToken?.payload.batchMeta
   const effectiveUiContext: AgentRunContext = appendToken?.payload.uiContextOverride ?? 'exam_editor'
+
+  const preferredLanguage: 'zh' | 'en' = i18n.language?.toLowerCase().startsWith('en') ? 'en' : 'zh'
 
   const questionTypeField = useMemo(() => {
     if (!Array.isArray(hitlFormUi?.fields)) return null
@@ -267,6 +269,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       // 如果当前有来自题卡/笔记的 noteFocus，就优先携带给本轮对话
       noteFocus: appendToken?.payload.noteFocus,
       onDocumentResolved,
+      preferredLanguage,
     })
 
   // 会话重置信号变化时（新建/切换会话），根据当前会话元信息和存量消息灌入 useAgentChat。
@@ -521,7 +524,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         if (!msg.content?.trim()) {
           return null
         }
-        const keyLabel = 'AI Copilot'
+        const keyLabel = 'Ordis'
         return (
           <div className="flex gap-3">
             <div className="shrink-0">
@@ -771,7 +774,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                             <RobotGlowFace className="pointer-events-none select-none" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">AI Copilot</div>
+                            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Ordis</div>
                             <div className="flex flex-col gap-2 text-sm text-slate-500">
                               <span className="font-medium text-slate-600">{t('agent_chat.thinking')}</span>
                               <span className="flex items-center gap-1.5" aria-label="thinking animation">

@@ -14,6 +14,7 @@ interface UseAgentChatOptions {
   /** 会话视图 ID，用于同一文档下区分不同编辑视图/标签的 Agent 会话 */
   viewId?: string | null
   onDocumentResolved?: (documentId: number) => void
+  preferredLanguage?: 'zh' | 'en'
 }
 
 export function useAgentChat({
@@ -26,6 +27,7 @@ export function useAgentChat({
   onAgUiEvent,
   viewId,
   onDocumentResolved,
+  preferredLanguage,
 }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<AgentRunMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -73,6 +75,7 @@ export function useAgentChat({
           documentId: documentId ?? undefined,
           messages: optimisticMessages,
           noteFocus: noteFocus ?? undefined,
+          preferredLanguage,
           viewId: viewId ?? undefined,
           sessionId: sessionId ?? undefined,
         }
@@ -147,7 +150,19 @@ export function useAgentChat({
         setIsAwaitingFirstToken(false)
       }
     },
-    [backendBaseUrl, isReady, sessionId, tenantId, uiContext, documentId, noteFocus, updateMessages, userId, viewId],
+    [
+      backendBaseUrl,
+      isReady,
+      sessionId,
+      tenantId,
+      uiContext,
+      documentId,
+      noteFocus,
+      updateMessages,
+      userId,
+      viewId,
+      preferredLanguage,
+    ],
   )
 
   const resumeWithPayload = useCallback(

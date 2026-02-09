@@ -312,7 +312,7 @@
     "flashcard_button": "Flashcard",
     "mindmap_button": "Mind Map",
     "answer_mode_button": "Answer Mode",
-    "copilot_button": "Copilot Chat",
+    "copilot_button": "Ordis Chat",
     "workspace_title": "Content Workspace",
     "session_label": "Current Session #{{sessionId}}",
     "session_not_started": "Not started",
@@ -339,7 +339,7 @@
     "button_delete": "Delete",
     "button_split": "Smart Split",
     "button_split_in_progress": "Smart split in progress",
-    "button_send_to_copilot": "Send to Copilot",
+    "button_send_to_copilot": "Send to Ordis",
     "button_copy": "Copy",
     "grading_status": {
       "pending": "Grading",

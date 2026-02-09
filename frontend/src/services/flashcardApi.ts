@@ -103,12 +103,13 @@ export async function generateFlashcards(
   documentId: number,
   maxCards = 40,
   force = false,
+  preferredLanguage?: 'zh' | 'en',
 ): Promise<FlashcardGenerateResult> {
   const query = buildQuery({ tenant_id: tenantId, user_id: userId })
   const resp = await fetch(`${backendBaseUrl}/api/flashcards/generate${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ document_id: documentId, max_cards: maxCards, force }),
+    body: JSON.stringify({ document_id: documentId, max_cards: maxCards, force, preferred_language: preferredLanguage }),
   })
   if (!resp.ok) throw new Error(await resp.text())
   const data = (await resp.json()) as ServerGenerateResponse
