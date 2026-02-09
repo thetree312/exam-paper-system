@@ -122,6 +122,37 @@ VITE_WS_URL=ws://localhost:8000/ws
 - **Topic Analysis**: Identify key concepts and difficulty levels
 - **Study Recommendations**: Personalized learning suggestions
 
+## 🧠 LangGraph Architecture
+
+The AI 助手通过 LangGraph StateGraph 组织“Supervisor→Solver→工具”执行流，并结合 Postgres / SQLite checkpointer 复用线程状态：
+
+```mermaid
+flowchart TD
+    subgraph Client
+        UI[Agent UI / UseAgentChat Hook]
+    end
+
+    subgraph Backend
+        API[FastAPI /api/agent/*]
+        Service[AgentService<br/>Session & snapshot orchestration]
+        Checkpointer[LangGraph Checkpointer<br/>(Postgres → SQLite fallback)]
+        Graph[LangGraph StateGraph<br/>build_agent_app]
+        Supervisor[Supervisor Node]
+        Solver[Solver / Skills]
+        Tools{{Tools: DocumentReadTool, MindMap, Flashcard, Translation, etc.}}
+        Memory[(agent_sessions / agent_messages)]
+    end
+
+    UI -->|payload| API --> Service
+    Service -->|session_id / thread_id| Memory
+    Service --> Graph
+    Graph --> Checkpointer
+    Graph --> Supervisor --> Solver --> Tools --> Supervisor
+    Graph -->|events| API -->|stream/response| UI
+```
+
+> ℹ️ GitHub README 原生支持 Mermaid，因此将上述代码块直接推送即可渲染为 SVG 图。若需要插入静态图片，可将文件放在仓库（例如 `docs/diagram.png`），并通过标准 Markdown 语法引用：`![Alt text](docs/diagram.png)`，这样 GitHub 也会自动展示图片。
+
 ## 📊 Database Schema
 
 The system uses PostgreSQL with the following main tables:
