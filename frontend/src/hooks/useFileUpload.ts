@@ -253,7 +253,8 @@ export const useFileUpload = (
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
+      const inputEl = e.target
+      const file = inputEl.files?.[0]
       if (!file) return
 
       if (!user) {
@@ -375,6 +376,9 @@ export const useFileUpload = (
         onStatusMessage('上传失败，请稍后重试')
       } finally {
         setIsUploading(false)
+        if (inputEl) {
+          inputEl.value = ''
+        }
       }
     },
     [activeFile, storeActiveTabIndex, backendBaseUrl, storeFileTabs.length, onStatusMessage, user, setStoreFileTabs, setStoreActiveTabIndex],

@@ -18,6 +18,79 @@ from .agent_service import AgentService
 
 logger = logging.getLogger("agent.similar_tool")
 
+FILL_BLANK_TOKEN = "___"
+_HTML_UNDERLINE_PATTERN = re.compile(r"<u>(.*?)</u>", re.IGNORECASE | re.DOTALL)
+_LATEX_UNDERLINE_PATTERN = re.compile(r"\\underline\s*\{[^}]*\}")
+_MULTI_UNDERSCORE_PATTERN = re.compile(r"_{2,}")
+_WIDE_BRACKET_BLANK_PATTERN = re.compile(r"([（(])\s{2,}([)）])")
+_LATEX_SPACE_CMD_PATTERN = re.compile(r"\\(,|;|:|!|quad|qquad)")
+
+
+def _strip_fill_blank_latex_noise(text: str) -> str:
+    if not text:
+        return text
+    result = text.replace("$", "")
+    result = result.replace("\\,", " ")
+    result = result.replace("\\;", " ")
+    result = result.replace("\\:", " ")
+    result = result.replace("\\!", "")
+    result = result.replace("\\quad", " ")
+    result = result.replace("\\qquad", " ")
+    result = _LATEX_SPACE_CMD_PATTERN.sub(" ", result)
+    result = result.replace("\\ ", " ")
+    return result
+
+
+def _normalize_question_type(value: Any) -> Optional[str]:
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    return None
+
+
+def _infer_question_type(plan_question_type: Optional[str], variant: Dict[str, Any]) -> Optional[str]:
+    metadata = variant.get("metadata")
+    meta_qtype: Optional[str] = None
+    if isinstance(metadata, dict):
+        meta_qtype = _normalize_question_type(metadata.get("question_type"))
+    return meta_qtype or plan_question_type
+
+
+def _should_enforce_fill_blank(question_type: Optional[str]) -> bool:
+    if not question_type:
+        return False
+    lowered = question_type.lower()
+    return ("填空" in question_type) or ("fill" in lowered)
+
+
+def _normalize_fill_blank_placeholder(text: str) -> str:
+    if not text:
+        return text
+    result = _strip_fill_blank_latex_noise(text)
+    result = _HTML_UNDERLINE_PATTERN.sub(FILL_BLANK_TOKEN, result)
+    result = _LATEX_UNDERLINE_PATTERN.sub(FILL_BLANK_TOKEN, result)
+
+    def _underscore_replacer(match: re.Match[str]) -> str:
+        group = match.group(0)
+        if len(group) >= 2:
+            return FILL_BLANK_TOKEN
+        return group
+
+    result = _MULTI_UNDERSCORE_PATTERN.sub(_underscore_replacer, result)
+
+    def _bracket_replacer(match: re.Match[str]) -> str:
+        left, right = match.groups()
+        if left in "(":
+            return f"( {FILL_BLANK_TOKEN} )"
+        return f"（{FILL_BLANK_TOKEN}）"
+
+    result = _WIDE_BRACKET_BLANK_PATTERN.sub(_bracket_replacer, result)
+
+    if FILL_BLANK_TOKEN not in result:
+        result = result.rstrip() + f" （{FILL_BLANK_TOKEN}）"
+
+    return result
+
 
 
 
@@ -98,7 +171,7 @@ def _extract_solution_payload(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
 
 
 
-def _build_student_content_from_variant(item: Dict[str, Any]) -> str:
+def _build_student_content_from_variant(item: Dict[str, Any], *, plan_question_type: Optional[str] = None) -> str:
 
     """Compose student-facing question content from a structured variant.
 
@@ -120,7 +193,11 @@ def _build_student_content_from_variant(item: Dict[str, Any]) -> str:
 
 
 
+    question_type = _infer_question_type(plan_question_type, item)
+
     stem = str(item.get("stem") or "").strip()
+    if _should_enforce_fill_blank(question_type):
+        stem = _normalize_fill_blank_placeholder(stem)
 
     options_raw = item.get("options")
 
@@ -155,7 +232,6 @@ def _build_student_content_from_variant(item: Dict[str, Any]) -> str:
 
 
     content = "\n".join(parts).strip()
-
     return content
 
 
@@ -308,7 +384,11 @@ class SimilarQuestionTool:
 
             return None
 
-        content = _build_student_content_from_variant(replacement)
+        plan_question_type = _normalize_question_type(plan.get("question_type"))
+        content = _build_student_content_from_variant(
+            replacement,
+            plan_question_type=plan_question_type,
+        )
 
         if target_index is None or content == "":
 
@@ -486,6 +566,7 @@ class SimilarQuestionTool:
 
     ) -> List[Dict[str, Any]]:
 
+        plan_question_type = _normalize_question_type(plan.get("question_type"))
         new_questions = plan.get("new_questions")
 
         if not isinstance(new_questions, list):
@@ -634,7 +715,10 @@ class SimilarQuestionTool:
 
                 continue
 
-            content = _build_student_content_from_variant(item)
+            content = _build_student_content_from_variant(
+                item,
+                plan_question_type=plan_question_type,
+            )
 
             if not content:
 

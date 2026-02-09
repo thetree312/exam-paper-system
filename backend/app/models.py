@@ -107,6 +107,9 @@ class File(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+    content_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     uploader: Mapped[Optional[User]] = relationship("User")
@@ -260,6 +263,12 @@ class Document(Base):
     mindmap_generated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    ocr_md_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ocr_layout_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ocr_cache_generated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    ocr_cache_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     owner: Mapped[Optional[User]] = relationship("User")
@@ -268,6 +277,38 @@ class Document(Base):
     questions: Mapped[list["Question"]] = relationship(
         "Question", back_populates="document", cascade="all, delete-orphan"
     )
+
+
+class FileOcrCache(Base):
+    __tablename__ = "file_ocr_cache"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    file_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("files.id", ondelete="SET NULL"), nullable=True
+    )
+    md_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    layout_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(Integer, nullable=False, default=1)
+    source_document_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    file: Mapped[Optional[File]] = relationship("File")
+    document: Mapped[Optional[Document]] = relationship("Document")
 
 
 class MindMap(Base):

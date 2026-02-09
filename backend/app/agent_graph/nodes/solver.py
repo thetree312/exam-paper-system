@@ -522,47 +522,56 @@ def solver_node(state: AgentState) -> AgentState:
     if allow_tools:
 
         tools = [
-
             {
-
                 "type": "function",
-
                 "function": {
-
                     "name": "similar_question_planner",
-
                     "description": (
-
-                        "规划如何调用 SimilarQuestionTool 来改写或插入题目。"
-
+                        "规划如何调用 SimilarQuestionTool 来改写或插入题目，"
+                        " 并严格遵守题量、题型、难度与相似度等批量配置。"
                         " 当需要生成类似题或批量练习时，请调用本工具并在 plans 数组中给出计划。"
-
                     ),
-
                     "parameters": {
-
                         "type": "object",
-
                         "properties": {
-
                             "plans": {
-
                                 "type": "array",
-
                                 "description": "要执行的题目修改/插入计划列表。",
-
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "mode": {
+                                            "type": "string",
+                                            "enum": [
+                                                "similar_overwrite",
+                                                "from_content_no_overwrite",
+                                            ],
+                                            "description": "题目改写模式。",
+                                        },
+                                        "question_type": {
+                                            "type": "string",
+                                            "description": "当批量配置给出题型时，必须与之完全一致，例如 填空题/单选题。",
+                                        },
+                                        "difficulty": {
+                                            "type": "string",
+                                            "description": "题目难度标签（easy/medium/hard 等）。",
+                                        },
+                                        "similarity": {
+                                            "type": "string",
+                                            "description": "与原题的相似度偏好（high/medium/low）。",
+                                        },
+                                        "new_questions": {
+                                            "type": "array",
+                                            "description": "当 mode 为 from_content_no_overwrite 时新增的题目列表。",
+                                        },
+                                    },
+                                },
                             }
-
                         },
-
                         "required": ["plans"],
-
                     },
-
                 },
-
             }
-
         ]
 
 

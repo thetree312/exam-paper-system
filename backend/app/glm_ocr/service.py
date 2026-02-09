@@ -1,10 +1,12 @@
 import base64
+import hashlib
 import io
 import json
 import logging
 import mimetypes
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from html import unescape
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,10 +17,12 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
-from ..models import Document, File, Question
+from ..models import Document, File, Question, FileOcrCache
+from ..services.cache_manager import FileOcrCacheManager
 from ..services.legend_service import LegendService
 
 
+CACHE_TTL = timedelta(days=180)
 settings = get_settings()
 logger = logging.getLogger("glm_ocr")
 
@@ -52,7 +56,15 @@ class GlmOcrService:
 
     # === 调用层 ===
 
-    async def call_layout_parsing(self, file: File) -> Dict[str, Any]:
+    async def call_layout_parsing(
+        self,
+        db: Session,
+        *,
+        file: File,
+        tenant_id: int,
+        document: Optional[Document] = None,
+        force_refresh: bool = False,
+    ) -> Tuple[Dict[str, Any], Optional[FileOcrCache]]:
         api_key = settings.zhipu_api_key  # type: ignore[attr-defined]
         layout_url = settings.zhipu_layout_url  # type: ignore[attr-defined]
         model = settings.zhipu_model_glm_ocr  # type: ignore[attr-defined]
@@ -60,7 +72,36 @@ class GlmOcrService:
         if not api_key:
             raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
 
-        file_bytes, mime = self._load_file_bytes(file)
+        content_hash = file.content_hash
+        file_bytes: Optional[bytes] = None
+        mime: Optional[str] = None
+        if not content_hash:
+            file_bytes, mime = self._load_file_bytes(file)
+            content_hash = hashlib.sha256(file_bytes).hexdigest()
+            file.content_hash = content_hash
+            db.add(file)
+            db.flush()
+
+        cache_manager = FileOcrCacheManager(db)
+        cache_entry = None
+        if content_hash:
+            cache_entry = cache_manager.get_latest(
+                tenant_id=tenant_id,
+                content_hash=content_hash,
+                model=model,
+                ttl=CACHE_TTL,
+            )
+
+        if cache_entry and not force_refresh:
+            cached_result = self._deserialize_cache(cache_entry)
+            if document is not None:
+                self._apply_document_cache(document, cached_result, model)
+                cache_manager.attach_document(cache_entry, document)
+            cache_manager.touch(cache_entry)
+            return cached_result, cache_entry
+
+        if file_bytes is None or mime is None:
+            file_bytes, mime = self._load_file_bytes(file)
         data_uri = self._to_data_uri(file_bytes, mime)
 
         headers = {
@@ -86,7 +127,23 @@ class GlmOcrService:
         data = resp.json()
         if isinstance(data, dict) and data.get("code") not in (None, 0, 200):
             raise HTTPException(status_code=502, detail=data)
-        return data
+
+        cache_entry = cache_manager.upsert(
+            tenant_id=tenant_id,
+            content_hash=content_hash or "",
+            model=model,
+            file_id=file.id,
+            document=document,
+            md_payload=data.get("md_results"),
+            layout_payload=data,
+        )
+
+        if document is not None:
+            self._apply_document_cache(document, data, model)
+            db.add(document)
+
+        db.flush()
+        return data, cache_entry
 
     # === 文件与裁剪工具 ===
 
@@ -641,6 +698,34 @@ class GlmOcrService:
             len(questions),
         )
         return questions
+
+    def _dump_json(self, payload: Any) -> Optional[str]:
+        if payload is None:
+            return None
+        try:
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            return None
+
+    def _deserialize_cache(self, cache_entry: FileOcrCache) -> Dict[str, Any]:
+        if cache_entry.layout_cache:
+            try:
+                return json.loads(cache_entry.layout_cache)
+            except Exception:
+                logger.exception("[glm_ocr.cache] failed to decode layout_cache cache_id=%s", cache_entry.id)
+        result: Dict[str, Any] = {}
+        if cache_entry.md_cache:
+            try:
+                result["md_results"] = json.loads(cache_entry.md_cache)
+            except Exception:
+                logger.exception("[glm_ocr.cache] failed to decode md_cache cache_id=%s", cache_entry.id)
+        return result
+
+    def _apply_document_cache(self, document: Document, glm_result: Dict[str, Any], model: str) -> None:
+        document.ocr_md_cache = self._dump_json(glm_result.get("md_results"))
+        document.ocr_layout_cache = self._dump_json(glm_result)
+        document.ocr_cache_generated_at = datetime.utcnow()
+        document.ocr_cache_model = model
 
     def _strip_html_tags(self, text: str) -> str:
         return re.sub(r"<[^>]+>", "", text)

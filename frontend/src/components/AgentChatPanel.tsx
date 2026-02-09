@@ -9,6 +9,8 @@ import noInternetAnimation from '../assets/animations/noInternet.json'
 import { RobotGlowFace } from './RobotGlowFace'
 import { AgentConversationHistory } from './AgentConversationHistory'
 import { MetalInputBox } from './MetalInputBox'
+import { useQuestionTypeOptions } from '../hooks/useQuestionTypeOptions'
+import { QuestionTypeSelectField } from './QuestionTypeSelectField'
 
 interface AgentChatPanelProps {
   backendBaseUrl: string
@@ -135,12 +137,51 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const [isSubmittingHitlForm, setIsSubmittingHitlForm] = useState(false)
   const [hitlAnchorIndex, setHitlAnchorIndex] = useState<number | null>(null)
   const hitlResumeInFlightRef = useRef(false)
+  const [isQuestionTypeEnsuring, setIsQuestionTypeEnsuring] = useState(false)
   // 当前 useAgentChat 状态所“绑定”的会话 key，用于避免在切换会话过程中
   // 将上一会话的消息和 sessionId 写入到新激活的会话元信息中。
   const [boundConversationKey, setBoundConversationKey] = useState<string | null>(null)
 
   const batchMeta = appendToken?.payload.batchMeta
   const effectiveUiContext: AgentRunContext = appendToken?.payload.uiContextOverride ?? 'exam_editor'
+
+  const questionTypeField = useMemo(() => {
+    if (!Array.isArray(hitlFormUi?.fields)) return null
+    return hitlFormUi.fields.find((field: any) => field && field.id === 'question_type') ?? null
+  }, [hitlFormUi])
+
+  const questionTypeSeedOptions = useMemo(() => {
+    if (!questionTypeField || !Array.isArray(questionTypeField.options)) return []
+    return questionTypeField.options
+      .map((opt: any) => {
+        if (!opt) return ''
+        if (typeof opt.value === 'string' && opt.value.trim()) return opt.value.trim()
+        if (typeof opt.label === 'string' && opt.label.trim()) return opt.label.trim()
+        return ''
+      })
+      .filter((name: string, idx: number, arr: string[]) => Boolean(name) && arr.indexOf(name) === idx)
+  }, [questionTypeField])
+
+  const {
+    options: questionTypeOptions,
+    isLoading: questionTypeOptionsLoading,
+    error: questionTypeOptionsError,
+    ensureQuestionTypeExists,
+    refresh: refreshQuestionTypeOptions,
+  } = useQuestionTypeOptions({
+    backendBaseUrl,
+    tenantId: user?.tenant_id,
+    enabled: Boolean(questionTypeField),
+    seedOptions: questionTypeSeedOptions,
+  })
+
+  const questionTypeOptionSet = useMemo(() => {
+    return new Set(
+      (questionTypeOptions || [])
+        .map((name) => (typeof name === 'string' ? name.trim() : ''))
+        .filter((name) => Boolean(name)),
+    )
+  }, [questionTypeOptions])
 
   const {
     conversations,
@@ -329,6 +370,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       setIsSubmittingHitlForm(true)
       try {
         const payload: Record<string, any> = { ...hitlFormValues }
+        if (typeof payload.question_type === 'string') {
+          payload.question_type = payload.question_type.trim()
+        }
         const maxCapacity = typeof batchMeta?.maxCapacity === 'number' ? batchMeta.maxCapacity : undefined
         if (typeof payload.count === 'number' && typeof maxCapacity === 'number') {
           payload.count = Math.max(1, Math.min(payload.count, maxCapacity))
@@ -338,6 +382,26 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           if (batchMeta.baseQuestionId != null) payload.baseQuestionId = batchMeta.baseQuestionId
           if (batchMeta.baseSequenceIndex != null) payload.baseSequenceIndex = batchMeta.baseSequenceIndex
         }
+
+        if (questionTypeField) {
+          const rawType = typeof payload.question_type === 'string' ? payload.question_type.trim() : ''
+          if (rawType) {
+            payload.question_type = rawType
+            if (!questionTypeOptionSet.has(rawType)) {
+              setIsQuestionTypeEnsuring(true)
+              try {
+                const ensuredName = await ensureQuestionTypeExists(rawType)
+                if (ensuredName) {
+                  payload.question_type = ensuredName
+                  refreshQuestionTypeOptions()
+                }
+              } finally {
+                setIsQuestionTypeEnsuring(false)
+              }
+            }
+          }
+        }
+
         // 在真正发起 resume 之前，立即清空表单及其锚点，避免在后续流式回复
         // 中继续渲染同一块表单。
         hitlResumeInFlightRef.current = true
@@ -356,7 +420,16 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         setIsSubmittingHitlForm(false)
       }
     },
-    [batchMeta, hitlFormUi, hitlFormValues, resumeWithPayload],
+    [
+      batchMeta,
+      ensureQuestionTypeExists,
+      hitlFormUi,
+      hitlFormValues,
+      questionTypeField,
+      questionTypeOptionSet,
+      refreshQuestionTypeOptions,
+      resumeWithPayload,
+    ],
   )
 
   const handleHitlCancel = useCallback(() => {
@@ -625,6 +698,21 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                               </div>
                                             )
                                           }
+                                          if (field.id === 'question_type' && field.type === 'select') {
+                                            return (
+                                              <QuestionTypeSelectField
+                                                key={field.id}
+                                                label={field.label || '题型'}
+                                                value={value}
+                                                options={questionTypeOptions}
+                                                placeholder={field.placeholder || '选择或输入题型'}
+                                                disabled={isSubmittingHitlForm || isQuestionTypeEnsuring}
+                                                isLoading={questionTypeOptionsLoading}
+                                                error={questionTypeOptionsError || undefined}
+                                                onChange={(next) => handleHitlFieldChange(field.id, next)}
+                                              />
+                                            )
+                                          }
                                           if (field.type === 'select' && Array.isArray(field.options)) {
                                             return (
                                               <div key={field.id} className="flex flex-col gap-1">
@@ -657,10 +745,14 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                         </button>
                                         <button
                                           type="submit"
-                                          disabled={isSubmittingHitlForm || isLoading}
+                                          disabled={isSubmittingHitlForm || isLoading || isQuestionTypeEnsuring}
                                           className="px-3 py-1.5 rounded-full text-xs bg-slate-900 text-white disabled:opacity-60"
                                         >
-                                          {isSubmittingHitlForm ? '提交中…' : hitlFormUi?.submit?.label || '确认'}
+                                          {isQuestionTypeEnsuring
+                                            ? '题型创建中…'
+                                            : isSubmittingHitlForm
+                                              ? '提交中…'
+                                              : hitlFormUi?.submit?.label || '确认'}
                                         </button>
                                       </div>
                                     </form>

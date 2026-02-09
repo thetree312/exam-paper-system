@@ -1,13 +1,38 @@
 from __future__ import annotations
 
+from typing import List
+
 from langgraph.types import interrupt
 
+from ...db import SessionLocal
+from ...services.question_type_service import QuestionTypeService
 from ..prompts import COLLECT_BATCH_CONFIG_SKILL_PROMPT
 from ..runtime import logger
 from ..stream_registry import _get_stream_handler
 from ..types import AgentState
 
 REQUIRED_BATCH_FIELDS = ("count", "difficulty", "similarity")
+
+DEFAULT_QUESTION_TYPES = [
+    "单选题",
+    "多选题",
+    "填空题",
+    "解答题",
+    "判断题",
+    "简答题",
+]
+
+DIFFICULTY_LABELS = {
+    "easy": "容易",
+    "medium": "中等",
+    "hard": "较难",
+}
+
+SIMILARITY_LABELS = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+}
 
 
 def _log_subgraph_event(event: str, state: AgentState, **extra: object) -> None:
@@ -23,6 +48,36 @@ def _log_subgraph_event(event: str, state: AgentState, **extra: object) -> None:
 def _require_fields(payload: dict) -> tuple[bool, list[str]]:
     missing = [field for field in REQUIRED_BATCH_FIELDS if payload.get(field) in (None, "")]
     return (not missing, missing)
+
+
+def _compose_supervisor_instruction(batch_cfg: dict, fallback: str | None = None) -> str:
+    count_raw = batch_cfg.get("count")
+    try:
+        count_int = int(count_raw) if count_raw is not None else None
+    except (TypeError, ValueError):
+        count_int = None
+
+    count_text = f"{count_int}道" if count_int else ""
+    difficulty = DIFFICULTY_LABELS.get(str(batch_cfg.get("difficulty")) or "", batch_cfg.get("difficulty") or "")
+    similarity = SIMILARITY_LABELS.get(str(batch_cfg.get("similarity")) or "", batch_cfg.get("similarity") or "")
+    question_type = (batch_cfg.get("question_type") or "练习题").strip()
+
+    segments: list[str] = ["请生成"]
+    if count_text:
+        segments.append(count_text)
+    if difficulty:
+        segments.append(f"{difficulty}难度")
+    if similarity:
+        segments.append(f"、与原题{similarity}相似度的")
+    else:
+        segments.append("的")
+    segments.append(question_type)
+    core = "".join(segments)
+    instruction = f"{core}，并严格遵守批量配置。"
+
+    if not count_text and fallback:
+        instruction = f"{fallback}\n{instruction}"
+    return instruction
 
 
 def _increment_epoch(state: AgentState, new_state: AgentState) -> None:
@@ -60,12 +115,47 @@ def _flip_permissions(new_state: AgentState, has_missing_fields: bool) -> None:
     )
 
 
+def _merge_with_defaults(fetched: List[str], defaults: List[str]) -> List[str]:
+    fetched_set = {name.strip() for name in fetched if name and name.strip()}
+    ordered_defaults = [name for name in defaults if name not in fetched_set]
+    return ordered_defaults + sorted(fetched_set)
+
+
+def _load_question_type_options(tenant_id: int | None) -> List[str]:
+    if tenant_id is None:
+        return DEFAULT_QUESTION_TYPES[:]
+
+    db = SessionLocal()
+    try:
+        service = QuestionTypeService(db)
+        types = service.get_types(tenant_id)
+        names = [t.name for t in types if t and t.name]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "agent.graph.batch_config.load_question_types_failed tenant=%s error=%s",
+            tenant_id,
+            exc,
+        )
+        names = []
+    finally:
+        db.close()
+
+    merged = _merge_with_defaults(names, DEFAULT_QUESTION_TYPES)
+    return merged if merged else DEFAULT_QUESTION_TYPES[:]
+
+
 def batch_config_node(state: AgentState) -> AgentState:
     _log_subgraph_event("subgraph_start", state)
     handler = _get_stream_handler(state)
 
     missing_fields = state.get("batch_config_missing_fields") or []
     reason = state.get("batch_config_reason")
+    tenant_id = state.get("tenant_id")
+    question_type_names = _load_question_type_options(tenant_id if isinstance(tenant_id, int) else None)
+    question_type_options = [
+        {"value": name, "label": name}
+        for name in question_type_names
+    ]
 
     form_spec = {
         "type": "form",
@@ -105,6 +195,15 @@ def batch_config_node(state: AgentState) -> AgentState:
                     {"value": "low", "label": "低"},
                 ],
                 "default": "medium",
+            },
+            {
+                "id": "question_type",
+                "type": "select",
+                "label": "题型",
+                "options": question_type_options,
+                "placeholder": "选择或输入题型",
+                "default": "",
+                "allowCustom": True,
             },
         ],
         "submit": {
@@ -164,6 +263,12 @@ def batch_config_node(state: AgentState) -> AgentState:
         )
         raise ValueError("Batch config resume payload is not a dict")
 
+    question_type_raw = resume_value.get("question_type")
+    if isinstance(question_type_raw, str):
+        resume_value["question_type"] = question_type_raw.strip() or None
+    else:
+        resume_value["question_type"] = None
+
     valid_payload, missing = _require_fields(resume_value)
     if not valid_payload:
         new_state["batch_config"] = None
@@ -193,6 +298,12 @@ def batch_config_node(state: AgentState) -> AgentState:
     if count_int:
         payload["expected_new_question_count"] = count_int
         new_state["supervisor_expected_new_questions"] = count_int
+
+    fallback_instruction = payload.get("solver_instruction") or state.get("supervisor_directive")
+    batch_instruction = _compose_supervisor_instruction(resume_value, fallback_instruction)
+    payload["solver_instruction"] = batch_instruction
+    new_state["supervisor_directive"] = batch_instruction
+
     new_state["supervisor_payload"] = payload
     _increment_epoch(state, new_state)
     _log_subgraph_event(

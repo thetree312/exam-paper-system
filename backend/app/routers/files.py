@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 import os
 from pathlib import Path
 import logging
@@ -126,6 +127,7 @@ async def upload_image(
     storage_path = upload_dir / storage_name
 
     content = await file.read()
+    content_hash = hashlib.sha256(content).hexdigest()
     with storage_path.open("wb") as f:
         f.write(content)
 
@@ -141,6 +143,7 @@ async def upload_image(
         file_size=len(content),
         source_type=source_type,
         status=1,
+        content_hash=content_hash,
     )
     db.add(db_file)
     db.flush()

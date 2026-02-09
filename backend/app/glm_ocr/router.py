@@ -25,6 +25,7 @@ async def import_exam_from_session(
     session_id: int,
     tenant_id: int = Query(..., description="租户 ID"),
     user_id: int = Query(..., description="用户 ID"),
+    force_refresh: bool = Query(False, description="是否强制刷新 GLM-OCR 缓存"),
     db: Session = Depends(get_db),
 ) -> GlmImportResponse:
     """使用 GLM-OCR 对指定 ExtractionSession 进行版面解析并导入题目。
@@ -49,17 +50,6 @@ async def import_exam_from_session(
     file = session.file
     if file is None:
         raise HTTPException(status_code=400, detail="该会话未绑定源文件，无法执行 GLM-OCR")
-
-    service = GlmOcrService()
-    logger.info(
-        "[glm_ocr.import] tenant=%s user=%s session=%s file_id=%s",
-        tenant_id,
-        user_id,
-        session.id,
-        file.id,
-    )
-
-    glm_result = await service.call_layout_parsing(file)
 
     # 复用或创建 Document：优先按 session 绑定，其次按 file 复用
     document = (
@@ -93,6 +83,24 @@ async def import_exam_from_session(
         )
         db.add(document)
         db.flush()
+
+    service = GlmOcrService()
+    logger.info(
+        "[glm_ocr.import] tenant=%s user=%s session=%s file_id=%s force=%s",
+        tenant_id,
+        user_id,
+        session.id,
+        file.id,
+        force_refresh,
+    )
+
+    glm_result, _ = await service.call_layout_parsing(
+        db,
+        file=file,
+        tenant_id=tenant_id,
+        document=document,
+        force_refresh=force_refresh,
+    )
 
     questions = service.import_exam_as_questions(
         db=db,
