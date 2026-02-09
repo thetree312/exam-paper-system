@@ -135,7 +135,7 @@ flowchart TD
     subgraph Backend
         API[FastAPI /api/agent/*]
         Service[AgentService<br/>会话 & 快照编排]
-        Checkpointer[LangGraph Checkpointer<br/>(Postgres → SQLite 回退)]
+        Checkpointer[LangGraph Checkpointer<br/>(Postgres -> SQLite 回退)]
         Graph[LangGraph StateGraph<br/>build_agent_app]
         Supervisor[Supervisor 节点]
         Solver[Solver / Skills]

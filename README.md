@@ -135,7 +135,7 @@ flowchart TD
     subgraph Backend
         API[FastAPI /api/agent/*]
         Service[AgentService<br/>Session & snapshot orchestration]
-        Checkpointer[LangGraph Checkpointer<br/>(Postgres → SQLite fallback)]
+        Checkpointer[LangGraph Checkpointer<br/>(Postgres -> SQLite fallback)]
         Graph[LangGraph StateGraph<br/>build_agent_app]
         Supervisor[Supervisor Node]
         Solver[Solver / Skills]
@@ -150,8 +150,6 @@ flowchart TD
     Graph --> Supervisor --> Solver --> Tools --> Supervisor
     Graph -->|events| API -->|stream/response| UI
 ```
-
-> ℹ️ GitHub README 原生支持 Mermaid，因此将上述代码块直接推送即可渲染为 SVG 图。若需要插入静态图片，可将文件放在仓库（例如 `docs/diagram.png`），并通过标准 Markdown 语法引用：`![Alt text](docs/diagram.png)`，这样 GitHub 也会自动展示图片。
 
 ## 📊 Database Schema
 
