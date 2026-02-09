@@ -129,18 +129,18 @@ The AI 助手通过 LangGraph StateGraph 组织“Supervisor→Solver→工具�
 ```mermaid
 flowchart TD
     subgraph Client
-        UI[Agent UI / UseAgentChat Hook]
+        UI["Agent UI / UseAgentChat Hook"]
     end
 
     subgraph Backend
-        API[FastAPI /api/agent/*]
-        Service[AgentService<br/>Session & snapshot orchestration]
-        Checkpointer[LangGraph Checkpointer<br/>(Postgres -> SQLite fallback)]
-        Graph[LangGraph StateGraph<br/>build_agent_app]
-        Supervisor[Supervisor Node]
-        Solver[Solver / Skills]
-        Tools{{Tools: DocumentReadTool, MindMap, Flashcard, Translation, etc.}}
-        Memory[(agent_sessions / agent_messages)]
+        API["FastAPI /api/agent/*"]
+        Service["AgentService<br/>Session & snapshot orchestration"]
+        Checkpointer["LangGraph Checkpointer<br/>(Postgres -> SQLite fallback)"]
+        Graph["LangGraph StateGraph<br/>build_agent_app"]
+        Supervisor["Supervisor Node"]
+        Solver["Solver / Skills"]
+        Tools{{"Tools: DocumentReadTool, MindMap, Flashcard, Translation, etc."}}
+        Memory[("agent_sessions / agent_messages")]
     end
 
     UI -->|payload| API --> Service

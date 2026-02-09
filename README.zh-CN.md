@@ -129,18 +129,18 @@ AI 助手通过 LangGraph StateGraph 串联 Supervisor、Solver 以及文档/题
 ```mermaid
 flowchart TD
     subgraph Client
-        UI[Agent UI / UseAgentChat Hook]
+        UI["Agent UI / UseAgentChat Hook"]
     end
 
     subgraph Backend
-        API[FastAPI /api/agent/*]
-        Service[AgentService<br/>会话 & 快照编排]
-        Checkpointer[LangGraph Checkpointer<br/>(Postgres -> SQLite 回退)]
-        Graph[LangGraph StateGraph<br/>build_agent_app]
-        Supervisor[Supervisor 节点]
-        Solver[Solver / Skills]
-        Tools{{工具：DocumentReadTool、MindMap、Flashcard、Translation 等}}
-        Memory[(agent_sessions / agent_messages)]
+        API["FastAPI /api/agent/*"]
+        Service["AgentService<br/>会话 & 快照编排"]
+        Checkpointer["LangGraph Checkpointer<br/>(Postgres -> SQLite 回退)"]
+        Graph["LangGraph StateGraph<br/>build_agent_app"]
+        Supervisor["Supervisor 节点"]
+        Solver["Solver / Skills"]
+        Tools{{"工具：DocumentReadTool、MindMap、Flashcard、Translation 等"}}
+        Memory[("agent_sessions / agent_messages")]
     end
 
     UI -->|payload| API --> Service
@@ -151,7 +151,6 @@ flowchart TD
     Graph -->|events| API -->|stream/response| UI
 ```
 
-> GitHub README 原生支持 Mermaid，提交后会直接渲染为图。若需插入静态示意图，可将文件放入仓库（如 `docs/diagram.png`），并使用 `![描述](docs/diagram.png)` 即可在 README 中显示。
 
 ## 📊 数据库架构
 
