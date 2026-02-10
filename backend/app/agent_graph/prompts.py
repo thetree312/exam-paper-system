@@ -96,13 +96,16 @@ SOLVER_BASE_PROMPT_EN = (
     "</solver_system>"
 )
 
-def get_solver_base_prompt(preferred_language: str | None) -> str:
-    lang = (preferred_language or "zh").lower()
-    if lang.startswith("en"):
-        return SOLVER_BASE_PROMPT_EN
-    return SOLVER_BASE_PROMPT_ZH
 
-SOLVER_BASE_PROMPT = SOLVER_BASE_PROMPT_ZH
+def get_solver_base_prompt(preferred_language: str | None) -> str:
+    """Temporarily force solver to always use English system prompt.
+
+    This ignores preferred_language to guarantee English output for demos.
+    """
+    return SOLVER_BASE_PROMPT_EN
+
+
+SOLVER_BASE_PROMPT = SOLVER_BASE_PROMPT_EN
 
 __all__ = [
     "SUPERVISOR_SYSTEM_PROMPT",

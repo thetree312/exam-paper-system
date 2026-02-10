@@ -472,6 +472,12 @@ _CHINESE_DIGITS = {
 }
 _CHINESE_UNITS = {"十": 10, "百": 100, "千": 1000}
 
+# Temporary English ordinal keyword support for natural language question references.
+_ENGLISH_ORDINAL_KEYWORDS = {
+    # "the first question", "first one" etc.
+    "first": 1,
+}
+
 
 def _normalize_postgres_checkpoint_url(url: str) -> str:
     """Convert SQLAlchemy-style URLs to libpq-compatible DSN."""
@@ -552,6 +558,14 @@ def _extract_question_numbers(text: str | None) -> List[int]:
         for num in _parse_question_chunk(chunk):
             if num > 0:
                 found.add(num)
+
+    # English ordinal keywords like "first" (for demo English mode).
+    lowered = normalized_text.lower()
+    for word, num in _ENGLISH_ORDINAL_KEYWORDS.items():
+        if re.search(rf"\b{word}\b", lowered):
+            if num > 0:
+                found.add(num)
+
     return sorted(found)
 
 
