@@ -1,5 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AgentNoteFocus, AgentRunMessage, AgentRunRequest } from '../types'
+import type {
+  AgentNoteFocus,
+  AgentRunMessage,
+  AgentRunRequest,
+  AgentThinkingThoughtTrace,
+  AgentThinkingToolTrace,
+} from '../types'
 import type { AgentStreamEvent } from '../services/agentApi'
 import { sendAgentRunStream, sendAgentResumeStream } from '../services/agentApi'
 
@@ -14,7 +20,6 @@ interface UseAgentChatOptions {
   /** 会话视图 ID，用于同一文档下区分不同编辑视图/标签的 Agent 会话 */
   viewId?: string | null
   onDocumentResolved?: (documentId: number) => void
-  preferredLanguage?: 'zh' | 'en'
 }
 
 export function useAgentChat({
@@ -27,7 +32,6 @@ export function useAgentChat({
   onAgUiEvent,
   viewId,
   onDocumentResolved,
-  preferredLanguage,
 }: UseAgentChatOptions) {
   const [messages, setMessages] = useState<AgentRunMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -38,12 +42,101 @@ export function useAgentChat({
 
   const messagesRef = useRef<AgentRunMessage[]>([])
 
-  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId), [backendBaseUrl, tenantId, userId])
-
   const updateMessages = useCallback((next: AgentRunMessage[]) => {
     messagesRef.current = next
     setMessages(next)
   }, [])
+
+  const appendAgentTraceToLastAssistant = useCallback((event: Extract<AgentStreamEvent, { type: 'agent_trace' }>) => {
+    const current = messagesRef.current
+    if (!current.length) return
+    const lastIndex = current.length - 1
+    const last = current[lastIndex]
+    if (!last || last.role !== 'assistant') return
+
+    const stage = String(event.stage || '').trim().toLowerCase()
+    const payload = event.payload || {}
+
+    const next = [...current]
+    const updated: AgentRunMessage = {
+      ...last,
+      historyTraces: [...(last.historyTraces || [])],
+      activeThought: last.activeThought ?? null,
+      activeTool: last.activeTool ?? null,
+      isStreaming: true,
+    }
+
+    if (stage === 'thought') {
+      const append = Boolean((payload as any).append)
+      const nextText = String(payload.text || payload.summary || payload.reason || '正在思考')
+      if (append && updated.activeThought) {
+        updated.activeThought = {
+          ...updated.activeThought,
+          text: `${updated.activeThought.text || ''}${nextText}`,
+        }
+      } else {
+        if (updated.activeThought) {
+          updated.historyTraces?.push(updated.activeThought)
+        }
+        const thought: AgentThinkingThoughtTrace = {
+          id: `thought-${Date.now()}`,
+          type: 'thought',
+          label: String(payload.agent || 'thought'),
+          text: nextText,
+        }
+        updated.activeThought = thought
+        updated.activeTool = null
+      }
+    } else if (stage === 'action') {
+      if (updated.activeThought) {
+        updated.historyTraces?.push(updated.activeThought)
+        updated.activeThought = null
+      }
+      const toolNames = Array.isArray(payload.tool_names)
+        ? payload.tool_names.map((x) => String(x)).filter(Boolean)
+        : []
+      const tool: AgentThinkingToolTrace = {
+        id: `tool-${Date.now()}`,
+        type: 'tool',
+        name: toolNames.join(', ') || 'tool',
+        text: String(payload.reason || '调用工具补充证据'),
+        status: 'calling',
+      }
+      updated.activeTool = tool
+    } else if (stage === 'tool_feedback') {
+      if (updated.activeTool) {
+        updated.historyTraces?.push({
+          ...updated.activeTool,
+          status: 'result',
+          result: String(payload.tool_message_count ?? ''),
+        })
+        updated.activeTool = null
+      }
+    } else if (stage === 'self_reflect') {
+      const trace: AgentThinkingThoughtTrace = {
+        id: `reflect-${Date.now()}`,
+        type: 'thought',
+        label: `self_reflect/${String(payload.status || '')}`,
+        text: String(payload.reason || '完成自反思'),
+      }
+      updated.historyTraces?.push(trace)
+    } else if (stage === 'final') {
+      if (updated.activeThought) {
+        updated.historyTraces?.push(updated.activeThought)
+        updated.activeThought = null
+      }
+      if (updated.activeTool) {
+        updated.historyTraces?.push({ ...updated.activeTool, status: 'result' })
+        updated.activeTool = null
+      }
+      updated.isStreaming = false
+    }
+
+    next[lastIndex] = updated
+    updateMessages(next)
+  }, [updateMessages])
+
+  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId), [backendBaseUrl, tenantId, userId])
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -63,6 +156,10 @@ export function useAgentChat({
         const assistantMessage: AgentRunMessage = {
           role: 'assistant',
           content: '',
+          isStreaming: true,
+          historyTraces: [],
+          activeThought: null,
+          activeTool: null,
         }
 
         const optimisticMessages = [...messagesRef.current, userMessage, assistantMessage]
@@ -75,7 +172,6 @@ export function useAgentChat({
           documentId: documentId ?? undefined,
           messages: optimisticMessages,
           noteFocus: noteFocus ?? undefined,
-          preferredLanguage,
           viewId: viewId ?? undefined,
           sessionId: sessionId ?? undefined,
         }
@@ -127,6 +223,8 @@ export function useAgentChat({
             if (rafId == null) {
               rafId = window.requestAnimationFrame(flush)
             }
+          } else if (event.type === 'agent_trace') {
+            appendAgentTraceToLastAssistant(event)
           } else if (event.type === 'ag_ui') {
             console.debug('[agentStream] ag_ui received', event.event)
             onAgUiEvent?.({ ...event, type: 'ag_ui' })
@@ -151,6 +249,7 @@ export function useAgentChat({
       }
     },
     [
+      appendAgentTraceToLastAssistant,
       backendBaseUrl,
       isReady,
       sessionId,
@@ -161,7 +260,6 @@ export function useAgentChat({
       updateMessages,
       userId,
       viewId,
-      preferredLanguage,
     ],
   )
 
@@ -186,6 +284,10 @@ export function useAgentChat({
           const assistantMessage: AgentRunMessage = {
             role: 'assistant',
             content: '',
+            isStreaming: true,
+            historyTraces: [],
+            activeThought: null,
+            activeTool: null,
           }
           current = [...current, assistantMessage]
           updateMessages(current)
@@ -241,6 +343,8 @@ export function useAgentChat({
               if (rafId == null) {
                 rafId = window.requestAnimationFrame(flush)
               }
+            } else if (event.type === 'agent_trace') {
+              appendAgentTraceToLastAssistant(event)
             } else if (event.type === 'ag_ui') {
               console.debug('[agentResumeStream] ag_ui received', event.event)
               onAgUiEvent?.({ ...event, type: 'ag_ui' })
@@ -261,7 +365,17 @@ export function useAgentChat({
         setIsAwaitingFirstToken(false)
       }
     },
-    [backendBaseUrl, documentId, isReady, onAgUiEvent, sessionId, tenantId, updateMessages, userId],
+    [
+      appendAgentTraceToLastAssistant,
+      backendBaseUrl,
+      documentId,
+      isReady,
+      onAgUiEvent,
+      sessionId,
+      tenantId,
+      updateMessages,
+      userId,
+    ],
   )
 
   const resetChat = useCallback(() => {

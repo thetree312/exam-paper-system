@@ -115,7 +115,6 @@ export async function sendAgentRun(baseUrl: string, payload: AgentRunRequest): P
       : undefined,
     view_id: payload.viewId ?? undefined,
     session_id: payload.sessionId ?? undefined,
-    preferred_language: payload.preferredLanguage,
   })
 
   return postJSON<AgentRunResponse>(`${baseUrl}/api/agent/run`, body)
@@ -125,6 +124,7 @@ export type AgentStreamEvent =
   | { type: 'delta'; role: 'assistant'; delta: string }
   | { type: 'ag_ui'; event: AgUiEvent }
   | { type: 'session'; session_id: number; document_id?: number | null }
+  | { type: 'agent_trace'; stage?: string; payload?: Record<string, unknown> }
 
 export async function sendAgentRunStream(
   baseUrl: string,
@@ -152,7 +152,6 @@ export async function sendAgentRunStream(
           : undefined,
         view_id: payload.viewId ?? undefined,
         session_id: payload.sessionId ?? undefined,
-        preferred_language: payload.preferredLanguage,
       }),
     ),
   })
@@ -273,7 +272,6 @@ export async function requestGrading(baseUrl: string, payload: GradeRunRequest):
     user_id: payload.userId,
     document_id: payload.documentId,
     title: payload.title,
-    preferred_language: payload.preferredLanguage,
     questions: payload.questions.map((q) =>
       toSnake({
         sequence_index: q.sequenceIndex,

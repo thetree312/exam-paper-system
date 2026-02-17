@@ -67,8 +67,6 @@ export const useOcrManager = (
 
   const [isExtracting, setIsExtracting] = useState(false)
   const [isGrading, setIsGrading] = useState(false)
-  const { i18n } = useTranslation('common')
-  const preferredLanguage: 'zh' | 'en' = i18n.language?.toLowerCase().startsWith('en') ? 'en' : 'zh'
   const [splittingItemId, setSplittingItemId] = useState<string | null>(null)
 
   const ocrItemsRef = useRef<AggregatedOcrItem[]>([])
@@ -375,7 +373,6 @@ export const useOcrManager = (
           userId: user.id,
           documentId: agentDocumentId ?? undefined,
           title: currentFile?.name ?? undefined,
-          preferredLanguage,
           questions: ocrItemsRef.current.map((item, idx) => ({
             sequenceIndex: idx,
             content: item.text,

@@ -118,7 +118,6 @@ class FlashcardPipelineService:
         document_id: int,
         max_cards: int = 40,
         force: bool = False,
-        preferred_language: str | None = None,
     ) -> FlashcardGenerationJob:
         """为指定文档生成知识点闪卡（同步执行，返回 Job 记录）。
 
@@ -164,9 +163,9 @@ class FlashcardPipelineService:
                 self._clear_existing_cards(tenant_id, document_id)
 
             if is_long:
-                cards = self._pipeline_long(doc, tenant_id, user_id, max_cards, preferred_language=preferred_language)
+                cards = self._pipeline_long(doc, tenant_id, user_id, max_cards)
             else:
-                cards = self._pipeline_short(doc, tenant_id, user_id, max_cards, preferred_language=preferred_language)
+                cards = self._pipeline_short(doc, tenant_id, user_id, max_cards)
 
             job.status = "completed"
             job.progress = 100
@@ -196,8 +195,6 @@ class FlashcardPipelineService:
         tenant_id: int,
         user_id: int,
         max_cards: int,
-        *,
-        preferred_language: str | None = None,
     ) -> List[FlashcardConcept]:
         """短文档：从 Question 表读取题干+答案，调用 Turbo 生成知识点卡。"""
 
@@ -217,7 +214,6 @@ class FlashcardPipelineService:
             if md_text:
                 return self._generate_cards_from_text(
                     doc, tenant_id, user_id, md_text, max_cards, source_type="ocr_text",
-                    preferred_language=preferred_language,
                 )
             return []
 
@@ -238,7 +234,7 @@ class FlashcardPipelineService:
         if len(full_text) > SHORT_DOC_MAX_CHARS:
             full_text = full_text[:SHORT_DOC_MAX_CHARS]
 
-        raw_cards = self._invoke_turbo_structured(full_text, max_cards, source_type="exam", preferred_language=preferred_language)
+        raw_cards = self._invoke_turbo_structured(full_text, max_cards, source_type="exam")
 
         # 写入数据库
         concepts: List[FlashcardConcept] = []
@@ -276,13 +272,11 @@ class FlashcardPipelineService:
         tenant_id: int,
         user_id: int,
         max_cards: int,
-        *,
-        preferred_language: str | None = None,
     ) -> List[FlashcardConcept]:
         """长文档：原文件 → Qwen Long 章节纲要 → Turbo 结构化知识点卡。"""
 
         # 1) 获取 Long 摘要（优先缓存）
-        outline_chunks = self._get_or_create_long_outline(doc, tenant_id, preferred_language=preferred_language)
+        outline_chunks = self._get_or_create_long_outline(doc, tenant_id)
         if not outline_chunks:
             return []
 
@@ -298,7 +292,6 @@ class FlashcardPipelineService:
 
             raw_cards = self._invoke_turbo_structured(
                 chunk_text, cards_per_chunk, source_type="long_doc",
-                preferred_language=preferred_language,
             )
 
             for card in raw_cards:
@@ -334,7 +327,6 @@ class FlashcardPipelineService:
 
     def _get_or_create_long_outline(
         self, doc: Document, tenant_id: int,
-        *, preferred_language: str | None = None,
     ) -> List[Dict[str, Any]]:
         """获取或生成长文档的章节纲要缓存。"""
 
@@ -356,7 +348,7 @@ class FlashcardPipelineService:
             return []
 
         # 调用 Qwen Long 生成章节纲要
-        outline_chunks = self._invoke_qwen_long_outline(raw_text, preferred_language=preferred_language)
+        outline_chunks = self._invoke_qwen_long_outline(raw_text)
 
         # 写入缓存
         doc.long_summary_cache = json.dumps(outline_chunks, ensure_ascii=False)
@@ -365,36 +357,23 @@ class FlashcardPipelineService:
 
         return outline_chunks
 
-    def _invoke_qwen_long_outline(self, raw_text: str, *, preferred_language: str | None = None) -> List[Dict[str, Any]]:
+    def _invoke_qwen_long_outline(self, raw_text: str) -> List[Dict[str, Any]]:
         """调用 Qwen Long 模型，将长文档压缩为章节级纲要。"""
 
         model_name = getattr(self.settings, "alibaba_model_qwen_long", None)
         if not model_name:
             model_name = "qwen-long"
 
-        _lang = (preferred_language or "zh").lower()
-        if _lang.startswith("en"):
-            system_prompt = (
-                "You are a teaching assistant responsible for compressing long textbooks/lecture notes into chapter-level knowledge outlines.\n"
-                "Output a structured JSON array by chapter/section, each element containing:\n"
-                '  chunk_id (string, e.g. "ch1-sec2"),\n'
-                "  page_start (integer, optional), page_end (integer, optional),\n"
-                "  summary (core content summary of this chapter, 300-800 words),\n"
-                '  concepts (array, each element {"tag": "concept name", "description": "one-sentence description"}).\n'
-                "Output strictly as a JSON array, do not wrap with ```, do not output extra explanation."
-            )
-            user_prompt = f"Below is the full document content. Please generate a chapter-level knowledge outline:\n\n{raw_text}"
-        else:
-            system_prompt = (
-                "你是一名教研助手，负责将长篇教材/讲义/笔记压缩为章节级知识纲要。\n"
-                "请按章节/段落输出结构化 JSON 数组，每个元素包含：\n"
-                '  chunk_id (字符串，如 "ch1-sec2")，\n'
-                "  page_start (整数，可选)，page_end (整数，可选)，\n"
-                "  summary (该章节的核心内容摘要，300~800字)，\n"
-                '  concepts (数组，每个元素 {"tag": "概念名", "description": "一句话描述"})。\n'
-                "输出严格为 JSON 数组，不要用 ``` 包裹，不要输出多余说明。"
-            )
-            user_prompt = f"以下是完整文档内容，请生成章节级知识纲要：\n\n{raw_text}"
+        system_prompt = (
+            "你是一名教研助手，负责将长篇教材/讲义/笔记压缩为章节级知识纲要。\n"
+            "请按章节/段落输出结构化 JSON 数组，每个元素包含：\n"
+            '  chunk_id (字符串，如 "ch1-sec2")，\n'
+            "  page_start (整数，可选)，page_end (整数，可选)，\n"
+            "  summary (该章节的核心内容摘要，300~800字)，\n"
+            '  concepts (数组，每个元素 {"tag": "概念名", "description": "一句话描述"})。\n'
+            "输出严格为 JSON 数组，不要用 ``` 包裹，不要输出多余说明。"
+        )
+        user_prompt = f"以下是完整文档内容，请生成章节级知识纲要：\n\n{raw_text}"
 
         try:
             client = QwenClient(model=model_name, max_output_tokens=8000)
@@ -422,75 +401,42 @@ class FlashcardPipelineService:
         max_cards: int,
         *,
         source_type: str = "exam",
-        preferred_language: str | None = None,
     ) -> List[Dict[str, Any]]:
         """调用 Turbo 模型，从文本中提取知识点闪卡。"""
 
-        _lang = (preferred_language or "zh").lower()
-        _is_en = _lang.startswith("en")
-
         if source_type == "exam":
-            if _is_en:
-                context_hint = "Below are exam questions and answers"
-                extra_field = '  question_number (integer, the original question number like 1, 2, 3; null if not applicable),\n'
-            else:
-                context_hint = "以下是试卷中的题目及答案"
-                extra_field = '  question_number (整数，对应原题序号，如 1、2、3，若无法对应则为 null)，\n'
+            context_hint = "以下是试卷中的题目及答案"
+            extra_field = (
+                '  question_number (整数，对应原题序号，如 1、2、3，若无法对应则为 null)，\n'
+            )
             example_block = EXAM_CARD_EXAMPLE
         else:
-            if _is_en:
-                context_hint = "Below is a document chapter summary"
-            else:
-                context_hint = "以下是文档章节摘要"
+            context_hint = "以下是文档章节摘要"
             extra_field = ""
             example_block = DOC_CARD_EXAMPLE
 
-        if _is_en:
-            system_prompt = (
-                "You are a teaching expert responsible for extracting fine-grained knowledge points from learning materials to generate flashcards for spaced repetition.\n"
-                "Never copy question stems or original text verbatim. First abstract the knowledge point, then use active recall questions to guide the learner.\n"
-                "Output strictly as a JSON array, each element containing:\n"
-                '  concept_tag (string, knowledge point topic tag, e.g. "Newton\'s Second Law"),\n'
-                "  cue (15-40 words, use questions like 'How/Why/Under what conditions', never paste original question text),\n"
-                "  answer (2-4 key points, can start with `1.` `2.` or `•`, focus on reasoning/formulas/conclusions),\n"
-                f"{extra_field}"
-                "  confidence (float 0-1, self-assessed quality of this extraction).\n"
-                "Quality rules:\n"
-                "1. Each card tests only one concept/formula/method; concept_tag must be the knowledge point name.\n"
-                "2. cue must summarize the knowledge point; do not include long original sentences or specific values.\n"
-                "3. answer must provide key conditions/steps/conclusions; no vague descriptions.\n"
-                "4. If input contains multiple questions, cover different knowledge points and avoid repetition.\n"
-                f"5. Output at most {max_cards} cards; fewer is fine if knowledge points are limited."
-            )
-            user_prompt = (
-                f"{context_hint}. Please strictly follow the example structure and writing style to generate flashcards.\n"
-                f"{example_block}\n"
-                "Input data:\n"
-                f"{text}"
-            )
-        else:
-            system_prompt = (
-                "你是一名教研专家，负责从学习材料中提取细粒度知识点，生成用于间隔重复复习的闪卡。\n"
-                "严禁照搬题干或原文，请先抽象出知识点，再用主动召回问题引导学习者回忆。\n"
-                "输出严格为 JSON 数组，每个元素包含：\n"
-                '  concept_tag (字符串，知识点主题标签，如"牛顿第二定律"），\n'
-                "  cue (15~40 字，使用“如何/为什么/在什么条件下”等疑问句，禁止直接粘贴题干原句)，\n"
-                "  answer (2~4 条要点，可用 `1.` `2.` 或 `•` 开头，聚焦推理/公式/结论)，\n"
-                f"{extra_field}"
-                "  confidence (0~1 浮点数，对该知识点提取质量的自信度)。\n"
-                "质量规则：\n"
-                "1. 一张卡只考一个概念/公式/方法，concept_tag 必须是知识点名称。\n"
-                "2. cue 只能概括知识点，不得带入原题长句、数值或“第X题”描述。\n"
-                "3. answer 需要给出关键条件/步骤/结论，禁止空泛描述。\n"
-                "4. 若输入包含多个题目，请覆盖不同知识点，避免重复。\n"
-                f"5. 最多输出 {max_cards} 张卡片，若知识点不足可少于该数量。"
-            )
-            user_prompt = (
-                f"{context_hint}。请严格参考示例的结构与写作风格生成闪卡。\n"
-                f"{example_block}\n"
-                "输入数据如下：\n"
-                f"{text}"
-            )
+        system_prompt = (
+            "你是一名教研专家，负责从学习材料中提取细粒度知识点，生成用于间隔重复复习的闪卡。\n"
+            "严禁照搬题干或原文，请先抽象出知识点，再用主动召回问题引导学习者回忆。\n"
+            "输出严格为 JSON 数组，每个元素包含：\n"
+            '  concept_tag (字符串，知识点主题标签，如"牛顿第二定律"），\n'
+            "  cue (15~40 字，使用“如何/为什么/在什么条件下”等疑问句，禁止直接粘贴题干原句)，\n"
+            "  answer (2~4 条要点，可用 `1.` `2.` 或 `•` 开头，聚焦推理/公式/结论)，\n"
+            f"{extra_field}"
+            "  confidence (0~1 浮点数，对该知识点提取质量的自信度)。\n"
+            "质量规则：\n"
+            "1. 一张卡只考一个概念/公式/方法，concept_tag 必须是知识点名称。\n"
+            "2. cue 只能概括知识点，不得带入原题长句、数值或“第X题”描述。\n"
+            "3. answer 需要给出关键条件/步骤/结论，禁止空泛描述。\n"
+            "4. 若输入包含多个题目，请覆盖不同知识点，避免重复。\n"
+            f"5. 最多输出 {max_cards} 张卡片，若知识点不足可少于该数量。"
+        )
+        user_prompt = (
+            f"{context_hint}。请严格参考示例的结构与写作风格生成闪卡。\n"
+            f"{example_block}\n"
+            "输入数据如下：\n"
+            f"{text}"
+        )
 
         turbo_model = self.settings.alibaba_model_qwen_flash
         try:
@@ -522,14 +468,13 @@ class FlashcardPipelineService:
         max_cards: int,
         *,
         source_type: str = "ocr_text",
-        preferred_language: str | None = None,
     ) -> List[FlashcardConcept]:
         """从纯文本生成知识点卡（短文档无 Question 时的回退）。"""
 
         if len(text) > SHORT_DOC_MAX_CHARS:
             text = text[:SHORT_DOC_MAX_CHARS]
 
-        raw_cards = self._invoke_turbo_structured(text, max_cards, source_type=source_type, preferred_language=preferred_language)
+        raw_cards = self._invoke_turbo_structured(text, max_cards, source_type=source_type)
 
         concepts: List[FlashcardConcept] = []
         for card in raw_cards:

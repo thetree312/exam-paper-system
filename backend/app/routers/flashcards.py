@@ -54,7 +54,6 @@ class GenerateRequest(BaseModel):
     document_id: int
     max_cards: int = Field(200, ge=1, le=20_000)
     force: bool = False
-    preferred_language: Optional[str] = None
 
 
 class GenerateResponse(BaseModel):
@@ -125,7 +124,6 @@ async def generate_flashcards(
             document_id=payload.document_id,
             max_cards=payload.max_cards,
             force=payload.force,
-            preferred_language=payload.preferred_language,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

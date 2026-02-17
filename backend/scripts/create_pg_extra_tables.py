@@ -34,6 +34,23 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
+VECTOR_EXTENSION_DDL = """CREATE EXTENSION IF NOT EXISTS vector;"""
+
+CONVERSATION_SNAPSHOTS_DDL = """
+CREATE TABLE IF NOT EXISTS conversation_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    session_id BIGINT NOT NULL,
+    thread_id VARCHAR(64),
+    turn_index INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    facts JSONB,
+    embedding vector(768),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 PROFILE_EVENTS_DDL = """
 CREATE TABLE IF NOT EXISTS profile_events (
     id BIGINT PRIMARY KEY,
@@ -56,6 +73,18 @@ def main() -> None:
         conn.execute(text(SCHEMA_MIGRATIONS_DDL))
         print("[info] Creating table profile_events (IF NOT EXISTS)...")
         conn.execute(text(PROFILE_EVENTS_DDL))
+        print("[info] Ensuring pgvector extension (IF NOT EXISTS)...")
+        try:
+            conn.execute(text(VECTOR_EXTENSION_DDL))
+        except Exception as exc:  # noqa: BLE001
+            print("[warn] Failed to create pgvector extension:", exc)
+        print("[info] Creating table conversation_snapshots (IF NOT EXISTS)...")
+        conn.execute(text(CONVERSATION_SNAPSHOTS_DDL))
+        # 兼容已存在但缺少 embedding 列的旧表
+        try:
+            conn.execute(text("ALTER TABLE conversation_snapshots ADD COLUMN IF NOT EXISTS embedding vector(768);"))
+        except Exception as exc:  # noqa: BLE001
+            print("[warn] Failed to ensure embedding column on conversation_snapshots:", exc)
     print("[done] Extra PostgreSQL tables created/verified.")
 
 

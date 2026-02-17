@@ -39,8 +39,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   onBack,
   onNavigateToQuestion,
 }) => {
-  const { t, i18n } = useTranslation('common')
-  const preferredLanguage: 'zh' | 'en' = i18n.language?.toLowerCase().startsWith('en') ? 'en' : 'zh'
+  const { t } = useTranslation('common')
   const [mode, setMode] = useState<'document' | 'file'>(() => (documentId ? 'document' : 'file'))
   const [layoutStyle, setLayoutStyle] = useState<MindMapLayoutStyle>('xmind')
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set())
@@ -62,7 +61,6 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     source,
     user?.tenant_id ?? null,
     user?.id ?? null,
-    preferredLanguage,
   )
   const {
     nodes: editableNodes,

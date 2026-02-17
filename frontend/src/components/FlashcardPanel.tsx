@@ -32,8 +32,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   ensureDocument,
   onDocumentResolved,
 }) => {
-  const { t, i18n } = useTranslation('common')
-  const preferredLanguage: 'zh' | 'en' = i18n.language?.toLowerCase().startsWith('en') ? 'en' : 'zh'
+  const { t } = useTranslation('common')
   const [items, setItems] = useState<FlashcardItem[]>([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -110,7 +109,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
       }
 
       const result = await FlashcardApi.generateFlashcards(
-        backendBaseUrl, tenantId, userId, targetDocId, 40, force, preferredLanguage,
+        backendBaseUrl, tenantId, userId, targetDocId, 40, force,
       )
       onToast?.(
         t('flashcard.toast.generated', { count: result.cardCount, mode: result.mode }),
@@ -127,19 +126,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
     } finally {
       setGenerating(false)
     }
-  }, [
-    backendBaseUrl,
-    tenantId,
-    userId,
-    documentId,
-    ensureDocument,
-    onDocumentResolved,
-    onToast,
-    t,
-    loadCards,
-    loadStats,
-    preferredLanguage,
-  ])
+  }, [backendBaseUrl, tenantId, userId, documentId, ensureDocument, onDocumentResolved, onToast, t, loadCards, loadStats])
 
   // ── 自评提交 ──────────────────────────────────────
 

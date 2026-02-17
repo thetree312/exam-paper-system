@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-import sqlite3
 import uuid
 from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -22,20 +21,19 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..agent_graph import (
+from ..assistant_graph import (
     AgentMessageEntry,
+    AgentState,
     build_agent_app,
     register_stream_handler,
     unregister_stream_handler,
     register_base_messages,
     unregister_base_messages,
 )
-from ..agent_graph.sqlite_debug import DebugSqliteSaver
-from ..state_models import AgentState
 from ..config import get_settings
 from ..services.agent_service import AgentService
 from ..services.document_read_tool import DocumentReadTool
-from ..services.qwen_client import QwenClient, QwenVisionClient, QwenRequestError
+from ..services.qwen_client import QwenClient, QwenRequestError
 from ..services.fulltext_service import FulltextService
 from ..models import AgentSession, AgentMessage, Document, File, Question
 from ..utils.rate_limiter import rate_limit
@@ -95,7 +93,6 @@ class AgentRunRequest(BaseModel):
     note_focus: Optional[NoteFocusPayload] = None
     view_id: Optional[str] = None
     session_id: Optional[int] = None
-    preferred_language: Optional[str] = None
 
 
 class AgentResumeRequest(BaseModel):
@@ -173,7 +170,6 @@ class GradeRunRequest(BaseModel):
     document_id: int | None = None
     title: str | None = None
     questions: List[GradeQuestionPayload]
-    preferred_language: str | None = None
 
 
 class GradeQuestionResult(BaseModel):
@@ -222,7 +218,6 @@ class MindMapRequest(BaseModel):
     mode: Literal["document", "file"] = "document"
     document_id: Optional[int] = None
     file_id: Optional[int] = None
-    preferred_language: Optional[str] = None
 
 
 class MindMapNode(BaseModel):
@@ -332,6 +327,173 @@ def _log_messages_preview(tag: str, messages: List[dict]) -> None:
         content = str(m.get("content", ""))
         preview.append({"role": role, "content": content[:200]})
     logger.info("%s messages_preview=%s", tag, preview)
+
+
+def _normalize_payload_chat_messages(messages: List[AgentMessage]) -> List[dict]:
+    """Normalize payload chat messages to non-empty user/assistant entries only."""
+
+    normalized: List[dict] = []
+    for msg in messages:
+        role = msg.role if msg.role in ("user", "assistant") else None
+        if role is None:
+            continue
+        content = (msg.content or "").strip()
+        if not content:
+            continue
+        normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def _normalize_legend_images_field(raw: Any) -> list[str]:
+    """将题目 legend_images 统一解析为字符串列表。"""
+
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        # DB 常见形态：JSON 字符串数组。
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            except Exception:
+                pass
+        return [text]
+    return []
+
+
+def _split_legend_images_for_snapshot(urls: list[str]) -> tuple[list[str], list[str]]:
+    """按用途分离图例 URL。
+
+    - llm_safe_legend_images: 仅保留非 data URL，允许进入通用上下文；
+    - vision_legend_images: 保留完整 URL（包括 data URL），仅供 vision_tools 使用。
+    """
+
+    llm_safe: list[str] = []
+    vision_all: list[str] = []
+    for u in urls:
+        url = str(u or "").strip()
+        if not url:
+            continue
+        if url not in vision_all:
+            vision_all.append(url)
+        if url.startswith("data:image/"):
+            continue
+        if url not in llm_safe:
+            llm_safe.append(url)
+    return llm_safe, vision_all
+
+
+def _build_snapshot_question_entry(q: Any) -> dict:
+    legend_urls = _normalize_legend_images_field(getattr(q, "legend_images", None))
+    llm_safe_legend, vision_legend = _split_legend_images_for_snapshot(legend_urls)
+    return {
+        "id": getattr(q, "id", None),
+        "sequence_index": getattr(q, "sequence_index", None),
+        "page": getattr(q, "page", None),
+        "content": getattr(q, "content", None),
+        "legend_images": llm_safe_legend,
+        "vision_legend_images": vision_legend,
+        "has_legend_image": bool(vision_legend),
+        "student_answer": getattr(q, "student_answer", None),
+        "grading_judgement": getattr(q, "grading_judgement", None),
+        "grading_predicted_answer": getattr(q, "grading_predicted_answer", None),
+    }
+
+
+def _latest_user_text_from_messages(messages: List[dict]) -> str:
+    for msg in reversed(messages):
+        if msg.get("role") != "user":
+            continue
+        content = str(msg.get("content") or "").strip()
+        if content:
+            return content
+    return ""
+
+
+def _load_session_history_messages(
+    *,
+    svc: AgentService,
+    tenant_id: int,
+    session_id: int,
+    limit: int = 1000,
+) -> List[dict]:
+    """Load persisted session messages in chronological order (user/assistant only)."""
+
+    raw = svc.list_messages(tenant_id=tenant_id, session_id=session_id, limit=limit)
+    ordered = list(sorted(raw, key=lambda m: m.id))
+    history: List[dict] = []
+    for msg in ordered:
+        role = str(getattr(msg, "role", "") or "").strip().lower()
+        if role not in ("user", "assistant"):
+            continue
+        content = str(getattr(msg, "content", "") or "").strip()
+        if not content:
+            continue
+        history.append({"role": role, "content": content})
+    return history
+
+
+def _build_canonical_messages_for_turn(
+    *,
+    payload_chat_messages: List[dict],
+    stored_history: List[dict],
+) -> List[dict]:
+    """Build canonical messages for this request using persisted history + latest user turn.
+
+    设计目标：
+    - 服务端数据库中的 session 历史作为权威来源；
+    - 当前请求只引入“最新一条 user 输入”；
+    - 若重试导致同一条 user 在 assistant 回复前重复提交，不会再次追加。
+    """
+
+    if not stored_history:
+        return list(payload_chat_messages)
+
+    canonical = list(stored_history)
+    latest_user = _latest_user_text_from_messages(payload_chat_messages)
+    if not latest_user:
+        return canonical
+
+    last = canonical[-1] if canonical else None
+    if (
+        isinstance(last, dict)
+        and last.get("role") == "user"
+        and str(last.get("content") or "") == latest_user
+    ):
+        # 幂等重试：上一条仍是同一 user 输入，说明尚未形成新的 assistant 轮次。
+        return canonical
+
+    canonical.append({"role": "user", "content": latest_user})
+    return canonical
+
+
+def _build_persist_messages_with_assistant_placeholder(messages: List[dict]) -> List[dict]:
+    """为当前轮持久化构造确定性的 assistant 占位。
+
+    规则：
+    - 输入按 user/assistant 时序排列；
+    - 若最后一条是 user，则追加一条空 assistant 占位；
+    - 其他情况原样返回（避免覆盖历史 assistant）。
+    """
+
+    out: List[dict] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role") or "").strip().lower()
+        if role not in ("user", "assistant"):
+            continue
+        out.append({"role": role, "content": str(m.get("content") or "")})
+
+    if out and out[-1].get("role") == "user":
+        out.append({"role": "assistant", "content": ""})
+    return out
 
 
 def _log_snapshot_overview(tag: str, snapshot: List) -> None:
@@ -472,12 +634,6 @@ _CHINESE_DIGITS = {
 }
 _CHINESE_UNITS = {"十": 10, "百": 100, "千": 1000}
 
-# Temporary English ordinal keyword support for natural language question references.
-_ENGLISH_ORDINAL_KEYWORDS = {
-    # "the first question", "first one" etc.
-    "first": 1,
-}
-
 
 def _normalize_postgres_checkpoint_url(url: str) -> str:
     """Convert SQLAlchemy-style URLs to libpq-compatible DSN."""
@@ -526,14 +682,9 @@ def _create_checkpointer():
         except Exception:  # noqa: BLE001
             logger.exception("agent.router.checkpointer_postgres_init_failed url=%s", normalized_url)
 
-    # 回退到本地 SQLite 存储，兼容无 Postgres 的开发环境。
-    _checkpoint_conn = sqlite3.connect("agent_graph_checkpoint.db", check_same_thread=False)
-    try:
-        logger.info("agent.router.checkpointer_sqlite_debug")
-        return DebugSqliteSaver(_checkpoint_conn)
-    except Exception:  # noqa: BLE001
-        logger.exception("agent.router.checkpointer_sqlite_debug_failed")
-        return SqliteSaver(_checkpoint_conn)
+    raise RuntimeError(
+        "LangGraph checkpointer requires Postgres; please set LANGGRAPH_CHECKPOINT_URL 或使用 Postgres 数据库 URL"
+    )
 
 
 _checkpointer = _create_checkpointer()
@@ -558,14 +709,6 @@ def _extract_question_numbers(text: str | None) -> List[int]:
         for num in _parse_question_chunk(chunk):
             if num > 0:
                 found.add(num)
-
-    # English ordinal keywords like "first" (for demo English mode).
-    lowered = normalized_text.lower()
-    for word, num in _ENGLISH_ORDINAL_KEYWORDS.items():
-        if re.search(rf"\b{word}\b", lowered):
-            if num > 0:
-                found.add(num)
-
     return sorted(found)
 
 
@@ -886,48 +1029,24 @@ def _generate_mindmap_core(payload: MindMapRequest, db: Session) -> MindMapRespo
         '\n}'
     )
 
-    _lang = (getattr(payload, "preferred_language", None) or "zh").lower()
-    _is_en = _lang.startswith("en")
-
-    if _is_en:
-        system_prompt = (
-            "You are a knowledge extraction expert. Your job is to organize an entire document (exam paper, lecture notes, study notes, etc.) into a knowledge-point mind map."
-            "\n\nOutput strictly in the following JSON structure. Output only the JSON itself, without ``` or any Markdown wrapping:"
-            "\n" + json_template +
-            "\nLayering requirements (adapt to document complexity):"
-            "\n- Simple documents (< 10 knowledge points): generate 3-4 layers."
-            "\n- Medium documents (10-30 knowledge points): generate 4 layers."
-            "\n- Complex documents (> 30 knowledge points): generate 4-5 layers."
-            "\n- Layer 1: root (document theme)."
-            "\n- Layer 2: structural groups (chapters/units/topic clusters), 2-7 nodes."
-            "\n- Layer 3: specific knowledge points, 2-8 per group."
-            "\n- Layer 4 (optional): refined details of knowledge points (type: detail)."
-            "\n- Layer 5 (optional): further refinement of layer 4 (type: sub_detail), only when necessary."
-            "\n- Do not hang many knowledge points directly under root."
-            "\n- Every parent_id relationship must have a corresponding edge in edges."
-            "\n- type can be: topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example."
-            "\n- All node labels and descriptions must be in English."
-            "\n- Output ONLY JSON, no extra text. Do NOT use ```json or ``` wrapping."
-        )
-    else:
-        system_prompt = (
-            "你是一个知识点提炼专家，负责将整份文档（试卷、讲义、学习笔记等）整理为知识点思维导图。"
-            "\n\n请严格按如下 JSON 结构输出，仅输出 JSON 本身，不要包含 ``` 等 Markdown 包裹："
-            "\n" + json_template +
-            "\n分层要求（根据文档复杂度自适应）："
-            "\n- 简单文档（知识点 < 10 个）：生成 3-4 层。"
-            "\n- 中等文档（知识点 10-30 个）：生成 4 层。"
-            "\n- 复杂文档（知识点 > 30 个）：生成 4-5 层。"
-            "\n- 第 1 层：root（文档主题）。"
-            "\n- 第 2 层：结构性分组（章节/单元/主题簇），2-7 个节点。"
-            "\n- 第 3 层：具体知识点，每个分组下 2-8 个。"
-            "\n- 第 4 层（可选）：知识点的细化要点（type: detail）。"
-            "\n- 第 5 层（可选）：对第 4 层的进一步细化（type: sub_detail），仅在必要时。"
-            "\n- 禁止把大量知识点直接挂在 root。"
-            "\n- 每一对 parent_id 关系都必须在 edges 中有对应的边。"
-            "\n- type 可使用：topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example。"
-            "\n- 严禁输出除 JSON 以外的任何文字，严禁使用 ```json 或 ``` 包裹。"
-        )
+    system_prompt = (
+        "你是一个知识点提炼专家，负责将整份文档（试卷、讲义、学习笔记等）整理为知识点思维导图。"
+        "\n\n请严格按如下 JSON 结构输出，仅输出 JSON 本身，不要包含 ``` 等 Markdown 包裹："
+        "\n" + json_template +
+        "\n分层要求（根据文档复杂度自适应）："
+        "\n- 简单文档（知识点 < 10 个）：生成 3-4 层。"
+        "\n- 中等文档（知识点 10-30 个）：生成 4 层。"
+        "\n- 复杂文档（知识点 > 30 个）：生成 4-5 层。"
+        "\n- 第 1 层：root（文档主题）。"
+        "\n- 第 2 层：结构性分组（章节/单元/主题簇），2-7 个节点。"
+        "\n- 第 3 层：具体知识点，每个分组下 2-8 个。"
+        "\n- 第 4 层（可选）：知识点的细化要点（type: detail）。"
+        "\n- 第 5 层（可选）：对第 4 层的进一步细化（type: sub_detail），仅在必要时。"
+        "\n- 禁止把大量知识点直接挂在 root。"
+        "\n- 每一对 parent_id 关系都必须在 edges 中有对应的边。"
+        "\n- type 可使用：topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example。"
+        "\n- 严禁输出除 JSON 以外的任何文字，严禁使用 ```json 或 ``` 包裹。"
+    )
 
     user_parts: list[str] = []
     title = None
@@ -1157,6 +1276,7 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
 
     # 构造基础对话状态
     messages: List[AgentMessageEntry] = []
+    payload_chat_messages = _normalize_payload_chat_messages(payload.messages)
 
     # 如果前端传了 document_id，则尝试获取试卷快照并作为额外的上下文信息。
     # 视觉理解已在 LangGraph 的 vision 节点统一处理，这里只负责拿到 snapshot_questions
@@ -1181,19 +1301,7 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
             )
             # 为了兼容 LangGraph SqliteSaver 的 msgpack 序列化，这里将 ORM Question
             # 对象转换为普通 dict，仅保留后续节点实际需要的字段。
-            snapshot_questions = [
-                {
-                    "id": q.id,
-                    "sequence_index": q.sequence_index,
-                    "page": q.page,
-                    "content": q.content,
-                    "legend_images": getattr(q, "legend_images", None),
-                    "student_answer": getattr(q, "student_answer", None),
-                    "grading_judgement": getattr(q, "grading_judgement", None),
-                    "grading_predicted_answer": getattr(q, "grading_predicted_answer", None),
-                }
-                for q in snapshot_questions_raw
-            ]
+            snapshot_questions = [_build_snapshot_question_entry(q) for q in snapshot_questions_raw]
         except HTTPException as exc:
             logger.warning(
                 "agent_run snapshot_failed tenant=%s user=%s document_id=%s status=%s detail=%s",
@@ -1245,8 +1353,6 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
                 focus_doc_id,
                 getattr(exc, "detail", exc),
             )
-
-    messages.extend(_to_state_messages(payload.messages))
 
     is_fresh_turn = _is_fresh_conversation(payload.messages)
 
@@ -1315,18 +1421,67 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
     if not thread_id:
         thread_id = f"agent:{payload.tenant_id}:{payload.user_id}:{resolved_document_id or 'no-doc'}"
 
+    if session_id:
+        try:
+            stored_history = _load_session_history_messages(
+                svc=svc,
+                tenant_id=payload.tenant_id,
+                session_id=session_id,
+            )
+            canonical_chat = _build_canonical_messages_for_turn(
+                payload_chat_messages=payload_chat_messages,
+                stored_history=stored_history,
+            )
+            messages.extend(
+                [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in canonical_chat
+                    if m.get("role") in ("user", "assistant")
+                ]
+            )
+            logger.info(
+                "agent_run.canonicalized tenant=%s user=%s session=%s stored_len=%s payload_len=%s final_len=%s",
+                payload.tenant_id,
+                payload.user_id,
+                session_id,
+                len(stored_history),
+                len(payload_chat_messages),
+                len(canonical_chat),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "agent_run.canonicalize_failed tenant=%s user=%s session=%s error=%s",
+                payload.tenant_id,
+                payload.user_id,
+                session_id,
+                exc,
+            )
+            messages.extend(_to_state_messages(payload.messages))
+    else:
+        messages.extend(_to_state_messages(payload.messages))
+
+    question_index_map: dict = {}
+    if snapshot_questions:
+        _log_snapshot_overview("agent_run.snapshot", snapshot_questions)
+        question_index_map = _build_question_index_map(snapshot_questions)
+
+    persist_messages = _build_persist_messages_with_assistant_placeholder(messages)
+
     base_state: AgentState = {
         "tenant_id": payload.tenant_id,
         "user_id": payload.user_id,
         "ui_context": payload.ui_context,
-        "preferred_language": payload.preferred_language,
+        "session_id": session_id,
         "messages": messages,
-        "base_messages": messages,
-        "session_profile": session_profile,
+        # 旧架构遗留字段，当前图内部不再依赖；保留以便调试时检查原始输入。
+        "base_messages": persist_messages,  # type: ignore[typeddict-item]
+        "user_profile": session_profile or {},
+        "session_profile": session_profile or {},  # 向后兼容 persist 等读取逻辑
         "history_summary": history_summary,
         "document_id": resolved_document_id,
         "document_title": document_title,
         "snapshot_questions": snapshot_questions,
+        "question_index_map": question_index_map,
         "ag_ui_events": [],
         "ag_ui_prompt_events": [],
         "tool_summaries": [],
@@ -1504,7 +1659,7 @@ def delete_question(payload: DeleteQuestionRequest, db: Session = Depends(get_db
     return {"ok": True}
 
 
-GRADING_SYSTEM_PROMPT_ZH = (
+GRADING_SYSTEM_PROMPT = (
     "你是一个严格的数学/理科阅卷老师，负责对单道题的作答进行机器阅卷。"
     "你会拿到：题目原文、（可选的）图像文字描述、以及学生答案。"
     "你的任务是：先在可见的 reasoning 中完整推理出该题的正确答案，再根据该最终推理结论，给出结构化的 JSON 判定结果。"
@@ -1523,7 +1678,7 @@ GRADING_SYSTEM_PROMPT_ZH = (
     "   - 学生未作答在上游已处理，这里不会出现 judgement='skipped' 的场景。"
     "4. reasoning 内容需覆盖：求解过程 + 正确答案 + 学生答案为何被判为当前 judgement，并避免无意义的来回修改。"
     "5. 在 reasoning 的最后一行必须使用固定格式总结："
-    "   最终结论：正确答案是 {correct_answer}，学生答案是 {student_answer}，判定为 {正确/错误/无法确定}。"
+    "   “最终结论：正确答案是 {correct_answer}，学生答案是 {student_answer}，判定为 {正确/错误/无法确定}。”"
     "   其中 {correct_answer}、{student_answer}、{判定为…} 均需与 JSON 字段完全一致。"
     "6. confidence 为 0~1 之间的小数，表示你对当前判定的主观把握程度（例如 0.95）。"
     "7. reasoning 不宜过长，通常 8~12 行推理即可，确保逻辑清晰。"
@@ -1533,45 +1688,6 @@ GRADING_SYSTEM_PROMPT_ZH = (
     "- judgement 取值只能是: 'correct', 'incorrect', 'skipped', 'uncertain' 之一（小写）。"
     '示例 JSON：{"predicted_answer": "C", "judgement": "incorrect", "confidence": 0.87, "reasoning": "……最终结论：正确答案是 C，学生答案是 A，判定为 错误。"}'
 )
-
-GRADING_SYSTEM_PROMPT_EN = (
-    "You are a strict math/science grading teacher responsible for machine-grading a single question."
-    " You will receive: the original question text, (optionally) image descriptions, and the student's answer."
-    " Your task: first derive the correct answer in the visible reasoning, then produce a structured JSON verdict."
-    "\n\n[Grading Rules (must follow)]"
-    "\n1. In reasoning, use English to reason step-by-step and concisely. You may do at most one brief recheck, but do not repeatedly overturn previous conclusions. You must clearly state:"
-    "\n   - Your final correct_answer (e.g., the correct answer is C, or the correct answer is 1);"
-    "\n   - Whether the student's answer equals correct_answer, and therefore whether the student is correct/incorrect/uncertain."
-    "\n2. After reasoning, fill in the JSON:"
-    "\n   - predicted_answer must equal the correct answer you gave at the end of reasoning;"
-    "\n   - judgement must be consistent with the last line of reasoning (only 'correct', 'incorrect', 'skipped', 'uncertain');"
-    "\n   - It is strictly forbidden for reasoning's final conclusion to contradict the JSON predicted_answer or judgement."
-    "\n3. Strictly compare student_answer with correct_answer:"
-    "\n   - If clearly comparable and identical, judgement must be 'correct';"
-    "\n   - If clearly comparable and different, judgement must be 'incorrect';"
-    "\n   - If insufficient information or multiple/no solutions, judgement must be 'uncertain';"
-    "\n   - Unanswered cases are handled upstream; 'skipped' will not appear here."
-    "\n4. reasoning must cover: solution process + correct answer + why the student's answer received the current judgement."
-    "\n5. The last line of reasoning must use this fixed format:"
-    '\n   "Final conclusion: the correct answer is {correct_answer}, the student answer is {student_answer}, verdict is {correct/incorrect/uncertain}."'
-    "\n   where {correct_answer}, {student_answer}, {verdict} must exactly match the JSON fields."
-    "\n6. confidence is a decimal between 0 and 1 representing your subjective certainty (e.g., 0.95)."
-    "\n7. reasoning should not be too long; typically 8-12 lines of reasoning, ensuring clear logic."
-    "\n\n[Output Requirements]"
-    "\n- The final reply must contain only one JSON object, no extra text, comments, or Markdown."
-    "\n- JSON fields must be complete and only include: predicted_answer, judgement, confidence, reasoning."
-    "\n- judgement can only be: 'correct', 'incorrect', 'skipped', 'uncertain' (lowercase)."
-    '\nExample JSON: {"predicted_answer": "C", "judgement": "incorrect", "confidence": 0.87, "reasoning": "…Final conclusion: the correct answer is C, the student answer is A, verdict is incorrect."}'
-)
-
-GRADING_SYSTEM_PROMPT = GRADING_SYSTEM_PROMPT_ZH
-
-
-def _get_grading_prompt(preferred_language: str | None) -> str:
-    lang = (preferred_language or "zh").lower()
-    if lang.startswith("en"):
-        return GRADING_SYSTEM_PROMPT_EN
-    return GRADING_SYSTEM_PROMPT_ZH
 
 
 def _parse_json_response(payload: str) -> dict:
@@ -1677,7 +1793,6 @@ def grade_document(payload: GradeRunRequest, db: Session = Depends(get_db)) -> G
     svc.require_active_subscription(payload.tenant_id)
 
     client = QwenClient()
-    vision_client: QwenVisionClient | None = None
     results: List[GradeQuestionResult] = []
 
     for q in payload.questions:
@@ -1727,35 +1842,10 @@ def grade_document(payload: GradeRunRequest, db: Session = Depends(get_db)) -> G
                 )
             continue
 
-        legend_summary = ""
-        if q.legend_images:
-            try:
-                if vision_client is None:
-                    vision_client = QwenVisionClient()
-                legend_summary = vision_client.describe_exam_images(
-                    [
-                        {
-                            "index": seq + 1,
-                            "page": q.page,
-                            "urls": q.legend_images,
-                            "content": q.content,
-                        }
-                    ],
-                    doc_title=payload.title,
-                ).strip()
-            except Exception as exc:  # noqa: BLE001 - 容错
-                logger.warning(
-                    "grade vision_failed seq=%s error=%s", seq, exc
-                )
-                legend_summary = ""
-
         user_prompt_lines = [
             "【题目】",
             q.content.strip(),
         ]
-        if legend_summary:
-            user_prompt_lines.append("\n【图像描述】")
-            user_prompt_lines.append(legend_summary)
         user_prompt_lines.append("\n【学生答案】")
         user_prompt_lines.append(user_answer)
         user_prompt_lines.append(
@@ -1763,9 +1853,8 @@ def grade_document(payload: GradeRunRequest, db: Session = Depends(get_db)) -> G
         )
         user_prompt = "\n".join(user_prompt_lines)
 
-        grading_prompt = _get_grading_prompt(payload.preferred_language)
         messages = [
-            {"role": "system", "content": grading_prompt},
+            {"role": "system", "content": GRADING_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -1931,6 +2020,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
 
     # 1) 构造 supervisor 需要的基础对话：历史对话 + 试卷快照
     conversation_messages: list[dict] = []
+    payload_chat_messages = _normalize_payload_chat_messages(payload.messages)
 
     svc = AgentService(db)
     document_title = None
@@ -1997,19 +2087,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
             document_title = document.title
             # 与 /run 保持一致：将 ORM Question 转为普通 dict，保证 LangGraph
             # SqliteSaver 在使用 msgpack 序列化 checkpoint 时不会遇到不可序列化类型。
-            snapshot_questions = [
-                {
-                    "id": q.id,
-                    "sequence_index": q.sequence_index,
-                    "page": q.page,
-                    "content": q.content,
-                    "legend_images": getattr(q, "legend_images", None),
-                    "student_answer": getattr(q, "student_answer", None),
-                    "grading_judgement": getattr(q, "grading_judgement", None),
-                    "grading_predicted_answer": getattr(q, "grading_predicted_answer", None),
-                }
-                for q in snapshot_questions_raw
-            ]
+            snapshot_questions = [_build_snapshot_question_entry(q) for q in snapshot_questions_raw]
         except HTTPException as exc:  # pragma: no cover - 容错
             logger.warning(
                 "agent_run_stream snapshot_failed tenant=%s user=%s document_id=%s status=%s detail=%s",
@@ -2023,39 +2101,6 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
     if snapshot_questions:
         _log_snapshot_overview("agent_run_stream.snapshot", snapshot_questions)
         question_index_map = _build_question_index_map(snapshot_questions)
-
-    latest_user_text = None
-    for m in reversed(payload.messages):
-        if m.role == "user":
-            latest_user_text = m.content
-            break
-
-    question_numbers = _extract_question_numbers(latest_user_text)
-    question_contexts: list[dict] = []
-    vision_focus_questions: list[dict] = []
-    if question_numbers and resolved_document_id:
-        question_contexts, vision_focus_questions = _collect_question_contexts(
-            svc=svc,
-            tenant_id=payload.tenant_id,
-            document_id=resolved_document_id,
-            question_numbers=question_numbers,
-            question_index_map=question_index_map,
-        )
-    logger.info(
-        "agent_run_stream.question_contexts tenant=%s user=%s document_id=%s refs=%s hits=%s vision_candidates=%s",
-        payload.tenant_id,
-        payload.user_id,
-        resolved_document_id,
-        question_numbers,
-        len(question_contexts),
-        len(vision_focus_questions),
-    )
-
-    for m in payload.messages:
-        role = m.role if m.role in ("system", "user", "assistant") else "user"
-        conversation_messages.append({"role": role, "content": m.content})
-
-    _log_messages_preview("agent_run_stream.before_qwen", conversation_messages)
 
     is_fresh_turn = _is_fresh_conversation(payload.messages)
 
@@ -2135,20 +2180,61 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
             suffix=uuid.uuid4().hex,
         )
 
+    for m in payload.messages:
+        role = m.role if m.role in ("system", "user", "assistant") else "user"
+        conversation_messages.append({"role": role, "content": m.content})
+
+    if session_id:
+        try:
+            stored_history = _load_session_history_messages(
+                svc=svc,
+                tenant_id=payload.tenant_id,
+                session_id=session_id,
+            )
+            canonical_chat = _build_canonical_messages_for_turn(
+                payload_chat_messages=payload_chat_messages,
+                stored_history=stored_history,
+            )
+            conversation_messages = [
+                {"role": m["role"], "content": m["content"]}
+                for m in canonical_chat
+                if m.get("role") in ("user", "assistant")
+            ]
+            logger.info(
+                "agent_run_stream.canonicalized tenant=%s user=%s session=%s stored_len=%s payload_len=%s final_len=%s",
+                payload.tenant_id,
+                payload.user_id,
+                session_id,
+                len(stored_history),
+                len(payload_chat_messages),
+                len(canonical_chat),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "agent_run_stream.canonicalize_failed tenant=%s user=%s session=%s error=%s",
+                payload.tenant_id,
+                payload.user_id,
+                session_id,
+                exc,
+            )
+
+    _log_messages_preview("agent_run_stream.before_qwen", conversation_messages)
+
     config = {"configurable": {"thread_id": thread_id}}
 
     def run_graph_thread() -> None:
         start_ts = time.time()
         try:
-            # 本次调用的完整对话快照（含历史 + 最新一轮 user + 占位 assistant），
-            # 作为 LangGraph 内部使用与最终持久化的单一数据源。
-            base_messages = [
+            # 模型输入窗口：只使用规范化的 user/assistant 历史，不包含占位。
+            model_messages = [
                 {"role": m["role"], "content": m["content"]}
                 for m in conversation_messages
                 if m["role"] in ("system", "user", "assistant")
             ]
+            # 持久化输入：显式补齐当前轮 assistant 占位，作为 persist 唯一替换目标。
+            persist_messages = _build_persist_messages_with_assistant_placeholder(model_messages)
 
-            window_messages = list(base_messages)
+            window_messages = list(model_messages)
             max_window_messages = 16
             if len(window_messages) > max_window_messages:
                 window_messages = window_messages[-max_window_messages:]
@@ -2159,7 +2245,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 payload.user_id,
                 session_id,
                 thread_id,
-                len(base_messages),
+                len(model_messages),
                 len(window_messages),
             )
 
@@ -2167,19 +2253,18 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 "tenant_id": payload.tenant_id,
                 "user_id": payload.user_id,
                 "ui_context": payload.ui_context,
-                "preferred_language": payload.preferred_language,
-                # 将当前会话 ID 一并写入状态，便于图在结束时将完整
-                # 对话历史持久化到 agent_messages / agent_sessions。
+                # 将当前会话 ID 一并写入状态，便于图在结束时将完整对话写回 agent_messages。
                 "session_id": session_id,
                 "messages": window_messages,
-                "session_profile": session_profile,
+                # base_messages 仅在调试/持久化节点使用，图内部不会依赖。
+                "base_messages": persist_messages,  # type: ignore[typeddict-item]
+                "user_profile": session_profile or {},
+                "session_profile": session_profile or {},
                 "history_summary": history_summary,
                 "document_id": resolved_document_id,
                 "document_title": document_title,
                 "snapshot_questions": snapshot_questions,
                 "question_index_map": question_index_map,
-                "question_contexts": question_contexts,
-                "vision_focus_questions": vision_focus_questions,
                 "ag_ui_events": [],
                 "ag_ui_prompt_events": [],
                 "tool_summaries": [],
@@ -2197,7 +2282,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
             }
             # 在进入图执行前，将完整 base_messages 绑定到当前 thread_id，供 memory_bus_node / persist_node 使用，
             # 避免在 AgentState 与 SQLite checkpoint 中长期保存完整历史。
-            register_base_messages(thread_id, base_messages)
+            register_base_messages(thread_id, persist_messages)
             register_stream_handler(thread_id, stream_handler)
             _app.invoke(base_state, config=config)
         except Exception:

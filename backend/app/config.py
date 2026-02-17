@@ -49,14 +49,32 @@ class Settings:
         self.alibaba_base_url: str = raw_alibaba_base.rstrip("/")
         self.alibaba_api_key: Optional[str] = os.getenv("ALIBABA_API_KEY")
         self.alibaba_model_qwen_flash: str = os.getenv(
-            "ALIBABA_MODEL_QWEN_FLASH", "qwen-flash"
+            "ALIBABA_MODEL_QWEN_FLASH", "qwen3.5-plus"
         )
         self.alibaba_model_qwen_plus: str = os.getenv(
-            "ALIBABA_MODEL_QWEN_PLUS", "qwen-flash"
+            "ALIBABA_MODEL_QWEN_PLUS", "qwen3.5-plus"
         )
-        # 专用视觉模型（例如 qwen3-vl-flash），供多模态视觉 Agent 使用
-        self.alibaba_model_qwen_vl_flash: str = os.getenv(
-            "ALIBABA_MODEL_QWEN_VL_FLASH", "qwen3-vl-flash"
+        self.alibaba_explicit_cache_enabled: bool = (
+            os.getenv("ALIBABA_EXPLICIT_CACHE_ENABLED", "true").strip().lower() == "true"
+        )
+        # 便宜/快速路由与总结模型（例如 qwen-turbo 或 qwen-flash）
+        self.alibaba_model_qwen_turbo: str = os.getenv(
+            "ALIBABA_MODEL_QWEN_TURBO", self.alibaba_model_qwen_flash
+        )
+        self.alibaba_enable_thinking: bool = (
+            os.getenv("ALIBABA_ENABLE_THINKING", "true").strip().lower() == "true"
+        )
+        self.alibaba_thinking_budget: int = int(
+            os.getenv("ALIBABA_THINKING_BUDGET", "2048")
+        )
+
+        # 向量化/embedding 模型配置（用于对话长期记忆等场景）
+        self.alibaba_model_embedding: str = os.getenv(
+            "ALIBABA_MODEL_EMBEDDING", "text-embedding-v4"
+        )
+        # 默认维度与 pgvector 列保持一致；如需变更，请同步更新 DDL
+        self.alibaba_embedding_dimensions: int = int(
+            os.getenv("ALIBABA_EMBEDDING_DIMENSIONS", "768")
         )
 
         self.siliconflow_base_url: str = os.getenv(

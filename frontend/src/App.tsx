@@ -396,7 +396,7 @@ const App: React.FC = () => {
           questionMeta: {
             questionId: q.id,
             sequenceIndex: idx,
-            groupId: null,
+            groupId: (q as any).group_id ?? q.id,
           },
         }
       })
@@ -448,6 +448,7 @@ const App: React.FC = () => {
           sourceType: 'favorite',
           questionMeta: {
             questionId: questionId,
+            groupId: (question as any).group_id ?? questionId,
           },
           originalText: question.content,
           answerText: '',

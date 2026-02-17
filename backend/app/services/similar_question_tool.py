@@ -240,7 +240,7 @@ def _build_student_content_from_variant(item: Dict[str, Any], *, plan_question_t
 
 class SimilarQuestionTool:
 
-    """Executes plan(s) produced by上游 Agent to overwrite or insert questions."""
+    """Executes plan(s) produced by上游 Agent to insert similar questions."""
 
 
 
@@ -277,279 +277,32 @@ class SimilarQuestionTool:
         label = (request_label or "")[:120]
 
         for plan in plans:
-
             try:
-
-                mode = str(plan.get("mode", "")).strip()
-
+                mode = str(plan.get("action") or "").strip()
             except Exception:
-
                 mode = ""
-
             if not mode:
-
-                logger.info("similar_tool.skip_plan_missing_mode plan=%s", plan)
-
+                logger.info("similar_tool.skip_plan_missing_action plan=%s", plan)
+                continue
+            if mode != "similar_insert":
+                logger.info("similar_tool.unsupported_action action=%s plan=%s", mode, plan)
                 continue
 
-
-
-            if mode == "similar_overwrite":
-
-                event = self._handle_overwrite(
-
-                    plan=plan,
-
-                    tenant_id=tenant_id,
-
-                    document_id=document_id,
-
-                    run_id=run_id,
-
-                    latest_user_message=label,
-
-                )
-
-                if event:
-
-                    events.append(event)
-
-                continue
-
-
-
-            if mode == "from_content_no_overwrite":
-
-                insert_events = self._handle_insert(
-
-                    plan=plan,
-
-                    tenant_id=tenant_id,
-
-                    document_id=document_id,
-
-                    run_id=run_id,
-
-                    latest_user_message=label,
-
-                    note_source=plan.get("note_source"),
-
-                )
-
-                events.extend(insert_events)
-
-                continue
-
-
-
-            logger.info("similar_tool.unsupported_mode mode=%s plan=%s", mode, plan)
-
-
+            insert_events = self._handle_insert(
+                plan=plan,
+                tenant_id=tenant_id,
+                document_id=document_id,
+                run_id=run_id,
+                latest_user_message=label,
+                note_source=plan.get("note_source"),
+            )
+            events.extend(insert_events)
 
         return events
 
 
-
-    def _handle_overwrite(
-
-        self,
-
-        *,
-
-        plan: Dict[str, Any],
-
-        tenant_id: int,
-
-        document_id: int,
-
-        run_id: str,
-
-        latest_user_message: str,
-
-    ) -> Optional[Dict[str, Any]]:
-
-        target_index = plan.get("target_sequence_index")
-
-        replacement = plan.get("replacement_question") or {}
-
-        solution_payload = _extract_solution_payload(replacement)
-
-
-
-        # 只接受结构化 schema：必须提供 stem
-
-        if not isinstance(replacement, dict) or not replacement.get("stem"):
-
-            logger.info("similar_tool.overwrite_invalid_schema plan=%s", plan)
-
-            return None
-
-        plan_question_type = _normalize_question_type(plan.get("question_type"))
-        content = _build_student_content_from_variant(
-            replacement,
-            plan_question_type=plan_question_type,
-        )
-
-        if target_index is None or content == "":
-
-            logger.info("similar_tool.overwrite_missing_fields plan=%s", plan)
-
-            return None
-
-
-
-        # 优先使用 base_question_id 精确定位题目，避免依赖可能漂移或不存在的 sequence_index
-
-        base_q: Optional[Question] = None
-
-        raw_base_id = plan.get("base_question_id")
-
-        if isinstance(raw_base_id, int):
-
-            try:
-
-                base_q = self.svc.get_question_by_id(
-
-                    tenant_id=tenant_id,
-
-                    document_id=document_id,
-
-                    question_id=raw_base_id,
-
-                )
-
-            except HTTPException as exc:
-
-                logger.info(
-
-                    "similar_tool.overwrite_base_id_not_found id=%s error=%s", raw_base_id, exc.detail
-
-                )
-
-
-
-        if base_q is not None:
-
-            question = base_q
-
-        else:
-
-            try:
-
-                question = self.svc.get_question_by_sequence(
-
-                    tenant_id=tenant_id,
-
-                    document_id=document_id,
-
-                    sequence_index=int(target_index),
-
-                )
-
-            except HTTPException as exc:
-
-                logger.info("similar_tool.question_not_found seq=%s error=%s", target_index, exc.detail)
-
-                return None
-
-
-
-        legend_images = replacement.get("legend_images")
-
-        if legend_images is not None and not isinstance(legend_images, list):
-
-            legend_images = []
-
-        origin_meta = {
-
-            "requestLabel": latest_user_message[:120],
-
-            "agentRunId": run_id,
-
-        }
-
-        question = self.svc.append_question_version(
-
-            question=question,
-
-            new_content=content,
-
-            new_legend_images=legend_images,
-
-            origin=origin_meta,
-
-        )
-
-        version_history = list(question.versions or [])
-
-        version_count = 1 + len(version_history)
-
-        logger.info(
-
-            "similar_tool.overwrite_success run_id=%s question_id=%s sequence=%s content_preview=%s",
-
-            run_id,
-
-            question.id,
-
-            question.sequence_index,
-
-            content[:120],
-
-        )
-
-        event = {
-
-            "action": "question.replace",
-
-            "target": {
-
-                "questionId": question.id,
-
-                "sequenceIndex": question.sequence_index,
-
-                "groupId": question.group_id or question.id,
-
-            },
-
-            "payload": {
-
-                "mode": "similar_overwrite",
-
-                "newContent": content,
-
-                "legendImages": legend_images or [],
-
-                "origin": origin_meta,
-
-                "versionCount": version_count,
-
-                "currentVersionIndex": 0,
-
-                "versions": version_history,
-
-                "solution": solution_payload,
-
-                "ui": {
-
-                    "shinyOverlay": True,
-
-                    "answerModeReset": True,
-
-                },
-
-            },
-
-        }
-
-        return event
-
-
-
     def _handle_insert(
-
         self,
-
         *,
 
         plan: Dict[str, Any],
@@ -567,12 +320,9 @@ class SimilarQuestionTool:
     ) -> List[Dict[str, Any]]:
 
         plan_question_type = _normalize_question_type(plan.get("question_type"))
-        new_questions = plan.get("new_questions")
-
-        if not isinstance(new_questions, list):
-
+        questions = plan.get("questions")
+        if not isinstance(questions, list):
             logger.info("similar_tool.insert_missing_questions plan=%s", plan)
-
             return []
 
 
@@ -707,7 +457,7 @@ class SimilarQuestionTool:
 
         current_after = after_index
 
-        for item in new_questions[:3]:
+        for item in questions:
 
             if not isinstance(item, dict) or not item.get("stem"):
 
@@ -798,7 +548,7 @@ class SimilarQuestionTool:
 
                     "payload": {
 
-                        "mode": "from_content_no_overwrite",
+                        "mode": "similar_insert",
 
                         "content": content,
 

@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     Boolean,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -398,6 +399,33 @@ class Question(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     document: Mapped[Document] = relationship("Document", back_populates="questions")
+
+
+class QuestionCatalog(Base):
+    __tablename__ = "question_catalogs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "document_id", name="uk_question_catalog_tenant_document"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    document_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    question_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    catalog_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    document: Mapped[Document] = relationship("Document")
 
 
 class AgentSession(Base):

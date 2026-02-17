@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..models import AgentMessage, AgentSession, Document, Question, Subscription
+from ..models import AgentMessage, AgentSession, Document, Question, QuestionCatalog, Subscription
 
 logger = logging.getLogger("agent")
 
@@ -117,6 +117,134 @@ class AgentService:
         self.db.add(document)
         self.db.flush()
         return document
+
+    def _build_question_catalog_entries(self, questions: List[Question]) -> list[dict[str, int]]:
+        """将题目列表转换为轻量 catalog（仅 id/序号/展示编号）。"""
+
+        entries: list[dict[str, int]] = []
+        for q in questions:
+            if q.id is None:
+                continue
+            try:
+                qid = int(q.id)
+                seq = int(q.sequence_index)
+            except (TypeError, ValueError):
+                continue
+            entries.append(
+                {
+                    "question_id": qid,
+                    "sequence_index": seq,
+                    "display_index": seq + 1,
+                }
+            )
+        return entries
+
+    def _refresh_question_catalog(
+        self,
+        *,
+        tenant_id: int,
+        document_id: int,
+        bump_version: bool,
+    ) -> QuestionCatalog:
+        """重建并写入 document 的 question_catalog。"""
+
+        questions = (
+            self.db.query(Question)
+            .filter(
+                Question.tenant_id == tenant_id,
+                Question.document_id == document_id,
+            )
+            .order_by(Question.sequence_index.asc(), Question.id.asc())
+            .all()
+        )
+        entries = self._build_question_catalog_entries(questions)
+
+        catalog = (
+            self.db.query(QuestionCatalog)
+            .filter(
+                QuestionCatalog.tenant_id == tenant_id,
+                QuestionCatalog.document_id == document_id,
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if catalog is None:
+            catalog = QuestionCatalog(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                version=1,
+                question_count=len(entries),
+                catalog_json=entries,
+            )
+            self.db.add(catalog)
+            self.db.flush()
+            return catalog
+
+        if bump_version:
+            catalog.version = int(catalog.version or 0) + 1
+        catalog.question_count = len(entries)
+        catalog.catalog_json = entries
+        catalog.updated_at = datetime.utcnow()
+        self.db.add(catalog)
+        self.db.flush()
+        return catalog
+
+    def get_question_catalog(
+        self,
+        *,
+        tenant_id: int,
+        document_id: int,
+        limit: int = 200,
+        offset: int = 0,
+        if_none_match_version: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """读取 question_catalog；若不存在则即时构建一次。"""
+
+        if limit <= 0:
+            limit = 1
+        if limit > 500:
+            limit = 500
+        if offset < 0:
+            offset = 0
+
+        catalog = (
+            self.db.query(QuestionCatalog)
+            .filter(
+                QuestionCatalog.tenant_id == tenant_id,
+                QuestionCatalog.document_id == document_id,
+            )
+            .first()
+        )
+
+        if catalog is None:
+            catalog = self._refresh_question_catalog(
+                tenant_id=tenant_id,
+                document_id=document_id,
+                bump_version=False,
+            )
+            self.db.commit()
+
+        version = int(catalog.version or 1)
+        if if_none_match_version is not None and int(if_none_match_version) == version:
+            return {
+                "not_modified": True,
+                "version": version,
+                "question_count": int(catalog.question_count or 0),
+                "rows": [],
+            }
+
+        rows = list(catalog.catalog_json or [])
+        sliced = rows[offset : offset + limit]
+        return {
+            "not_modified": False,
+            "version": version,
+            "question_count": int(catalog.question_count or len(rows)),
+            "rows": sliced,
+            "offset": offset,
+            "limit": limit,
+            "has_more": offset + limit < len(rows),
+        }
 
     def create_agent_chat_document(
         self,
@@ -713,6 +841,13 @@ class AgentService:
             question.group_id = question.id
             self.db.commit()
             self.db.refresh(question)
+
+        self._refresh_question_catalog(
+            tenant_id=tenant_id,
+            document_id=document.id,
+            bump_version=True,
+        )
+        self.db.commit()
         return document, question
 
     def update_question_grading(
@@ -874,6 +1009,13 @@ class AgentService:
             return
 
         self.db.delete(question)
+        self.db.flush()
+
+        self._refresh_question_catalog(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            bump_version=True,
+        )
         self.db.commit()
 
     def get_base_question_for_insert(
@@ -1018,6 +1160,13 @@ class AgentService:
             question.group_id = question.id
             self.db.commit()
             self.db.refresh(question)
+
+        self._refresh_question_catalog(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            bump_version=True,
+        )
+        self.db.commit()
         return question
 
     def _serialize_legend_images(self, legend_json: str | None) -> List[str]:

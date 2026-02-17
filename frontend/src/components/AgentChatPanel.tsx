@@ -117,6 +117,44 @@ function normalizeAiMarkdown(raw: string): string {
   return text
 }
 
+function normalizeFormUiCandidate(raw: unknown): any | null {
+  if (!raw || typeof raw !== 'object') return null
+  const ui = raw as Record<string, any>
+  if (ui.type === 'form' || Array.isArray(ui.fields)) {
+    return { ...ui, type: 'form' }
+  }
+  return null
+}
+
+function extractInterruptFormFromAgUiEvent(rawEvent: unknown): any | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  const event = rawEvent as Record<string, any>
+  const action = String(event.action || '')
+
+  if (action === 'form.show') {
+    return normalizeFormUiCandidate(event?.payload?.ui)
+  }
+
+  if (action !== 'a2ui.render') {
+    return null
+  }
+
+  const a2ui = event?.payload?.a2ui
+  if (!a2ui || typeof a2ui !== 'object') return null
+
+  const components = Array.isArray((a2ui as any).components) ? (a2ui as any).components : []
+  for (const component of components) {
+    if (!component || typeof component !== 'object') continue
+    const type = String((component as any).type || '')
+    if (type !== 'form') continue
+    const props = (component as any).props
+    const ui = normalizeFormUiCandidate(props)
+    if (ui) return ui
+  }
+
+  return null
+}
+
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   backendBaseUrl,
   user,
@@ -131,13 +169,14 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onAppendTokenConsumed,
   onDocumentResolved,
 }) => {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [inputHeight, setInputHeight] = useState(36)
   const [hitlFormUi, setHitlFormUi] = useState<any | null>(null)
   const [hitlFormValues, setHitlFormValues] = useState<Record<string, any>>({})
   const [isSubmittingHitlForm, setIsSubmittingHitlForm] = useState(false)
   const [hitlAnchorIndex, setHitlAnchorIndex] = useState<number | null>(null)
+  const [expandedTraceIds, setExpandedTraceIds] = useState<Set<string>>(new Set())
   const hitlResumeInFlightRef = useRef(false)
   const [isQuestionTypeEnsuring, setIsQuestionTypeEnsuring] = useState(false)
   // 当前 useAgentChat 状态所“绑定”的会话 key，用于避免在切换会话过程中
@@ -146,8 +185,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   const batchMeta = appendToken?.payload.batchMeta
   const effectiveUiContext: AgentRunContext = appendToken?.payload.uiContextOverride ?? 'exam_editor'
-
-  const preferredLanguage: 'zh' | 'en' = i18n.language?.toLowerCase().startsWith('en') ? 'en' : 'zh'
 
   const questionTypeField = useMemo(() => {
     if (!Array.isArray(hitlFormUi?.fields)) return null
@@ -207,7 +244,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const {
     messages,
     isLoading,
-    isAwaitingFirstToken,
     error,
     sendMessage,
     resumeWithPayload,
@@ -225,42 +261,40 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     viewId,
     onAgUiEvent: (event) => {
         const inner = event.event as any
-        if (inner && inner.action === 'form.show' && inner.payload && inner.payload.ui) {
-          const ui = inner.payload.ui
+        const ui = extractInterruptFormFromAgUiEvent(inner)
+        if (ui) {
           // 如果当前正处于提交过程中，则忽略新的 form.show，避免在同一轮 resume 过程中
           // 再次出现表单；下一轮对话会重新进入 HITL 时再接收新的表单。
           if (isSubmittingHitlForm || hitlResumeInFlightRef.current) {
             return
           }
-          if (ui && ui.type === 'form') {
-            const patchedUi = { ...ui }
-            if (Array.isArray(patchedUi.fields)) {
-              patchedUi.fields = patchedUi.fields.map((field: any) => {
-                if (!field || field.type !== 'number' || field.id !== 'count') return field
-                const originalMax = typeof field.max === 'number' ? field.max : 5
-                const capacity = typeof batchMeta?.maxCapacity === 'number' ? batchMeta.maxCapacity : originalMax
-                const nextMax = Math.max(1, Math.min(originalMax, capacity))
-                return {
-                  ...field,
-                  max: nextMax,
-                  default:
-                    typeof field.default === 'number'
-                      ? Math.min(field.default, nextMax)
-                      : Math.min(3, nextMax),
-                }
-              })
-            }
-            setHitlFormUi(patchedUi)
-            const initial: Record<string, any> = {}
-            if (Array.isArray(patchedUi.fields)) {
-              for (const field of patchedUi.fields) {
-                if (!field || !field.id) continue
-                initial[field.id] = field.default ?? ''
+          const patchedUi = { ...ui }
+          if (Array.isArray(patchedUi.fields)) {
+            patchedUi.fields = patchedUi.fields.map((field: any) => {
+              if (!field || field.type !== 'number' || field.id !== 'count') return field
+              const originalMax = typeof field.max === 'number' ? field.max : 5
+              const capacity = typeof batchMeta?.maxCapacity === 'number' ? batchMeta.maxCapacity : originalMax
+              const nextMax = Math.max(1, Math.min(originalMax, capacity))
+              return {
+                ...field,
+                max: nextMax,
+                default:
+                  typeof field.default === 'number'
+                    ? Math.min(field.default, nextMax)
+                    : Math.min(3, nextMax),
               }
-            }
-            setHitlFormValues(initial)
-            setIsSubmittingHitlForm(false)
+            })
           }
+          setHitlFormUi(patchedUi)
+          const initial: Record<string, any> = {}
+          if (Array.isArray(patchedUi.fields)) {
+            for (const field of patchedUi.fields) {
+              if (!field || !field.id) continue
+              initial[field.id] = field.default ?? ''
+            }
+          }
+          setHitlFormValues(initial)
+          setIsSubmittingHitlForm(false)
         }
         if (onAgUiEvent) {
           onAgUiEvent(inner)
@@ -269,7 +303,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       // 如果当前有来自题卡/笔记的 noteFocus，就优先携带给本轮对话
       noteFocus: appendToken?.payload.noteFocus,
       onDocumentResolved,
-      preferredLanguage,
     })
 
   // 会话重置信号变化时（新建/切换会话），根据当前会话元信息和存量消息灌入 useAgentChat。
@@ -518,10 +551,28 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     sessionId,
   ])
 
+  const toggleTraceExpanded = useCallback((messageKey: string) => {
+    setExpandedTraceIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(messageKey)) {
+        next.delete(messageKey)
+      } else {
+        next.add(messageKey)
+      }
+      return next
+    })
+  }, [])
+
   const AssistantMessage: React.FC<{ msg: any }> = useMemo(
     () =>
       React.memo(({ msg }: { msg: any }) => {
-        if (!msg.content?.trim()) {
+        const msgKey = String(msg.id ?? msg.created_at ?? '')
+        const traces = Array.isArray(msg.historyTraces) ? msg.historyTraces : []
+        const hasTrace = traces.length > 0 || Boolean(msg.activeThought) || Boolean(msg.activeTool)
+        const showTrace = Boolean(msg.isStreaming) || expandedTraceIds.has(msgKey)
+        const hasContent = Boolean(msg.content?.trim())
+        const showPendingOnly = Boolean(msg.isStreaming) && !hasContent && !hasTrace
+        if (!hasContent && !hasTrace && !showPendingOnly) {
           return null
         }
         const keyLabel = 'Ordis'
@@ -532,14 +583,93 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">{keyLabel}</div>
-              <div className="prose prose-slate max-w-none text-[15px] leading-relaxed">
-                <MarkdownWithMath>{normalizeAiMarkdown(msg.content)}</MarkdownWithMath>
-              </div>
+              {hasTrace && (
+                <div className="mb-3 space-y-2">
+                  {!msg.isStreaming && (
+                    <button
+                      type="button"
+                      onClick={() => toggleTraceExpanded(msgKey)}
+                      className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-700 transition"
+                    >
+                      {expandedTraceIds.has(msgKey) ? 'Collapse Logic' : 'Expand Logic'}
+                    </button>
+                  )}
+                  {showTrace && (
+                    <div className="space-y-2 pl-3 border-l border-slate-200">
+                      {traces.map((trace: any, idx: number) => (
+                        <div key={trace.id ?? `${trace.type}-${idx}`} className="text-[12px] leading-relaxed text-slate-500">
+                          {trace.type === 'tool' ? (
+                            <>
+                              <span className="text-blue-600 font-semibold">Use Tool</span>
+                              <span className="mx-1 text-slate-300">/</span>
+                              <span className="font-medium text-slate-700">{trace.name || 'tool'}</span>
+                              {trace.result ? <span className="ml-2 text-slate-400">({trace.result})</span> : null}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-slate-400">[{trace.label || 'thought'}]</span>
+                              <span className="ml-2">{trace.text || ''}</span>
+                            </>
+                          )}
+                        </div>
+                      ))}
+
+                      {msg.activeTool && (
+                        <div className="text-[12px] text-blue-600 animate-pulse">
+                          <span className="font-semibold">Calling Tool</span>
+                          <span className="mx-1 text-blue-300">/</span>
+                          <span>{msg.activeTool.name || 'tool'}</span>
+                        </div>
+                      )}
+
+                      {msg.activeThought && !msg.activeTool && (
+                        <div className="text-[12px] text-slate-600 animate-pulse">
+                          <span className="text-slate-400">[{msg.activeThought.label || 'thought'}]</span>
+                          <span className="ml-2">{msg.activeThought.text || ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {msg.content?.trim() && (
+                <div className="prose prose-slate max-w-none text-[15px] leading-relaxed">
+                  <MarkdownWithMath>{normalizeAiMarkdown(msg.content)}</MarkdownWithMath>
+                </div>
+              )}
+
+              {showPendingOnly && (
+                <div className="flex flex-col gap-2 text-sm text-slate-500">
+                  <span className="font-medium text-slate-600">{t('agent_chat.thinking')}</span>
+                  <span className="flex items-center gap-1.5" aria-label="thinking animation">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    />
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+                      style={{ animationDelay: '120ms' }}
+                    />
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+                      style={{ animationDelay: '240ms' }}
+                    />
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )
-      }, (prev, next) => prev.msg?.id === next.msg?.id && prev.msg?.content === next.msg?.content),
-    [],
+      }, (prev, next) => (
+        prev.msg?.id === next.msg?.id
+        && prev.msg?.content === next.msg?.content
+        && prev.msg?.isStreaming === next.msg?.isStreaming
+        && prev.msg?.activeThought === next.msg?.activeThought
+        && prev.msg?.activeTool === next.msg?.activeTool
+        && prev.msg?.historyTraces === next.msg?.historyTraces
+      )),
+    [expandedTraceIds, toggleTraceExpanded],
   )
 
   const UserMessage: React.FC<{ msg: any }> = useMemo(
@@ -666,9 +796,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                             {isAssistant ? <AssistantMessage msg={msg} /> : <UserMessage msg={msg} />}
                             {shouldShowHitlForm && (
                               <div className="flex gap-3">
-                                <div className="shrink-0">
-                                  <RobotGlowFace className="pointer-events-none select-none" />
-                                </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
                                     {t('agent_chat.form_title')}
@@ -768,33 +895,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                           </React.Fragment>
                         )
                       })}
-                      {isAwaitingFirstToken && (
-                        <div className="flex gap-3">
-                          <div className="shrink-0">
-                            <RobotGlowFace className="pointer-events-none select-none" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Ordis</div>
-                            <div className="flex flex-col gap-2 text-sm text-slate-500">
-                              <span className="font-medium text-slate-600">{t('agent_chat.thinking')}</span>
-                              <span className="flex items-center gap-1.5" aria-label="thinking animation">
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
-                                  style={{ animationDelay: '0ms' }}
-                                />
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
-                                  style={{ animationDelay: '120ms' }}
-                                />
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
-                                  style={{ animationDelay: '240ms' }}
-                                />
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     {error && <div className="mt-3 text-sm text-red-500">{error}</div>}

@@ -141,6 +141,7 @@ def main():
             migrations_dir / "20250118_add_favorite_metadata.sql",
             migrations_dir / "20250118_add_favorite_metadata_fk.sql",
             migrations_dir / "20250120_add_agent_session_meta.sql",
+            migrations_dir / "20260214_add_question_catalogs.sql",
         ]
 
         selected_paths = resolve_migration_paths(args.files)
