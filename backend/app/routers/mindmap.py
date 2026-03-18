@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import MindMap
-from .agent_v2 import (
+from ..agent.router import (
     MindMapNode,
     MindMapEdge,
     MindMapResponse,

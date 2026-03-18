@@ -6,12 +6,13 @@ interface UseAgentSyncOptions {
   backendBaseUrl: string
   tenantId?: number | null
   userId?: number | null
+  workroomId?: number | null
   initialDocumentId?: number | null
   debounceMs?: number
 }
 
 interface SyncQuestionInput
-  extends Omit<QuestionSyncPayload, 'tenantId' | 'userId' | 'documentId'> {
+  extends Omit<QuestionSyncPayload, 'tenantId' | 'userId' | 'workroomId' | 'documentId'> {
   documentId?: number | null
 }
 
@@ -19,6 +20,7 @@ export function useAgentSync({
   backendBaseUrl,
   tenantId,
   userId,
+  workroomId,
   initialDocumentId = null,
   debounceMs = 800,
 }: UseAgentSyncOptions) {
@@ -31,7 +33,7 @@ export function useAgentSync({
   const pendingPayload = useRef<QuestionSyncPayload | null>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId), [backendBaseUrl, tenantId, userId])
+  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId && workroomId), [backendBaseUrl, tenantId, userId, workroomId])
 
   useEffect(() => {
     if (initialDocumentId === undefined) return
@@ -47,7 +49,8 @@ export function useAgentSync({
       setError(null)
       try {
         const resp = await syncQuestionApi(backendBaseUrl, payload)
-        setDocumentId(resp.document_id)
+        const resolvedDocumentId = (resp as any).studio_document_id ?? (resp as any).document_id ?? null
+        setDocumentId(resolvedDocumentId)
         setLastSavedAt(Date.now())
         return resp
       } catch (err) {
@@ -69,12 +72,13 @@ export function useAgentSync({
       const payload: QuestionSyncPayload = {
         tenantId,
         userId,
+        workroomId: workroomId ?? 0,
         documentId: input.documentId ?? documentId ?? undefined,
         ...input,
       }
       return runSync(payload)
     },
-    [documentId, runSync, tenantId, userId],
+    [documentId, runSync, tenantId, userId, workroomId],
   )
 
   const flushPending = useCallback(async () => {
@@ -90,6 +94,7 @@ export function useAgentSync({
       pendingPayload.current = {
         tenantId,
         userId,
+        workroomId: workroomId ?? 0,
         documentId: input.documentId ?? documentId ?? undefined,
         ...input,
       }
@@ -102,23 +107,27 @@ export function useAgentSync({
         })
       }, debounceMs)
     },
-    [debounceMs, documentId, flushPending, tenantId, userId],
+    [debounceMs, documentId, flushPending, tenantId, userId, workroomId],
   )
 
   const loadSnapshot = useCallback(
     async (targetDocumentId?: number | null) => {
       const resolvedId = targetDocumentId ?? documentId
-      if (!resolvedId || !tenantId) return
+      if (!resolvedId || !tenantId || !userId || !workroomId) return
       try {
-        const resp = await fetchSnapshot(backendBaseUrl, tenantId, resolvedId)
-        setSnapshot(resp)
-        return resp
+        const resp = await fetchSnapshot(backendBaseUrl, tenantId, userId, workroomId, resolvedId)
+        const normalized = {
+          ...resp,
+          document_id: (resp as any).document_id ?? (resp as any).studio_document_id ?? resolvedId,
+        } as AgentSnapshotResponse
+        setSnapshot(normalized)
+        return normalized
       } catch (err) {
         setError(err instanceof Error ? err.message : '获取快照失败')
         return null
       }
     },
-    [backendBaseUrl, documentId, tenantId],
+    [backendBaseUrl, documentId, tenantId, userId, workroomId],
   )
 
   return {

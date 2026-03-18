@@ -5,12 +5,25 @@ import type {
   AgentRunMessage,
   UploadedFileTab,
   UserInfo,
+  WorkroomInfo,
+  WorkroomRuntimeState,
+  WorkroomSourceBinding,
+  WorkroomArtifact,
 } from '../types'
 
 interface AppState {
   // 用户认证
   user: UserInfo | null
   setUser: (user: UserInfo | null) => void
+
+  workroom: WorkroomInfo | null
+  setWorkroom: (workroom: WorkroomInfo | null) => void
+  workroomRuntimeState: WorkroomRuntimeState | null
+  setWorkroomRuntimeState: (state: WorkroomRuntimeState | null) => void
+  workroomSources: WorkroomSourceBinding[]
+  setWorkroomSources: (sources: WorkroomSourceBinding[]) => void
+  workroomArtifacts: WorkroomArtifact[]
+  setWorkroomArtifacts: (artifacts: WorkroomArtifact[]) => void
 
   // 文件管理
   fileTabs: UploadedFileTab[]
@@ -47,8 +60,8 @@ interface AppState {
   setIsPreviewCollapsed: (collapsed: boolean) => void
   isAnswerMode: boolean
   setIsAnswerMode: (mode: boolean) => void
-  workspaceView: 'editor' | 'mindmap' | 'flashcard'
-  setWorkspaceView: (view: 'editor' | 'mindmap' | 'flashcard') => void
+  studioView: 'editor' | 'mindmap' | 'flashcard'
+  setStudioView: (view: 'editor' | 'mindmap' | 'flashcard') => void
   appView: 'editor' | 'favorites'
   setAppView: (view: 'editor' | 'favorites') => void
   leftWidth: number
@@ -65,6 +78,14 @@ export const useAppStore = create<AppState>((set) => ({
   // 用户认证
   user: null,
   setUser: (user) => set({ user }),
+  workroom: null,
+  setWorkroom: (workroom) => set({ workroom }),
+  workroomRuntimeState: null,
+  setWorkroomRuntimeState: (workroomRuntimeState) => set({ workroomRuntimeState }),
+  workroomSources: [],
+  setWorkroomSources: (workroomSources) => set({ workroomSources }),
+  workroomArtifacts: [],
+  setWorkroomArtifacts: (workroomArtifacts) => set({ workroomArtifacts }),
 
   // 文件管理
   fileTabs: [],
@@ -117,8 +138,8 @@ export const useAppStore = create<AppState>((set) => ({
   setIsPreviewCollapsed: (collapsed) => set({ isPreviewCollapsed: collapsed }),
   isAnswerMode: false,
   setIsAnswerMode: (mode) => set({ isAnswerMode: mode }),
-  workspaceView: 'editor',
-  setWorkspaceView: (view) => set({ workspaceView: view }),
+  studioView: 'editor',
+  setStudioView: (view) => set({ studioView: view }),
   appView: 'editor',
   setAppView: (view) => set({ appView: view }),
   leftWidth: 420,

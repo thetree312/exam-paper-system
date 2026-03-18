@@ -14,12 +14,14 @@ from fastapi import (
     Query,
 )
 from fastapi.responses import FileResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_db
 from ..models import File, ExtractionSession
-from ..schemas import FileUploadResponse, SessionStatusResponse
+from ..schemas import FileUploadResponse, SessionStatusResponse, WorkroomFileTabOut
+from ..services.workroom import WorkroomService
 
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,7 @@ def _render_word_previews(word_path: Path) -> list[Path]:
 async def upload_image(
     tenant_id: int = Form(...),
     user_id: int = Form(...),
+    workroom_id: int | None = Form(default=None),
     file: UploadFile = UploadFileType(...),
     db: Session = Depends(get_db),
 ):
@@ -152,10 +155,33 @@ async def upload_image(
         tenant_id=tenant_id,
         user_id=user_id,
         file_id=db_file.id,
+        workroom_id=workroom_id,
         status="pending",
     )
     db.add(session)
     db.commit()
+
+    if workroom_id is not None:
+        try:
+            svc = WorkroomService(db)
+            svc.bind_source_file(
+                tenant_id=int(tenant_id),
+                user_id=int(user_id),
+                workroom_id=int(workroom_id),
+                file_id=int(db_file.id),
+            )
+            svc.update_runtime_state(
+                tenant_id=int(tenant_id),
+                user_id=int(user_id),
+                workroom_id=int(workroom_id),
+                values={
+                    "active_file_id": int(db_file.id),
+                    "active_session_id": int(session.id),
+                    "active_extraction_session_id": int(session.id),
+                },
+            )
+        except Exception:
+            logger.exception("[upload_image] failed to bind file into workroom")
 
     # 异步生成预览图，避免在上传请求中阻塞
     try:
@@ -288,3 +314,84 @@ def get_session_status(session_id: int, db: Session = Depends(get_db)) -> Sessio
         preview_url=preview_url,
         preview_pages=preview_pages,
     )
+
+
+@router.get("/workroom/{workroom_id}/tabs", response_model=list[WorkroomFileTabOut])
+def list_workroom_tabs(
+    workroom_id: int,
+    tenant_id: int = Query(...),
+    user_id: int = Query(...),
+    db: Session = Depends(get_db),
+) -> list[WorkroomFileTabOut]:
+    """Return latest extraction session per file bound to current workroom.
+
+    Used by frontend to rehydrate preview tabs after leaving and re-entering a workroom.
+    """
+    rows = db.execute(
+        text(
+            """
+            WITH latest_sessions AS (
+                SELECT
+                    es.id AS session_id,
+                    es.file_id,
+                    es.status,
+                    ROW_NUMBER() OVER (PARTITION BY es.file_id ORDER BY es.id DESC) AS rn
+                FROM extraction_sessions es
+                WHERE es.tenant_id = :tenant_id
+                  AND es.user_id = :user_id
+                  AND es.workroom_id = :workroom_id
+            )
+            SELECT
+                ls.session_id,
+                ls.file_id,
+                ls.status,
+                f.original_name,
+                f.source_type
+            FROM latest_sessions ls
+            JOIN files f ON f.id = ls.file_id
+            JOIN workroom_source_bindings wb
+              ON wb.file_id = ls.file_id
+             AND wb.workroom_id = :workroom_id
+             AND wb.tenant_id = :tenant_id
+             AND wb.user_id = :user_id
+             AND wb.is_active = TRUE
+            WHERE ls.rn = 1
+            ORDER BY ls.session_id ASC
+            """
+        ),
+        {"tenant_id": tenant_id, "user_id": user_id, "workroom_id": workroom_id},
+    ).mappings().all()
+
+    backend_root = Path(__file__).resolve().parents[2]
+    out: list[WorkroomFileTabOut] = []
+    for row in rows:
+        session_id = int(row["session_id"])
+        file_id = int(row["file_id"])
+        status = str(row["status"] or "pending")
+        source_type = str(row.get("source_type") or "").strip() or None
+
+        preview_url: str | None = None
+        preview_pages: list[str] = []
+        if status == "done":
+            file = db.query(File).filter(File.id == file_id).first()
+            if file is not None:
+                page_count = _detect_page_count(file, backend_root)
+                if page_count > 0:
+                    preview_url = f"/api/files/preview/{file_id}"
+                    preview_pages = [
+                        f"/api/files/preview/{file_id}?page={idx + 1}"
+                        for idx in range(page_count)
+                    ]
+
+        out.append(
+            WorkroomFileTabOut(
+                file_id=file_id,
+                session_id=session_id,
+                name=str(row.get("original_name") or f"source-{file_id}"),
+                source_type=source_type,
+                status=status,
+                preview_url=preview_url,
+                preview_pages=preview_pages,
+            )
+        )
+    return out

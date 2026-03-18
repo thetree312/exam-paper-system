@@ -13,6 +13,7 @@ interface UseAgentChatOptions {
   backendBaseUrl: string
   tenantId?: number | null
   userId?: number | null
+  workroomId?: number | null
   uiContext?: 'blank' | 'exam_editor' | 'code_editor' | 'other' | 'batch_question'
   documentId?: number | null
   noteFocus?: AgentNoteFocus | null
@@ -26,6 +27,7 @@ export function useAgentChat({
   backendBaseUrl,
   tenantId,
   userId,
+  workroomId,
   uiContext,
   documentId,
   noteFocus,
@@ -54,89 +56,106 @@ export function useAgentChat({
     const last = current[lastIndex]
     if (!last || last.role !== 'assistant') return
 
-    const stage = String(event.stage || '').trim().toLowerCase()
     const payload = event.payload || {}
+    const traceType = String((payload as any).trace_type || '').trim().toLowerCase()
 
     const next = [...current]
     const updated: AgentRunMessage = {
       ...last,
       historyTraces: [...(last.historyTraces || [])],
-      activeThought: last.activeThought ?? null,
-      activeTool: last.activeTool ?? null,
+      activeThought: null,
+      activeTool: null,
       isStreaming: true,
     }
 
-    if (stage === 'thought') {
-      const append = Boolean((payload as any).append)
-      const nextText = String(payload.text || payload.summary || payload.reason || '正在思考')
-      if (append && updated.activeThought) {
-        updated.activeThought = {
-          ...updated.activeThought,
-          text: `${updated.activeThought.text || ''}${nextText}`,
+    if (traceType === 'model_native_thinking') {
+      const content = String((payload as any).content || '')
+      if (content) {
+        const traces = updated.historyTraces || []
+        const lastTrace = traces.length > 0 ? traces[traces.length - 1] : null
+        if (lastTrace && lastTrace.type === 'thought') {
+          lastTrace.text = `${lastTrace.text || ''}${content}`
+        } else {
+          traces.push({
+            id: `thought-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: 'thought',
+            text: content,
+          } as AgentThinkingThoughtTrace)
         }
-      } else {
-        if (updated.activeThought) {
-          updated.historyTraces?.push(updated.activeThought)
-        }
-        const thought: AgentThinkingThoughtTrace = {
-          id: `thought-${Date.now()}`,
-          type: 'thought',
-          label: String(payload.agent || 'thought'),
-          text: nextText,
-        }
-        updated.activeThought = thought
-        updated.activeTool = null
       }
-    } else if (stage === 'action') {
-      if (updated.activeThought) {
-        updated.historyTraces?.push(updated.activeThought)
-        updated.activeThought = null
-      }
-      const toolNames = Array.isArray(payload.tool_names)
-        ? payload.tool_names.map((x) => String(x)).filter(Boolean)
-        : []
-      const tool: AgentThinkingToolTrace = {
-        id: `tool-${Date.now()}`,
-        type: 'tool',
-        name: toolNames.join(', ') || 'tool',
-        text: String(payload.reason || '调用工具补充证据'),
-        status: 'calling',
-      }
-      updated.activeTool = tool
-    } else if (stage === 'tool_feedback') {
-      if (updated.activeTool) {
+    } else if (traceType === 'model_event') {
+      const toolCalls = Array.isArray((payload as any).tool_calls) ? (payload as any).tool_calls : []
+      for (const item of toolCalls) {
+        if (!item || typeof item !== 'object') continue
+        const toolCallId = String((item as any).id || '').trim()
+        if (!toolCallId) continue
+        const name = String((item as any).name || '').trim() || 'tool'
+        const exists = (updated.historyTraces || []).some(
+          (trace) => trace.type === 'tool' && (trace as AgentThinkingToolTrace).toolCallId === toolCallId,
+        )
+        if (exists) continue
         updated.historyTraces?.push({
-          ...updated.activeTool,
-          status: 'result',
-          result: String(payload.tool_message_count ?? ''),
-        })
-        updated.activeTool = null
+          id: `tool-${toolCallId}`,
+          type: 'tool',
+          toolCallId,
+          name,
+          status: 'calling',
+        } as AgentThinkingToolTrace)
       }
-    } else if (stage === 'self_reflect') {
-      const trace: AgentThinkingThoughtTrace = {
-        id: `reflect-${Date.now()}`,
-        type: 'thought',
-        label: `self_reflect/${String(payload.status || '')}`,
-        text: String(payload.reason || '完成自反思'),
+    } else if (traceType === 'tool_call') {
+      const toolCallId = String((payload as any).tool_call_id || '').trim()
+      const toolName = String((payload as any).tool_name || '').trim() || 'tool'
+      const rawStatus = String((payload as any).status || '').trim().toLowerCase()
+      let mappedStatus: AgentThinkingToolTrace['status'] = 'calling'
+      if (rawStatus === 'ok' || rawStatus === 'success') {
+        mappedStatus = 'success'
+      } else if (rawStatus === 'error' || rawStatus === 'fail' || rawStatus === 'failed') {
+        mappedStatus = 'fail'
       }
-      updated.historyTraces?.push(trace)
-    } else if (stage === 'final') {
-      if (updated.activeThought) {
-        updated.historyTraces?.push(updated.activeThought)
-        updated.activeThought = null
+
+      let target = (updated.historyTraces || []).find(
+        (trace) => trace.type === 'tool' && (trace as AgentThinkingToolTrace).toolCallId === toolCallId,
+      ) as AgentThinkingToolTrace | undefined
+
+      if (!target) {
+        const reversed = [...(updated.historyTraces || [])].reverse()
+        target = reversed.find(
+          (trace) =>
+            trace.type === 'tool' &&
+            (trace as AgentThinkingToolTrace).name === toolName &&
+            (trace as AgentThinkingToolTrace).status === 'calling',
+        ) as AgentThinkingToolTrace | undefined
       }
-      if (updated.activeTool) {
-        updated.historyTraces?.push({ ...updated.activeTool, status: 'result' })
-        updated.activeTool = null
+
+      if (target) {
+        target.status = mappedStatus
+      } else {
+        updated.historyTraces?.push({
+          id: `tool-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          type: 'tool',
+          toolCallId: toolCallId || undefined,
+          name: toolName,
+          status: mappedStatus,
+        } as AgentThinkingToolTrace)
       }
-      updated.isStreaming = false
     }
 
     next[lastIndex] = updated
     updateMessages(next)
   }, [updateMessages])
 
-  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId), [backendBaseUrl, tenantId, userId])
+  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId && workroomId), [backendBaseUrl, tenantId, userId, workroomId])
+
+  const markLastAssistantFinished = useCallback(() => {
+    const current = messagesRef.current
+    if (!current.length) return
+    const lastIndex = current.length - 1
+    const last = current[lastIndex]
+    if (!last || last.role !== 'assistant') return
+    if (!last.isStreaming) return
+    const next = current.map((msg, idx) => (idx === lastIndex ? { ...msg, isStreaming: false } : msg))
+    updateMessages(next)
+  }, [updateMessages])
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -168,6 +187,7 @@ export function useAgentChat({
         const payload: AgentRunRequest = {
           tenantId: tenantId ?? 0,
           userId: userId ?? 0,
+          workroomId: workroomId ?? 0,
           uiContext: uiContext ?? 'blank',
           documentId: documentId ?? undefined,
           messages: optimisticMessages,
@@ -207,8 +227,9 @@ export function useAgentChat({
         await sendAgentRunStream(backendBaseUrl, payload, (event) => {
           if (event.type === 'session') {
             setSessionId(event.session_id)
-            if (typeof event.document_id === 'number') {
-              onDocumentResolved?.(event.document_id)
+            const resolvedDocumentId = (event as any).studio_document_id ?? (event as any).document_id
+            if (typeof resolvedDocumentId === 'number') {
+              onDocumentResolved?.(resolvedDocumentId)
             }
             return
           }
@@ -236,6 +257,7 @@ export function useAgentChat({
           window.cancelAnimationFrame(rafId)
           flush()
         }
+        markLastAssistantFinished()
         return { messages: messagesRef.current }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Agent 请求失败')
@@ -252,6 +274,7 @@ export function useAgentChat({
       appendAgentTraceToLastAssistant,
       backendBaseUrl,
       isReady,
+      markLastAssistantFinished,
       sessionId,
       tenantId,
       uiContext,
@@ -259,6 +282,7 @@ export function useAgentChat({
       noteFocus,
       updateMessages,
       userId,
+      workroomId,
       viewId,
     ],
   )
@@ -272,6 +296,7 @@ export function useAgentChat({
 
       const tenant = tenantId ?? 0
       const user = userId ?? 0
+      const workroom = workroomId ?? 0
       const docId = documentId ?? undefined
 
       setIsLoading(true)
@@ -328,6 +353,7 @@ export function useAgentChat({
           {
             tenantId: tenant,
             userId: user,
+            workroomId: workroom,
             documentId: docId,
             sessionId,
             resumePayload,
@@ -356,6 +382,7 @@ export function useAgentChat({
           window.cancelAnimationFrame(rafId)
           flush()
         }
+        markLastAssistantFinished()
         return { messages: messagesRef.current }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Agent 请求失败')
@@ -370,11 +397,13 @@ export function useAgentChat({
       backendBaseUrl,
       documentId,
       isReady,
+      markLastAssistantFinished,
       onAgUiEvent,
       sessionId,
       tenantId,
       updateMessages,
       userId,
+      workroomId,
     ],
   )
 

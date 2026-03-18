@@ -9,7 +9,7 @@ import type {
   QuestionSyncResponse,
   SplitQuestionsRequest,
   SplitQuestionsResponse,
-  AgentSessionListResponse,
+  AgentSessionListResponseDto,
   AgentSessionMessagesResponseDto,
 } from '../types'
 
@@ -56,7 +56,8 @@ export async function syncQuestion(
   const body = toSnake({
     tenant_id: payload.tenantId,
     user_id: payload.userId,
-    document_id: payload.documentId,
+    workroom_id: payload.workroomId,
+    studio_document_id: payload.documentId,
     session_id: payload.sessionId,
     file_id: payload.fileId,
     question_id: payload.questionId,
@@ -88,11 +89,15 @@ export async function deleteQuestion(
 export async function fetchSnapshot(
   baseUrl: string,
   tenantId: number,
+  userId: number,
+  workroomId: number,
   documentId: number,
 ): Promise<AgentSnapshotResponse> {
   const body = {
     tenant_id: tenantId,
-    document_id: documentId,
+    user_id: userId,
+    workroom_id: workroomId,
+    studio_document_id: documentId,
   }
   return postJSON<AgentSnapshotResponse>(`${baseUrl}/api/agent/snapshot`, body)
 }
@@ -101,8 +106,9 @@ export async function sendAgentRun(baseUrl: string, payload: AgentRunRequest): P
   const body = toSnake({
     tenant_id: payload.tenantId,
     user_id: payload.userId,
+    workroom_id: payload.workroomId,
     ui_context: payload.uiContext,
-    document_id: payload.documentId ?? undefined,
+    studio_document_id: payload.documentId ?? undefined,
     messages: payload.messages,
     note_focus: payload.noteFocus
       ? {
@@ -123,7 +129,7 @@ export async function sendAgentRun(baseUrl: string, payload: AgentRunRequest): P
 export type AgentStreamEvent =
   | { type: 'delta'; role: 'assistant'; delta: string }
   | { type: 'ag_ui'; event: AgUiEvent }
-  | { type: 'session'; session_id: number; document_id?: number | null }
+  | { type: 'session'; session_id: number; document_id?: number | null; studio_document_id?: number | null }
   | { type: 'agent_trace'; stage?: string; payload?: Record<string, unknown> }
 
 export async function sendAgentRunStream(
@@ -138,8 +144,9 @@ export async function sendAgentRunStream(
       toSnake({
         tenant_id: payload.tenantId,
         user_id: payload.userId,
+        workroom_id: payload.workroomId,
         ui_context: payload.uiContext,
-        document_id: payload.documentId ?? undefined,
+        studio_document_id: payload.documentId ?? undefined,
         messages: payload.messages,
         note_focus: payload.noteFocus
           ? {
@@ -204,6 +211,7 @@ export async function sendAgentResumeStream(
   params: {
     tenantId: number
     userId: number
+    workroomId: number
     documentId?: number | null
     sessionId: number
     resumePayload: unknown
@@ -217,7 +225,8 @@ export async function sendAgentResumeStream(
       toSnake({
         tenant_id: params.tenantId,
         user_id: params.userId,
-        document_id: params.documentId ?? undefined,
+        workroom_id: params.workroomId,
+        studio_document_id: params.documentId ?? undefined,
         session_id: params.sessionId,
         resume_payload: params.resumePayload,
       }),
@@ -270,6 +279,7 @@ export async function requestGrading(baseUrl: string, payload: GradeRunRequest):
   const body = toSnake({
     tenant_id: payload.tenantId,
     user_id: payload.userId,
+    workroom_id: payload.workroomId,
     document_id: payload.documentId,
     title: payload.title,
     questions: payload.questions.map((q) =>
@@ -307,6 +317,7 @@ export async function fetchAgentSessions(
   params: {
     tenantId: number
     userId: number
+    workroomId?: number | null
     documentId?: number | null
     viewId?: string | null
     includeArchived?: boolean
@@ -315,7 +326,8 @@ export async function fetchAgentSessions(
   const search = new URLSearchParams()
   search.set('tenant_id', String(params.tenantId))
   search.set('user_id', String(params.userId))
-  if (params.documentId != null) search.set('document_id', String(params.documentId))
+  if (params.workroomId != null) search.set('workroom_id', String(params.workroomId))
+  if (params.documentId != null) search.set('studio_document_id', String(params.documentId))
   if (params.viewId) search.set('view_id', params.viewId)
   if (params.includeArchived) search.set('include_archived', 'true')
 

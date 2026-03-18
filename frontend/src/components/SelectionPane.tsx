@@ -95,7 +95,7 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
   return (
     <div
       ref={previewScrollRef}
-      className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950 p-3 sm:p-4 lg:p-6 relative scrollbar-hidden"
+      className="flex-1 overflow-y-auto bg-slate-100 p-3 sm:p-4 lg:p-6 relative scrollbar-hidden"
       onPointerDown={handlePointerDown}
     >
       <SelectionWorkspace

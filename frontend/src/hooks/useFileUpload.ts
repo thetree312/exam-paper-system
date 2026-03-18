@@ -48,6 +48,7 @@ export const useFileUpload = (
   const setStoreActiveTabIndex = useAppStore((state) => state.setActiveTabIndex)
   const storePreviewScrollPositions = useAppStore((state) => state.previewScrollPositions)
   const setStorePreviewScrollPositions = useAppStore((state) => state.setPreviewScrollPositions)
+  const workroom = useAppStore((state) => state.workroom)
 
   const [isUploading, setIsUploading] = useState(false)
 
@@ -237,19 +238,19 @@ export const useFileUpload = (
         })
       }
 
-      setStoreActiveTabIndex((current) => {
-        if (current === index) {
-          return next.length ? Math.min(index, next.length - 1) : -1
-        }
-        if (current > index) {
-          return current - 1
-        }
-        return current
-      })
+      const nextActiveIndex =
+        storeActiveTabIndex === index
+          ? next.length
+            ? Math.min(index, next.length - 1)
+            : -1
+          : storeActiveTabIndex > index
+            ? storeActiveTabIndex - 1
+            : storeActiveTabIndex
+      setStoreActiveTabIndex(nextActiveIndex)
 
       return next
     })
-  }, [setStoreFileTabs, setStoreActiveTabIndex, setStorePreviewScrollPositions])
+  }, [setStoreFileTabs, setStoreActiveTabIndex, setStorePreviewScrollPositions, storeActiveTabIndex])
 
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,6 +291,9 @@ export const useFileUpload = (
       const formData = new FormData()
       formData.append('tenant_id', String(user.tenant_id))
       formData.append('user_id', String(user.id))
+      if (workroom?.id) {
+        formData.append('workroom_id', String(workroom.id))
+      }
       formData.append('file', file)
 
       try {
@@ -381,7 +385,7 @@ export const useFileUpload = (
         }
       }
     },
-    [activeFile, storeActiveTabIndex, backendBaseUrl, storeFileTabs.length, onStatusMessage, user, setStoreFileTabs, setStoreActiveTabIndex],
+    [activeFile, storeActiveTabIndex, backendBaseUrl, storeFileTabs.length, onStatusMessage, user, workroom?.id, setStoreFileTabs, setStoreActiveTabIndex],
   )
 
   return {

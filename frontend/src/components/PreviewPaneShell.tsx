@@ -35,9 +35,10 @@ interface PreviewPaneShellProps {
   onSelectionAddClick: () => void
   onClearSelection: () => void
   backendBaseUrl: string
-  user: UserInfo | null
+  user: UserInfo
   onToast: (message: string, type: 'info' | 'success' | 'error') => void
   onAddFavoriteToEditor: (questionId: number) => Promise<void> | void
+  onBackToWorkspace?: () => void
 }
 
 export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
@@ -73,11 +74,12 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   user,
   onToast,
   onAddFavoriteToEditor,
+  onBackToWorkspace,
 }) => {
   const { t } = useTranslation()
   return (
     <aside
-      className="bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col relative"
+      className="bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col relative"
       ref={leftPaneRef}
       style={style}
     >
@@ -166,7 +168,14 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
               </span>
             </button>
             <div className="h-px w-8 bg-slate-200" />
-            <span className="material-symbols-outlined text-[22px]">folder</span>
+            <button
+              type="button"
+              className="w-10 h-10 flex items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+              onClick={onBackToWorkspace}
+              title="返回 Workspace"
+            >
+              <span className="material-symbols-outlined text-[22px]">folder</span>
+            </button>
           </div>
           <div className="flex-1" />
           <span className="material-symbols-outlined text-[22px] mb-2">download</span>

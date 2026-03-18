@@ -1,11 +1,11 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { EditorWorkspaceShell } from './EditorWorkspaceShell'
-import { FavoritesPage } from './FavoritesPage'
 import { useAppStore } from '../store/appStore'
 import { useFileUpload, useOcrManager } from '../hooks'
 import { getQuestion } from '../services/questionApi'
 import type { AggregatedOcrItem } from '../types'
+import { EditorWorkspaceShell } from './EditorWorkspaceShell'
+import { FavoritesPage } from './FavoritesPage'
 
 interface EditorConnectorProps {
   backendBaseUrl: string
@@ -21,16 +21,14 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
   const user = useAppStore((state) => state.user)
   const appView = useAppStore((state) => state.appView)
   const setAppView = useAppStore((state) => state.setAppView)
-  const workspaceView = useAppStore((state) => state.workspaceView)
-  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView)
+  const studioView = useAppStore((state) => state.studioView)
+  const setStudioView = useAppStore((state) => state.setStudioView)
   const isAnswerMode = useAppStore((state) => state.isAnswerMode)
   const setIsAnswerMode = useAppStore((state) => state.setIsAnswerMode)
   const isAgentDrawerOpen = useAppStore((state) => state.isAgentDrawerOpen)
   const setIsAgentDrawerOpen = useAppStore((state) => state.setIsAgentDrawerOpen)
   const agentDocumentId = useAppStore((state) => state.agentDocumentId)
   const setAgentDocumentId = useAppStore((state) => state.setAgentDocumentId)
-  const isExportDialogOpen = useAppStore((state) => state.isExportDialogOpen)
-  const setIsExportDialogOpen = useAppStore((state) => state.setIsExportDialogOpen)
 
   const { t } = useTranslation('common')
 
@@ -70,13 +68,13 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
           text: question.content,
           sessionId: 0,
           fileId: 0,
-          fileName: '收藏题目',
+          fileName: 'Favorite Question',
           page: question.page || 1,
           createdAt: Date.now(),
           legendImages: question.legend_images || [],
           sourceType: 'favorite',
           questionMeta: {
-            questionId: questionId,
+            questionId,
           },
           originalText: question.content,
           answerText: '',
@@ -87,12 +85,16 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
         onToast(t('app.toast.favorite_success'), 'success')
       } catch (err) {
         console.error('[add_favorite_to_editor] failed', err)
-        const errorMsg = err instanceof Error ? err.message : '加载失败'
+        const errorMsg = err instanceof Error ? err.message : 'load_failed'
         onToast(t('app.toast.favorite_failed', { error: errorMsg }), 'error')
       }
     },
     [user, backendBaseUrl, ocrItems.length, onToast, handleOcrItemUpdate, setAppView, t],
   )
+
+  if (!user) {
+    return null
+  }
 
   if (appView === 'favorites') {
     return (
@@ -112,8 +114,8 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
     <EditorWorkspaceShell
       backendBaseUrl={backendBaseUrl}
       user={user}
-      workspaceView={workspaceView}
-      onWorkspaceViewChange={setWorkspaceView}
+      studioView={studioView}
+      onStudioViewChange={setStudioView}
       isAnswerMode={isAnswerMode}
       onToggleAnswerMode={() => setIsAnswerMode(!isAnswerMode)}
       isAgentDrawerOpen={isAgentDrawerOpen}
@@ -127,12 +129,13 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
       onDeleteItem={handleOcrItemDelete}
       onSendToAgent={() => {}}
       onAnswerChange={handleAnswerChange}
-      onSubmitGrading={() => handleSubmitGrading(currentFile, agentDocumentId, user!)}
+      onSubmitGrading={() => handleSubmitGrading(currentFile, agentDocumentId, user)}
       isGrading={isGrading}
-      onSplitItem={(item, idx) => handleSplitOcrItem(item, idx, user!)}
+      onSplitItem={(item, idx) => handleSplitOcrItem(item, idx, user)}
       splittingItemId={splittingItemId}
       previewScrollRef={previewScrollRef}
       onToast={onToast}
+      onRunGlmOcr={async () => agentDocumentId}
     />
   )
 }

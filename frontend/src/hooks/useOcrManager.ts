@@ -64,6 +64,7 @@ export const useOcrManager = (
   const storeOcrItems = useAppStore((state) => state.ocrItems)
   const setStoreOcrItems = useAppStore((state) => state.setOcrItems)
   const currentUser = useAppStore((state) => state.user)
+  const workroom = useAppStore((state) => state.workroom)
 
   const [isExtracting, setIsExtracting] = useState(false)
   const [isGrading, setIsGrading] = useState(false)
@@ -371,6 +372,7 @@ export const useOcrManager = (
         const payload: GradeRunRequest = {
           tenantId: user.tenant_id,
           userId: user.id,
+          workroomId: workroom?.id ?? 0,
           documentId: agentDocumentId ?? undefined,
           title: currentFile?.name ?? undefined,
           questions: ocrItemsRef.current.map((item, idx) => ({
@@ -425,7 +427,7 @@ export const useOcrManager = (
         setIsGrading(false)
       }
     },
-    [backendBaseUrl, onStatusMessage],
+    [backendBaseUrl, onStatusMessage, workroom?.id],
   )
 
   const handleAgUiEvent = useCallback(

@@ -10,6 +10,7 @@ from .celery_app import celery_app
 from .db import SessionLocal
 from .models import ExtractionSession, File
 from .routers.files import _render_pdf_previews, _render_word_previews
+from .services.kb.ingest_service import KBIngestService
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,35 @@ def _get_backend_root() -> Path:
 
 def _ensure_posix(path: Path) -> str:
     return str(path).replace("\\", "/")
+
+
+@celery_app.task(name="ingest_kb_for_file")
+def ingest_kb_for_file(
+    tenant_id: int,
+    user_id: int,
+    file_id: int,
+    workroom_id: int | None = None,
+) -> None:
+    db: Session = SessionLocal()
+    try:
+        logger.info(
+            "[celery] start kb ingest tenant=%s user=%s workroom=%s file_id=%s",
+            tenant_id,
+            user_id,
+            workroom_id,
+            file_id,
+        )
+        result = KBIngestService(db).ingest_file(
+            tenant_id=int(tenant_id),
+            user_id=int(user_id),
+            workroom_id=int(workroom_id) if workroom_id is not None else None,
+            file_id=int(file_id),
+        )
+        logger.info("[celery] kb ingest done file_id=%s result=%s", file_id, result)
+    except Exception:
+        logger.exception("[celery] ingest_kb_for_file failed file_id=%s", file_id)
+    finally:
+        db.close()
 
 
 @celery_app.task(name="generate_previews_for_session")
@@ -75,6 +105,16 @@ def generate_previews_for_session(session_id: int) -> None:
         session.status = "done"
         db.add(session)
         db.commit()
+
+        try:
+            ingest_kb_for_file.delay(
+                int(session.tenant_id),
+                int(session.user_id),
+                int(file.id),
+                None,
+            )
+        except Exception:
+            logger.exception("[celery] failed to enqueue kb ingest file_id=%s", file.id)
 
         logger.info(
             "[celery] generate previews done session=%s file_id=%s pages=%s",

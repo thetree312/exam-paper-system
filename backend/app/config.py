@@ -31,6 +31,12 @@ class Settings:
                 f"mysql+pymysql://{user_enc}:{pwd_enc}"
                 f"@{self.mysql_host}:{self.mysql_port}/{db_enc}?charset=utf8mb4"
             )
+        self.agent_checkpoint_postgres_url: str = os.getenv(
+            "AGENT_CHECKPOINT_POSTGRES_URL", self.database_url
+        ).strip()
+        self.agent_checkpoint_setup_on_boot: bool = (
+            os.getenv("AGENT_CHECKPOINT_SETUP_ON_BOOT", "true").strip().lower() == "true"
+        )
 
         self.ms_base_url: str = os.getenv(
             "PHONE_AGENT_BASE_URL", "https://api-inference.modelscope.cn/v1"

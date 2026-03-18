@@ -15,7 +15,6 @@ from app.routers import (
     ocr,
     auth,
     legend,
-    agent_v2,
     export,
     mindmap,
     translation,
@@ -25,7 +24,10 @@ from app.routers import (
     subjects,
     tags,
     flashcards,
+    workroom,
+    workspace,
 )
+from app.agent import router as agent_router
 from app.glm_ocr import router as glm_ocr_router
 
 
@@ -124,7 +126,7 @@ app.include_router(files.router)
 app.include_router(ocr.router)
 app.include_router(auth.router)
 app.include_router(legend.router)
-app.include_router(agent_v2.router)
+app.include_router(agent_router.router)
 app.include_router(export.router)
 app.include_router(mindmap.router)
 app.include_router(translation.router)
@@ -135,3 +137,5 @@ app.include_router(subjects.router)
 app.include_router(tags.router)
 app.include_router(glm_ocr_router)
 app.include_router(flashcards.router)
+app.include_router(workspace.router)
+app.include_router(workroom.router)

@@ -128,6 +128,7 @@ interface AgentWorkspacePanelProps {
   documentTitle?: string | null
 
   initialDocumentId?: number | null
+  workroomId?: number | null
 
   onUpdateItem: (id: string, updater: OcrItemUpdater) => void
 
@@ -166,6 +167,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
   documentTitle,
 
   initialDocumentId = null,
+  workroomId = null,
 
   onUpdateItem,
 
@@ -219,6 +221,8 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
     tenantId: user?.tenant_id,
 
     userId: user?.id,
+
+    workroomId,
 
     initialDocumentId,
 
@@ -395,48 +399,6 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         card.items.push({ item, index })
 
       })
-
-
-
-      if (process.env.NODE_ENV !== 'production') {
-
-        // 调试：观察题卡分组情况
-
-        // 不改变任何行为
-
-        // eslint-disable-next-line no-console
-
-        console.warn(
-
-          '[panel] cards_computed',
-
-          result.map((card) => ({
-
-            groupKey: card.groupKey,
-
-            groupId: card.groupId,
-
-            items: card.items.map(({ item, index }) => ({
-
-              index,
-
-              id: item.id,
-
-              qid: item.questionMeta?.questionId,
-
-              seq: item.questionMeta?.sequenceIndex,
-
-              groupId: item.questionMeta?.groupId,
-
-              uiState: item.uiState,
-
-            })),
-
-          })),
-
-        )
-
-      }
 
 
 
@@ -1137,8 +1099,6 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
             answerModeStem = viewingContent
 
           }
-
-          console.log('[answerModeStem]', answerModeStem)
 
         }
 

@@ -1,7 +1,9 @@
 from typing import Any, Dict, Generator, Iterable, List, Tuple
 
+import base64
 import json
 import logging
+import mimetypes
 import time
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -17,6 +19,7 @@ embedding_logger = logging.getLogger("agent.embedding")
 
 _MAX_LOG_PAYLOAD_CHARS = 6000
 _EXPLICIT_CACHE_MAX_MARKERS = 4
+_MAX_LOG_STRING_CHARS = 240
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -583,100 +586,202 @@ class QwenEmbeddingClient:
         self.api_key = settings.alibaba_api_key
         self.model = settings.alibaba_model_embedding
         self.dimensions = settings.alibaba_embedding_dimensions
+        if "embedding" not in self.model.lower():
+            raise RuntimeError("ALIBABA_MODEL_EMBEDDING must contain 'embedding'")
+        self._is_multimodal_native = self._is_multimodal_embedding_model(self.model)
 
-    def embed(self, inputs: list[str] | str) -> list[list[float]]:
-        if isinstance(inputs, str):
-            batch = [inputs]
-        else:
-            batch = [str(x) for x in inputs if str(x).strip()]
-        if not batch:
-            return []
+    @staticmethod
+    def _is_multimodal_embedding_model(model_name: str) -> bool:
+        name = (model_name or "").strip().lower()
+        return any(
+            key in name
+            for key in (
+                "tongyi-embedding-vision",
+                "multimodal-embedding",
+                "qwen3-vl-embedding",
+                "qwen2.5-vl-embedding",
+            )
+        )
 
-        url = _build_dashscope_url(self.base_url, "compatible-mode/v1/embeddings")
+    def _build_image_data_uri(self, image_ref: str) -> str:
+        value = image_ref.strip()
+        if not value:
+            return value
+        if value.startswith(("http://", "https://", "data:image/")):
+            return value
+
+        backend_root = Path(__file__).resolve().parents[2]
+        candidate = (backend_root / value.lstrip("/\\")).resolve()
+        if not candidate.exists() or not candidate.is_file():
+            return value
+
+        raw = candidate.read_bytes()
+        mime_type, _ = mimetypes.guess_type(candidate.name)
+        mime = mime_type or "image/png"
+        b64 = base64.b64encode(raw).decode("ascii")
+        return f"data:{mime};base64,{b64}"
+
+    def _normalize_embedding_input(self, item: Any) -> dict[str, str] | None:
+        if isinstance(item, dict):
+            if isinstance(item.get("text"), str) and item["text"].strip():
+                return {"text": item["text"].strip()}
+            if isinstance(item.get("image"), str) and item["image"].strip():
+                return {"image": self._build_image_data_uri(item["image"])}
+            return None
+        text_value = str(item or "").strip()
+        if not text_value:
+            return None
+        return {"text": text_value}
+
+    def _iter_embedding_batches(
+        self,
+        contents: list[dict[str, str]],
+        *,
+        batch_size: int = 10,
+    ) -> list[list[dict[str, str]]]:
+        return [contents[idx : idx + batch_size] for idx in range(0, len(contents), batch_size)]
+
+    def _post_embedding_batch(self, contents: list[dict[str, str]]) -> list[list[float]]:
+        path = (
+            "api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+            if self._is_multimodal_native
+            else "compatible-mode/v1/embeddings"
+        )
+        url = _build_dashscope_url(self.base_url, path)
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload: dict = {
-            "model": self.model,
-            "input": batch,
-            "dimensions": self.dimensions,
-        }
+        if self._is_multimodal_native:
+            parameters: dict[str, Any] = {"output_type": "dense"}
+            if self.dimensions > 0:
+                parameters["dimension"] = self.dimensions
+            payload: dict[str, Any] = {
+                "model": self.model,
+                "input": {"contents": contents},
+                "parameters": parameters,
+            }
+        else:
+            payload = {
+                "model": self.model,
+                "input": {"contents": contents},
+                "dimension": self.dimensions,
+                "dimensions": self.dimensions,
+            }
         try:
-            serialized = json.dumps(payload, ensure_ascii=False)
+            serialized = json.dumps(self._sanitize_payload_for_log(payload), ensure_ascii=False)
         except TypeError:
             serialized = str(payload)
         embedding_logger.info(
             "qwen.embedding.payload model=%s batch=%s payload=%s",
             self.model,
-            len(batch),
+            len(contents),
             serialized,
         )
 
-        start = time.perf_counter()
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=300)
-            resp.raise_for_status()
-        except requests.HTTPError as exc:
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            status = getattr(exc.response, "status_code", None) or resp.status_code
-            body_preview = (resp.text or "")[:400]
-            embedding_logger.exception(
-                "qwen.embedding.http_error model=%s status=%s elapsed_ms=%.1f body=%s",
-                self.model,
-                status,
-                elapsed_ms,
-                body_preview,
-            )
-            raise QwenRequestError(
-                f"Qwen embedding failed: status={resp.status_code}, body={resp.text}",
-                response_text=resp.text,
-            ) from exc
-        except requests.RequestException as exc:
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            embedding_logger.exception(
-                "qwen.embedding.request_error model=%s elapsed_ms=%.1f",
-                self.model,
-                elapsed_ms,
-            )
-            response_text = None
-            if getattr(exc, "response", None) is not None:
-                try:
-                    response_text = exc.response.text  # type: ignore[attr-defined]
-                except Exception:
-                    response_text = None
-            raise QwenRequestError(
-                f"Qwen embedding request error: {exc}", response_text=response_text
-            ) from exc
+        attempt = 0
+        while True:
+            start = time.perf_counter()
+            resp = None
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=300)
+                resp.raise_for_status()
+                data = resp.json()
+                items = ((data.get("output") or {}).get("embeddings") or [])
+                indexed: dict[int, list[float]] = {}
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    idx = item.get("index")
+                    if not isinstance(idx, int):
+                        idx = item.get("text_index")
+                    emb = item.get("embedding")
+                    if not isinstance(idx, int) or not isinstance(emb, list):
+                        continue
+                    try:
+                        indexed[idx] = [float(x) for x in emb]
+                    except (TypeError, ValueError):
+                        continue
+                vectors = [indexed[idx] for idx in range(len(contents)) if idx in indexed]
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                embedding_logger.info(
+                    "qwen.embedding.success model=%s batch=%s elapsed_ms=%.1f dim=%s",
+                    self.model,
+                    len(vectors),
+                    elapsed_ms,
+                    len(vectors[0]) if vectors else 0,
+                )
+                return vectors
+            except requests.HTTPError as exc:
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                status = getattr(exc.response, "status_code", None) or getattr(resp, "status_code", None)
+                body_preview = (getattr(resp, "text", "") or "")[:400]
+                embedding_logger.exception(
+                    "qwen.embedding.http_error model=%s status=%s elapsed_ms=%.1f body=%s",
+                    self.model,
+                    status,
+                    elapsed_ms,
+                    body_preview,
+                )
+                if status in (429, 500, 502, 503, 504) and attempt < 2:
+                    time.sleep(2**attempt)
+                    attempt += 1
+                    continue
+                raise QwenRequestError(
+                    f"Qwen embedding failed: status={getattr(resp, 'status_code', status)}, body={getattr(resp, 'text', '')}",
+                    response_text=getattr(resp, "text", None),
+                ) from exc
+            except requests.RequestException as exc:
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                embedding_logger.exception(
+                    "qwen.embedding.request_error model=%s elapsed_ms=%.1f",
+                    self.model,
+                    elapsed_ms,
+                )
+                if attempt < 2:
+                    time.sleep(2**attempt)
+                    attempt += 1
+                    continue
+                response_text = None
+                if getattr(exc, "response", None) is not None:
+                    try:
+                        response_text = exc.response.text  # type: ignore[attr-defined]
+                    except Exception:
+                        response_text = None
+                raise QwenRequestError(
+                    f"Qwen embedding request error: {exc}", response_text=response_text
+                ) from exc
 
-        data = resp.json()
-        vectors: list[list[float]] = []
-        try:
-            items = data["data"]
-        except (KeyError, TypeError):
-            embedding_logger.warning("qwen.embedding.malformed_response data=%s", data)
+    def _sanitize_payload_for_log(self, payload: Any) -> Any:
+        if isinstance(payload, dict):
+            return {str(k): self._sanitize_payload_for_log(v) for k, v in payload.items()}
+        if isinstance(payload, list):
+            return [self._sanitize_payload_for_log(v) for v in payload]
+        if isinstance(payload, str):
+            value = payload
+            if value.startswith("data:image/"):
+                head, _, b64 = value.partition(",")
+                if b64:
+                    preview = b64[:32]
+                    return f"{head},<base64:{len(b64)} chars preview:{preview}...>"
+                return value
+            if len(value) > _MAX_LOG_STRING_CHARS:
+                return f"{value[:_MAX_LOG_STRING_CHARS]}...[truncated {len(value) - _MAX_LOG_STRING_CHARS} chars]"
+            return value
+        return payload
+
+    def embed(self, inputs: list[Any] | str) -> list[list[float]]:
+        if isinstance(inputs, str):
+            normalized = [self._normalize_embedding_input(inputs)]
+        else:
+            normalized = [self._normalize_embedding_input(item) for item in inputs]
+        contents = [item for item in normalized if item is not None]
+        if not contents:
             return []
 
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            emb = item.get("embedding")
-            if not isinstance(emb, list):
-                continue
-            try:
-                vec = [float(x) for x in emb]
-            except (TypeError, ValueError):
-                continue
-            vectors.append(vec)
-
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        embedding_logger.info(
-            "qwen.embedding.success model=%s batch=%s elapsed_ms=%.1f dim=%s",
-            self.model,
-            len(vectors),
-            elapsed_ms,
-            len(vectors[0]) if vectors else 0,
-        )
+        vectors: list[list[float]] = []
+        for batch in self._iter_embedding_batches(contents):
+            vectors.extend(self._post_embedding_batch(batch))
         return vectors
 
     def chat_stream(

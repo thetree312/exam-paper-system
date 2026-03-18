@@ -56,7 +56,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
 
   return (
     <aside
-      className="bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col relative"
+      className="bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col relative"
       style={
         isMobileOrTablet
           ? { width: '100%', minWidth: 0 }

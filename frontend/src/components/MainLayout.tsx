@@ -102,7 +102,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   }
 
   return (
-    <div className="bg-background-light dark:bg-background-dark text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col">
+    <div className="bg-background-light text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col">
       <AppHeader
         statusMessage={statusMessage}
         isUploading={isUploading}
@@ -149,7 +149,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {!isMobileOrTablet && appView !== 'favorites' && (
           <div
             onMouseDown={() => setIsResizing(true)}
-            className="w-1 cursor-col-resize bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+            className="w-1 cursor-col-resize bg-slate-200 hover:bg-slate-300 transition-colors"
           />
         )}
 

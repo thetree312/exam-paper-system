@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentChat } from '../hooks/useAgentChat'
 import { useConversation } from '../hooks'
@@ -16,6 +16,7 @@ import { QuestionTypeSelectField } from './QuestionTypeSelectField'
 interface AgentChatPanelProps {
   backendBaseUrl: string
   user: UserInfo
+  workroomId: number
   documentId?: number | null
   /** 会话视图 ID，用于区分同一文档下不同编辑视图/标签 */
   viewId?: string | null
@@ -158,10 +159,11 @@ function extractInterruptFormFromAgUiEvent(rawEvent: unknown): any | null {
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   backendBaseUrl,
   user,
+  workroomId,
   documentId,
   viewId,
   isOpen,
-  onClose,
+  onClose: _onClose,
   width = 480,
   onResize,
   appendToken,
@@ -176,7 +178,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const [hitlFormValues, setHitlFormValues] = useState<Record<string, any>>({})
   const [isSubmittingHitlForm, setIsSubmittingHitlForm] = useState(false)
   const [hitlAnchorIndex, setHitlAnchorIndex] = useState<number | null>(null)
-  const [expandedTraceIds, setExpandedTraceIds] = useState<Set<string>>(new Set())
   const hitlResumeInFlightRef = useRef(false)
   const [isQuestionTypeEnsuring, setIsQuestionTypeEnsuring] = useState(false)
   // 当前 useAgentChat 状态所“绑定”的会话 key，用于避免在切换会话过程中
@@ -238,6 +239,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   } = useConversation(backendBaseUrl, {
     tenantId: user?.tenant_id,
     userId: user?.id,
+    workroomId,
     documentId: documentId ?? null,
   })
 
@@ -248,7 +250,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     sendMessage,
     resumeWithPayload,
     resetChat,
-    isReady,
     sessionId,
     setSessionId,
     setMessagesFromHistory,
@@ -256,6 +257,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     backendBaseUrl,
     tenantId: user?.tenant_id,
     userId: user?.id,
+    workroomId,
     uiContext: effectiveUiContext,
     documentId,
     viewId,
@@ -304,6 +306,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       noteFocus: appendToken?.payload.noteFocus,
       onDocumentResolved,
     })
+  const deferredMessages = useDeferredValue(messages)
 
   // 会话重置信号变化时（新建/切换会话），根据当前会话元信息和存量消息灌入 useAgentChat。
   // 仅在 conversationResetSignal 变化时运行一次，避免与 messages -> store 同步形成更新环。
@@ -324,18 +327,35 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     }
   }, [conversationResetSignal])
 
-  // 将当前 messages 同步回会话 store，便于下次切换/恢复
+  // 将当前 messages 同步回会话 store，便于下次切换/恢复。
+  // 流式输出期间做轻度节流，避免每个 token 都触发全局状态更新导致页面抖动。
+  const syncTimerRef = useRef<number | null>(null)
   useEffect(() => {
     if (!activeConversationKey) return
-    // 仅当 useAgentChat 明确绑定到当前激活会话时才回写，
-    // 防止在点击切换会话但尚未完成历史灌入阶段，把上一会话的
-    // 消息和 sessionId 写进新会话，导致两个会话绑定到同一个 sessionId。
     if (boundConversationKey !== activeConversationKey) return
-    handleConversationMessagesChange(activeConversationKey, messages as any, sessionId ?? null)
+
+    if (syncTimerRef.current != null) {
+      window.clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
+
+    const hasStreamingAssistant = messages.some((msg) => msg.role === 'assistant' && Boolean(msg.isStreaming))
+    const delay = hasStreamingAssistant ? 220 : 0
+    syncTimerRef.current = window.setTimeout(() => {
+      handleConversationMessagesChange(activeConversationKey, messages as any, sessionId ?? null)
+      syncTimerRef.current = null
+    }, delay)
+
+    return () => {
+      if (syncTimerRef.current != null) {
+        window.clearTimeout(syncTimerRef.current)
+        syncTimerRef.current = null
+      }
+    }
   }, [activeConversationKey, boundConversationKey, handleConversationMessagesChange, messages, sessionId])
 
   const canSend = useMemo(() => !!input.trim() && !isLoading, [input, isLoading])
-  const hasMessages = messages.length > 0
+  const hasMessages = deferredMessages.length > 0
   const sendButtonSize = useMemo(() => Math.max(Math.min(inputHeight - 10, 38), 28), [inputHeight])
 
   // 处理来自编辑区的“发送到 Copilot”指令，将题目文本附加到输入框
@@ -354,8 +374,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   useEffect(() => {
     if (hitlFormUi && hitlAnchorIndex == null) {
-      for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
-        if (messages[idx]?.role === 'assistant') {
+      for (let idx = deferredMessages.length - 1; idx >= 0; idx -= 1) {
+        if (deferredMessages[idx]?.role === 'assistant') {
           setHitlAnchorIndex(idx)
           break
         }
@@ -364,7 +384,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     if (!hitlFormUi && hitlAnchorIndex != null) {
       setHitlAnchorIndex(null)
     }
-  }, [hitlFormUi, hitlAnchorIndex, messages])
+  }, [hitlFormUi, hitlAnchorIndex, deferredMessages])
 
   const handleSend = useCallback(
     async (evt?: React.FormEvent) => {
@@ -527,10 +547,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     }
   }, [t])
 
-  const handleReset = useCallback(() => {
-    resetChat()
-  }, [resetChat])
-
   const drawerRef = useRef<HTMLElement | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
@@ -551,25 +567,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     sessionId,
   ])
 
-  const toggleTraceExpanded = useCallback((messageKey: string) => {
-    setExpandedTraceIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(messageKey)) {
-        next.delete(messageKey)
-      } else {
-        next.add(messageKey)
-      }
-      return next
-    })
-  }, [])
-
   const AssistantMessage: React.FC<{ msg: any }> = useMemo(
     () =>
       React.memo(({ msg }: { msg: any }) => {
-        const msgKey = String(msg.id ?? msg.created_at ?? '')
         const traces = Array.isArray(msg.historyTraces) ? msg.historyTraces : []
-        const hasTrace = traces.length > 0 || Boolean(msg.activeThought) || Boolean(msg.activeTool)
-        const showTrace = Boolean(msg.isStreaming) || expandedTraceIds.has(msgKey)
+        const hasTrace = traces.length > 0
         const hasContent = Boolean(msg.content?.trim())
         const showPendingOnly = Boolean(msg.isStreaming) && !hasContent && !hasTrace
         if (!hasContent && !hasTrace && !showPendingOnly) {
@@ -584,52 +586,26 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             <div className="flex-1 min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">{keyLabel}</div>
               {hasTrace && (
-                <div className="mb-3 space-y-2">
-                  {!msg.isStreaming && (
-                    <button
-                      type="button"
-                      onClick={() => toggleTraceExpanded(msgKey)}
-                      className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-700 transition"
-                    >
-                      {expandedTraceIds.has(msgKey) ? 'Collapse Logic' : 'Expand Logic'}
-                    </button>
-                  )}
-                  {showTrace && (
-                    <div className="space-y-2 pl-3 border-l border-slate-200">
-                      {traces.map((trace: any, idx: number) => (
-                        <div key={trace.id ?? `${trace.type}-${idx}`} className="text-[12px] leading-relaxed text-slate-500">
-                          {trace.type === 'tool' ? (
-                            <>
-                              <span className="text-blue-600 font-semibold">Use Tool</span>
-                              <span className="mx-1 text-slate-300">/</span>
-                              <span className="font-medium text-slate-700">{trace.name || 'tool'}</span>
-                              {trace.result ? <span className="ml-2 text-slate-400">({trace.result})</span> : null}
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-slate-400">[{trace.label || 'thought'}]</span>
-                              <span className="ml-2">{trace.text || ''}</span>
-                            </>
-                          )}
-                        </div>
-                      ))}
-
-                      {msg.activeTool && (
-                        <div className="text-[12px] text-blue-600 animate-pulse">
-                          <span className="font-semibold">Calling Tool</span>
-                          <span className="mx-1 text-blue-300">/</span>
-                          <span>{msg.activeTool.name || 'tool'}</span>
-                        </div>
-                      )}
-
-                      {msg.activeThought && !msg.activeTool && (
-                        <div className="text-[12px] text-slate-600 animate-pulse">
-                          <span className="text-slate-400">[{msg.activeThought.label || 'thought'}]</span>
-                          <span className="ml-2">{msg.activeThought.text || ''}</span>
-                        </div>
+                <div className="mb-3 space-y-1.5">
+                  {traces.map((trace: any, idx: number) => (
+                    <div key={trace.id ?? `${trace.type}-${idx}`} className="text-[12px] leading-relaxed text-slate-500">
+                      {trace.type === 'tool' ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[16px] leading-none text-slate-500">build_circle</span>
+                          <span>{trace.name || 'tool'}</span>
+                          {trace.status === 'calling' ? (
+                            <span className="material-symbols-outlined text-[16px] leading-none text-slate-400 animate-spin">progress_activity</span>
+                          ) : trace.status === 'success' ? (
+                            <span className="material-symbols-outlined text-[16px] leading-none text-emerald-600">check</span>
+                          ) : trace.status === 'fail' ? (
+                            <span className="material-symbols-outlined text-[16px] leading-none text-rose-600">close</span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="whitespace-pre-wrap">{trace.text || ''}</span>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
 
@@ -665,26 +641,77 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         prev.msg?.id === next.msg?.id
         && prev.msg?.content === next.msg?.content
         && prev.msg?.isStreaming === next.msg?.isStreaming
-        && prev.msg?.activeThought === next.msg?.activeThought
-        && prev.msg?.activeTool === next.msg?.activeTool
         && prev.msg?.historyTraces === next.msg?.historyTraces
       )),
-    [expandedTraceIds, toggleTraceExpanded],
+    [],
   )
 
   const UserMessage: React.FC<{ msg: any }> = useMemo(
     () =>
       React.memo(({ msg }: { msg: any }) => {
+        const [copied, setCopied] = useState(false)
+
+        const handleCopy = async () => {
+          const text = String(msg?.content ?? '')
+          if (!text) return
+          let success = false
+
+          try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+              await navigator.clipboard.writeText(text)
+              success = true
+            }
+          } catch {
+            success = false
+          }
+
+          if (!success) {
+            try {
+              const textarea = document.createElement('textarea')
+              textarea.value = text
+              textarea.setAttribute('readonly', 'true')
+              textarea.style.position = 'fixed'
+              textarea.style.opacity = '0'
+              textarea.style.pointerEvents = 'none'
+              document.body.appendChild(textarea)
+              textarea.select()
+              textarea.setSelectionRange(0, text.length)
+              success = document.execCommand('copy')
+              document.body.removeChild(textarea)
+            } catch {
+              success = false
+            }
+          }
+
+          if (success) {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1200)
+          }
+        }
+
         return (
-          <div className="flex gap-3 flex-row-reverse text-right">
+          <div className="group flex gap-3 flex-row-reverse text-right">
             <div className="h-9 w-9 rounded-full shrink-0 inline-flex items-center justify-center bg-slate-200 text-slate-600">
               {user.display_name?.slice(0, 1) || t('agent_chat.user_default_name')}
             </div>
-            <div className="max-w-[72%] rounded-2xl px-4 py-3 bg-slate-100 text-slate-800 shadow-sm">
-              <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
-                {user.display_name || t('agent_chat.user_default_name')}
+            <div className="relative max-w-[72%]">
+              <div className="rounded-2xl px-4 py-3 bg-slate-100 text-slate-800 shadow-sm">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                  {user.display_name || t('agent_chat.user_default_name')}
+                </div>
+                <MarkdownWithMath>{msg.content}</MarkdownWithMath>
               </div>
-              <MarkdownWithMath>{msg.content}</MarkdownWithMath>
+              <button
+                type="button"
+                aria-label={t('agent_chat.copy_message')}
+                title={t('agent_chat.copy_message')}
+                onClick={handleCopy}
+                className="absolute -right-6 bottom-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-700"
+              >
+                <span className="material-symbols-outlined text-[16px] leading-none">
+                  {copied ? 'check' : 'content_copy'}
+                </span>
+              </button>
             </div>
           </div>
         )
@@ -786,8 +813,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                 <>
                   <div className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-neutral-200' : ''}`}>
                     <div className="flex flex-col gap-4 text-sm text-slate-700 min-h-[340px]">
-                      {messages.map((msg, idx) => {
-                        const key = msg.id ?? msg.created_at ?? `msg-${idx}`
+                      {deferredMessages.map((msg, idx) => {
+                        const key = `${msg.role}-${idx}-${String(msg.content || '').slice(0, 24)}`
                         const isAssistant = msg.role === 'assistant'
                         const shouldShowHitlForm = Boolean(hitlFormUi) && hitlAnchorIndex === idx && isAssistant
 

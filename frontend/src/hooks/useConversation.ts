@@ -38,14 +38,19 @@ interface UseConversationReturn {
 }
 
 const debug = (...args: any[]) => {
-  if (import.meta.env?.DEV) {
+  if (import.meta.env?.DEV && (window as any).__AGENT_DEBUG__ === true) {
     console.info('[agent conversations]', ...args)
   }
 }
 
 export const useConversation = (
   backendBaseUrl: string,
-  options: { tenantId: number | null | undefined; userId: number | null | undefined; documentId: number | null },
+  options: {
+    tenantId: number | null | undefined
+    userId: number | null | undefined
+    workroomId?: number | null | undefined
+    documentId: number | null
+  },
 ): UseConversationReturn => {
   const storeConversations = useAppStore((state) => state.conversations)
   const setStoreConversations = useAppStore((state) => state.setConversations)
@@ -59,7 +64,12 @@ export const useConversation = (
 
   const tenantId = options.tenantId ?? null
   const userId = options.userId ?? null
+  const workroomId = options.workroomId ?? null
   const documentId = options.documentId ?? null
+
+  useEffect(() => {
+    setConversationsLoaded(false)
+  }, [tenantId, userId, workroomId, documentId])
 
   const activeConversation = useMemo(
     () => storeConversations.find((conv) => conv.key === storeActiveConversationKey) ?? null,
@@ -82,6 +92,7 @@ export const useConversation = (
         const resp = await fetchAgentSessions(backendBaseUrl, {
           tenantId,
           userId,
+          workroomId: workroomId ?? undefined,
           documentId: documentId ?? undefined,
           viewId: undefined,
           includeArchived: false,
@@ -197,7 +208,7 @@ export const useConversation = (
     }
 
     load()
-  }, [backendBaseUrl, tenantId, userId, documentId, conversationsLoaded, setStoreActiveConversationKey, setStoreConversationMessages, setStoreConversations])
+  }, [backendBaseUrl, tenantId, userId, workroomId, documentId, conversationsLoaded, setStoreActiveConversationKey, setStoreConversationMessages, setStoreConversations])
 
   const upsertConversation = useCallback(
     (key: string, updater: (prev: AgentConversationMeta) => AgentConversationMeta) => {

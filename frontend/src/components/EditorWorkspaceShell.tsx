@@ -1,17 +1,18 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentSendPayload, AggregatedOcrItem, UploadedFileTab, UserInfo } from '../types'
-import { AgentWorkspacePanel } from './AgentWorkspacePanel'
 import { MindMapPanel } from '../features/mindmap/MindMapPanel'
+import { AgentWorkspacePanel } from './AgentWorkspacePanel'
 import { FlashcardPanel } from './FlashcardPanel'
 
-export type WorkspaceView = 'editor' | 'mindmap' | 'flashcard'
+export type StudioView = 'editor' | 'mindmap' | 'flashcard'
 
 interface EditorWorkspaceShellProps {
   backendBaseUrl: string
   user: UserInfo | null
-  workspaceView: WorkspaceView
-  onWorkspaceViewChange: (view: WorkspaceView) => void
+  workroomId?: number | null
+  studioView: StudioView
+  onStudioViewChange: (view: StudioView) => void
   isAnswerMode: boolean
   onToggleAnswerMode: () => void
   isAgentDrawerOpen: boolean
@@ -31,18 +32,17 @@ interface EditorWorkspaceShellProps {
   splittingItemId: string | null
   previewScrollRef: React.RefObject<HTMLDivElement>
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
-  /** 触发 GLM-OCR 全卷解析的回调，由上层 App 负责调用后端并更新题卡列表 */
   onRunGlmOcr: () => Promise<number | null>
 }
 
 export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
   backendBaseUrl,
   user,
-  workspaceView,
-  onWorkspaceViewChange,
+  workroomId = null,
+  studioView,
+  onStudioViewChange,
   isAnswerMode,
   onToggleAnswerMode,
-  isAgentDrawerOpen,
   onOpenAgentDrawer,
   currentFile,
   sessionId,
@@ -62,11 +62,12 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
   onRunGlmOcr,
 }) => {
   const { t } = useTranslation('common')
+
   return (
-    <section className="flex-1 relative bg-background-light dark:bg-background-dark flex flex-col">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex bg-white border border-slate-200 rounded-full shadow-lg p-1.5 gap-1">
+    <section className="relative flex flex-1 flex-col bg-background-light">
+      <div className="absolute left-1/2 top-4 z-20 flex -translate-x-1/2 gap-1 rounded-full border border-slate-200 bg-white p-1.5 shadow-lg">
         <button
-          className="p-2 rounded-full text-slate-600"
+          className="rounded-full p-2 text-slate-600"
           type="button"
           title={t('editor_workspace.text_button')}
           onClick={() => {
@@ -76,25 +77,23 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           <span className="material-symbols-outlined text-[20px]">title</span>
         </button>
         <button
-          className={`p-2 rounded-full text-slate-600 ${workspaceView === 'flashcard' ? 'bg-slate-200' : ''}`}
+          className={`rounded-full p-2 text-slate-600 ${studioView === 'flashcard' ? 'bg-slate-200' : ''}`}
           type="button"
           title={t('editor_workspace.flashcard_button')}
-          onClick={() =>
-            onWorkspaceViewChange(workspaceView === 'flashcard' ? 'editor' : 'flashcard')
-          }
+          onClick={() => onStudioViewChange(studioView === 'flashcard' ? 'editor' : 'flashcard')}
         >
           <span className="material-symbols-outlined text-[20px]">image</span>
         </button>
         <button
-          className={`p-2 rounded-full text-slate-600 ${workspaceView === 'mindmap' ? 'bg-slate-200' : ''}`}
+          className={`rounded-full p-2 text-slate-600 ${studioView === 'mindmap' ? 'bg-slate-200' : ''}`}
           type="button"
           title={t('editor_workspace.mindmap_button')}
-          onClick={() => onWorkspaceViewChange(workspaceView === 'mindmap' ? 'editor' : 'mindmap')}
+          onClick={() => onStudioViewChange(studioView === 'mindmap' ? 'editor' : 'mindmap')}
         >
           <span className="material-symbols-outlined text-[20px]">account_tree</span>
         </button>
         <button
-          className={`p-2 rounded-full flex items-center gap-1.5 text-sm ${
+          className={`flex items-center gap-1.5 rounded-full p-2 text-sm ${
             isAnswerMode ? 'bg-slate-900 text-white shadow-inner' : 'text-slate-600'
           }`}
           type="button"
@@ -103,9 +102,9 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
         >
           <span className="material-symbols-outlined text-[18px]">edit_note</span>
         </button>
-        <div className="w-px bg-slate-200 mx-1" />
+        <div className="mx-1 w-px bg-slate-200" />
         <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-purple-600"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-purple-600"
           type="button"
           onClick={onOpenAgentDrawer}
           title={t('editor_workspace.copilot_button')}
@@ -115,15 +114,15 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-0 lg:p-6 pb-8 scrollbar-hidden">
-        {workspaceView === 'mindmap' ? (
-          <div className="h-full w-full rounded-xl border border-slate-200 overflow-hidden bg-white shadow-inner">
+      <div className="scrollbar-hidden flex-1 overflow-y-auto p-0 pb-8 lg:p-6">
+        {studioView === 'mindmap' ? (
+          <div className="h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner">
             <MindMapPanel
               backendBaseUrl={backendBaseUrl}
               documentId={agentDocumentId}
               fileId={currentFile?.fileId ?? null}
               user={user}
-              onBack={() => onWorkspaceViewChange('editor')}
+              onBack={() => onStudioViewChange('editor')}
               onNavigateToQuestion={(target) => {
                 if (!target) return
                 if (typeof target.sequenceIndex === 'number') {
@@ -142,25 +141,29 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
               }}
             />
           </div>
-        ) : workspaceView === 'flashcard' ? (
+        ) : studioView === 'flashcard' ? (
           <FlashcardPanel
             backendBaseUrl={backendBaseUrl}
             documentId={agentDocumentId}
             documentTitle={currentFile?.name ?? null}
             user={user}
-            onBack={() => onWorkspaceViewChange('editor')}
+            onBack={() => onStudioViewChange('editor')}
             onToast={onToast}
             ensureDocument={onRunGlmOcr}
             onDocumentResolved={onDocumentChange}
           />
         ) : (
-          <div className="bg-white w-full max-w-[800px] min-h-[900px] mx-auto shadow-sm border border-slate-200 rounded-sm p-12 flex flex-col gap-6">
-            <div className="text-center border-b-2 border-slate-900 pb-6">
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">{t('editor_workspace.workspace_title')}</h1>
-              <p className="text-slate-500 font-medium">{sessionId ? t('editor_workspace.session_label', { sessionId }) : t('editor_workspace.session_not_started')}</p>
+          <div className="mx-auto flex min-h-[900px] w-full max-w-[800px] flex-col gap-6 rounded-sm border border-slate-200 bg-white p-12 shadow-sm">
+            <div className="border-b-2 border-slate-900 pb-6 text-center">
+              <h1 className="mb-2 text-3xl font-bold text-slate-900">{t('editor_workspace.workspace_title')}</h1>
+              <p className="font-medium text-slate-500">
+                {sessionId
+                  ? t('editor_workspace.session_label', { sessionId })
+                  : t('editor_workspace.session_not_started')}
+              </p>
             </div>
 
-            <div className="text-sm text-slate-500 mb-2">{t('editor_workspace.recognition_results')}</div>
+            <div className="mb-2 text-sm text-slate-500">{t('editor_workspace.recognition_results')}</div>
             <div className="space-y-6">
               <AgentWorkspacePanel
                 backendBaseUrl={backendBaseUrl}
@@ -168,6 +171,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
                 items={ocrItems}
                 documentTitle={currentFile?.name}
                 initialDocumentId={agentDocumentId}
+                workroomId={workroomId}
                 onUpdateItem={onUpdateItem}
                 onDeleteItem={onDeleteItem}
                 onDocumentChange={onDocumentChange}

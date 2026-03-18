@@ -6,21 +6,21 @@ from pydantic import BaseModel, EmailStr, Field, constr, validator
 
 
 class RegionExclusion(BaseModel):
-    x: float = Field(..., ge=0.0, le=1.0, description="排除区域左上角 x，0-1 归一化")
-    y: float = Field(..., ge=0.0, le=1.0, description="排除区域左上角 y，0-1 归一化")
-    width: float = Field(..., gt=0.0, le=1.0, description="排除区域宽度，0-1 归一化")
-    height: float = Field(..., gt=0.0, le=1.0, description="排除区域高度，0-1 归一化")
+    x: float = Field(..., ge=0.0, le=1.0, description="Exclusion region top-left x in normalized coordinates (0-1).")
+    y: float = Field(..., ge=0.0, le=1.0, description="Exclusion region top-left y in normalized coordinates (0-1).")
+    width: float = Field(..., gt=0.0, le=1.0, description="Exclusion region width in normalized coordinates (0-1).")
+    height: float = Field(..., gt=0.0, le=1.0, description="Exclusion region height in normalized coordinates (0-1).")
 
 
 class Region(BaseModel):
-    page: int = Field(1, description="页码，从 1 开始")
-    x: float = Field(..., ge=0.0, le=1.0, description="左上角 x，0-1 归一化")
-    y: float = Field(..., ge=0.0, le=1.0, description="左上角 y，0-1 归一化")
-    width: float = Field(..., gt=0.0, le=1.0, description="宽度，0-1 归一化")
-    height: float = Field(..., gt=0.0, le=1.0, description="高度，0-1 归一化")
+    page: int = Field(1, description="Page index starting from 1.")
+    x: float = Field(..., ge=0.0, le=1.0, description="Region top-left x in normalized coordinates (0-1).")
+    y: float = Field(..., ge=0.0, le=1.0, description="Region top-left y in normalized coordinates (0-1).")
+    width: float = Field(..., gt=0.0, le=1.0, description="Region width in normalized coordinates (0-1).")
+    height: float = Field(..., gt=0.0, le=1.0, description="Region height in normalized coordinates (0-1).")
     exclusions: List[RegionExclusion] = Field(
         default_factory=list,
-        description="需要挖掉的子矩形，坐标同样按整页归一化",
+        description="Sub-regions to exclude from OCR, using page-normalized coordinates.",
     )
 
 
@@ -30,11 +30,11 @@ class OcrRequest(BaseModel):
 
 
 class LegendRegion(BaseModel):
-    page: int = Field(1, description="页码，从 1 开始")
-    x: float = Field(..., ge=0.0, le=1.0, description="左上角 x，0-1 归一化")
-    y: float = Field(..., ge=0.0, le=1.0, description="左上角 y，0-1 归一化")
-    width: float = Field(..., gt=0.0, le=1.0, description="宽度，0-1 归一化")
-    height: float = Field(..., gt=0.0, le=1.0, description="高度，0-1 归一化")
+    page: int = Field(1, description="Page index starting from 1.")
+    x: float = Field(..., ge=0.0, le=1.0, description="Legend region top-left x in normalized coordinates (0-1).")
+    y: float = Field(..., ge=0.0, le=1.0, description="Legend region top-left y in normalized coordinates (0-1).")
+    width: float = Field(..., gt=0.0, le=1.0, description="Legend region width in normalized coordinates (0-1).")
+    height: float = Field(..., gt=0.0, le=1.0, description="Legend region height in normalized coordinates (0-1).")
 
 
 class LegendRequest(BaseModel):
@@ -71,6 +71,16 @@ class SessionStatusResponse(BaseModel):
     preview_pages: List[str] = []
 
 
+class WorkroomFileTabOut(BaseModel):
+    file_id: int
+    session_id: int
+    name: str
+    source_type: Optional[str] = None
+    status: str
+    preview_url: Optional[str] = None
+    preview_pages: List[str] = Field(default_factory=list)
+
+
 class UserOut(BaseModel):
     id: int
     tenant_id: int
@@ -92,7 +102,7 @@ class RegisterRequest(BaseModel):
         has_letter = any(ch.isalpha() for ch in value)
         has_digit = any(ch.isdigit() for ch in value)
         if not (has_letter and has_digit):
-            raise ValueError("密码需包含字母和数字")
+            raise ValueError("Password must include both letters and digits.")
         return value
 
 
@@ -103,6 +113,97 @@ class LoginRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     user: UserOut
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    tenant_id: int
+    user_id: int
+    name: str
+    topic: Optional[str] = None
+    status: str
+
+
+class WorkspaceCreateRequest(BaseModel):
+    tenant_id: int
+    user_id: int
+    name: str
+    topic: Optional[str] = None
+
+
+class WorkroomOut(BaseModel):
+    id: int
+    workspace_id: Optional[int] = None
+    tenant_id: int
+    user_id: int
+    name: str
+    status: str
+
+
+class WorkroomSourceBindingOut(BaseModel):
+    file_id: int
+    source_id: Optional[int] = None
+    is_active: bool = True
+
+
+class WorkspaceLaunchResponse(BaseModel):
+    workspace: WorkspaceOut
+    workroom: WorkroomOut
+
+
+class WorkroomRuntimeStateOut(BaseModel):
+    active_file_id: Optional[int] = None
+    active_session_id: Optional[int] = None
+    active_tab_index: int = 0
+    active_studio_document_id: Optional[int] = None
+    active_agent_session_id: Optional[int] = None
+    active_extraction_session_id: Optional[int] = None
+    left_panel_state_json: dict = Field(default_factory=dict)
+    center_panel_state_json: dict = Field(default_factory=dict)
+    right_panel_state_json: dict = Field(default_factory=dict)
+
+
+class WorkroomArtifactOut(BaseModel):
+    artifact_type: str
+    artifact_ref_id: str
+    source_file_id: Optional[int] = None
+    studio_document_id: Optional[int] = None
+    payload_json: dict = Field(default_factory=dict)
+
+
+class WorkroomCurrentResponse(BaseModel):
+    workroom: WorkroomOut
+    runtime_state: WorkroomRuntimeStateOut
+    sources: List[WorkroomSourceBindingOut] = Field(default_factory=list)
+    artifacts: List[WorkroomArtifactOut] = Field(default_factory=list)
+
+
+class WorkroomRuntimeStateUpdateRequest(BaseModel):
+    tenant_id: int
+    user_id: int
+    active_file_id: Optional[int] = None
+    active_session_id: Optional[int] = None
+    active_tab_index: Optional[int] = None
+    active_studio_document_id: Optional[int] = None
+    active_agent_session_id: Optional[int] = None
+    active_extraction_session_id: Optional[int] = None
+    left_panel_state_json: Optional[dict] = None
+    center_panel_state_json: Optional[dict] = None
+    right_panel_state_json: Optional[dict] = None
+
+
+class WorkroomSourceBindRequest(BaseModel):
+    tenant_id: int
+    user_id: int
+    file_id: int
+
+
+class WorkroomArtifactUpdateRequest(BaseModel):
+    tenant_id: int
+    user_id: int
+    source_file_id: Optional[int] = None
+    studio_document_id: Optional[int] = None
+    payload_json: dict = Field(default_factory=dict)
 
 
 class AgentQuestion(BaseModel):
@@ -116,15 +217,15 @@ class AgentQuestion(BaseModel):
 class QuestionSyncRequest(BaseModel):
     tenant_id: int
     user_id: int
-    document_id: Optional[int] = Field(default=None, description="已有文档 ID，可为空")
-    session_id: Optional[int] = Field(default=None, description="Extraction session ID，用于首次创建")
-    file_id: Optional[int] = Field(default=None, description="原始文件 ID，首次创建时用于绑定")
-    question_id: Optional[int] = Field(default=None, description="已有题目 ID，可为空")
-    sequence_index: int = Field(..., ge=0, description="题目在文档内的顺序")
-    page: Optional[int] = Field(default=None, description="题目所在页")
-    content: str = Field(..., description="题目文本内容（纯文本）")
-    legend_images: List[str] = Field(default_factory=list, description="题目引用的图例 base64 列表")
-    title: Optional[str] = Field(default=None, description="文档标题，首次创建文档时使用")
+    document_id: Optional[int] = Field(default=None, description="Existing document ID (optional).")
+    session_id: Optional[int] = Field(default=None, description="Extraction session ID for first-time creation.")
+    file_id: Optional[int] = Field(default=None, description="Original file ID used for first-time binding.")
+    question_id: Optional[int] = Field(default=None, description="Existing question ID (optional).")
+    sequence_index: int = Field(..., ge=0, description="Question order index within the document.")
+    page: Optional[int] = Field(default=None, description="Page number where the question appears.")
+    content: str = Field(..., description="Question content in plain text.")
+    legend_images: List[str] = Field(default_factory=list, description="Referenced legend image list in base64.")
+    title: Optional[str] = Field(default=None, description="Document title used when first creating the document.")
 
 
 class QuestionSyncResponse(BaseModel):
@@ -156,14 +257,14 @@ class AgentChatRequest(BaseModel):
     tenant_id: int
     user_id: int
     document_id: int
-    view_id: str = Field(..., description="前端编辑视图/标签 ID，用于复用会话")
+    view_id: str = Field(..., description="Frontend editor view/tag ID used to reuse session.")
     session_id: Optional[int] = Field(
-        default=None, description="已有 agent 会话 ID，可选"
+        default=None, description="Existing agent session ID (optional)."
     )
-    query: str = Field(..., description="用户向 Agent 提出的指令/问题")
+    query: str = Field(..., description="User query sent to the agent.")
     temperature: float = Field(0.2, ge=0.0, le=1.0)
     top_p: float = Field(0.8, ge=0.0, le=1.0)
-    history_limit: int = Field(10, ge=1, le=30, description="返回的历史消息上限")
+    history_limit: int = Field(10, ge=1, le=30, description="Returned message history upper limit.")
 
 
 class AgentChatResponse(BaseModel):
@@ -175,36 +276,36 @@ class AgentChatResponse(BaseModel):
 
 
 class ExportQuestion(BaseModel):
-    index: int = Field(..., ge=1, description="题目序号（从 1 开始）")
-    markdown: str = Field(..., description="该题的 Markdown+LaTeX 内容，包括题干/选项/解析等")
+    index: int = Field(..., ge=1, description="Question index starting from 1.")
+    markdown: str = Field(..., description="Question content in Markdown + LaTeX.")
 
 
 class ExportWordRequest(BaseModel):
-    title: str = Field(..., description="试卷标题，用于文档标题和文件名")
+    title: str = Field(..., description="Paper title used for document title and output filename.")
     questions: List[ExportQuestion] = Field(
         default_factory=list,
-        description="需要导出的题目列表，按 index 排序",
+        description="Question list to export, sorted by index.",
     )
     template_key: Optional[str] = Field(
         default=None,
         alias="templateKey",
-        description="可选的模板标识，对应后端 templates 目录下的某个 .docx 文件（不含扩展名）",
+        description="Optional template key mapped to a .docx file under templates.",
     )
 
 
 class ExportTemplateInfo(BaseModel):
-    key: str = Field(..., description="模板标识，一般为模板文件名（不含扩展名）")
-    name: str = Field(..., description="模板展示名称")
+    key: str = Field(..., description="Template identifier, usually template filename without extension.")
+    name: str = Field(..., description="Display name of template.")
     description: Optional[str] = Field(
         default=None,
-        description="模板说明，可选",
+        description="Optional template description.",
     )
 
 
 class ExportTemplatesResponse(BaseModel):
     templates: List[ExportTemplateInfo] = Field(
         default_factory=list,
-        description="可用的 Word 导出模板列表",
+        description="Available Word export templates.",
     )
 
 
@@ -239,10 +340,11 @@ class TranslationLookupRequest(BaseModel):
     tenant_id: int
     user_id: int
     text: str = Field(..., min_length=1, max_length=2000)
-    scope: TranslationScope = Field(TranslationScope.sentence, description="word=单词释义；sentence=整句翻译")
+    scope: TranslationScope = Field(TranslationScope.sentence, description="word=鍗曡瘝閲婁箟锛泂entence=鏁村彞缈昏瘧")
 
 
 class TranslationLookupResponse(BaseModel):
     translation: Optional[str] = None
     word: Optional[TranslationWordPayload] = None
     quota: Optional[TranslationQuotaInfo] = None
+

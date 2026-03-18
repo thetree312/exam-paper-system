@@ -16,17 +16,22 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
   const setAgentDrawerWidth = useAppStore((state) => state.setAgentDrawerWidth)
   const agentDocumentId = useAppStore((state) => state.agentDocumentId)
   const setAgentDocumentId = useAppStore((state) => state.setAgentDocumentId)
+  const workroom = useAppStore((state) => state.workroom)
 
-  const { currentFile, sessionId } = useFileUpload(backendBaseUrl, user, () => {})
+  const { currentFile } = useFileUpload(backendBaseUrl, user, () => {})
   const { handleAgUiEvent } = useOcrManager(backendBaseUrl, () => {}, () => {}, agentDocumentId)
 
-  const [agentAppendToken, setAgentAppendToken] = useState<
+  const [agentAppendToken] = useState<
     | {
         id: number
         payload: AgentSendPayload
       }
     | null
   >(null)
+
+  if (!user) {
+    return null
+  }
 
   const agentViewId = React.useMemo(() => {
     if (!currentFile) return null
@@ -37,6 +42,7 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
     <AgentChatPanel
       backendBaseUrl={backendBaseUrl}
       user={user}
+      workroomId={workroom?.id ?? 0}
       documentId={agentDocumentId}
       viewId={agentViewId ?? undefined}
       isOpen={isAgentDrawerOpen}

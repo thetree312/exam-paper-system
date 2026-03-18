@@ -43,6 +43,62 @@ export interface UserInfo {
   display_name: string
 }
 
+export interface WorkspaceInfo {
+  id: number
+  tenant_id: number
+  user_id: number
+  name: string
+  topic?: string | null
+  status: string
+}
+
+export interface WorkroomInfo {
+  id: number
+  workspace_id?: number | null
+  tenant_id: number
+  user_id: number
+  name: string
+  status: string
+}
+
+export interface WorkroomRuntimeState {
+  active_file_id?: number | null
+  active_session_id?: number | null
+  active_tab_index: number
+  active_studio_document_id?: number | null
+  active_agent_session_id?: number | null
+  active_extraction_session_id?: number | null
+  left_panel_state_json: Record<string, unknown>
+  center_panel_state_json: Record<string, unknown>
+  right_panel_state_json: Record<string, unknown>
+}
+
+export interface WorkroomSourceBinding {
+  file_id: number
+  source_id?: number | null
+  is_active: boolean
+}
+
+export interface WorkroomArtifact {
+  artifact_type: string
+  artifact_ref_id: string
+  source_file_id?: number | null
+  studio_document_id?: number | null
+  payload_json: Record<string, unknown>
+}
+
+export interface WorkroomCurrentResponse {
+  workroom: WorkroomInfo
+  runtime_state: WorkroomRuntimeState
+  sources: WorkroomSourceBinding[]
+  artifacts: WorkroomArtifact[]
+}
+
+export interface WorkspaceLaunchResponse {
+  workspace: WorkspaceInfo
+  workroom: WorkroomInfo
+}
+
 export interface FlashcardItem {
   questionId: number | null
   documentId: number
@@ -133,7 +189,7 @@ export interface AggregatedOcrItem extends OcrResult {
   legendImages?: string[]
   originalText?: string
   answerText?: string
-  sourceType?: 'upload' | 'favorite'  // 新增：标识来源（上传或收藏）
+  sourceType?: 'upload' | 'favorite'  // 鏂板锛氭爣璇嗘潵婧愶紙涓婁紶鎴栨敹钘忥級
   questionMeta?: {
     questionId?: number
     sequenceIndex?: number
@@ -210,6 +266,7 @@ export interface AgentQuestion {
 export interface QuestionSyncPayload {
   tenantId: number
   userId: number
+  workroomId: number
   documentId?: number | null
   sessionId?: number | null
   fileId?: number | null
@@ -225,6 +282,7 @@ export interface QuestionSyncPayload {
 
 export interface QuestionSyncResponse {
   document_id: number
+  studio_document_id?: number
   question: {
     id: number
     sequence_index: number
@@ -233,6 +291,7 @@ export interface QuestionSyncResponse {
 
 export interface AgentSnapshotResponse {
   document_id: number
+  studio_document_id?: number
   title: string
   status: string
   questions: AgentQuestion[]
@@ -260,11 +319,11 @@ export interface AgentThinkingThoughtTrace {
 export interface AgentThinkingToolTrace {
   id: string
   type: 'tool'
+  toolCallId?: string
   name?: string
   args?: unknown
-  text?: string
   result?: string
-  status?: 'calling' | 'result'
+  status?: 'calling' | 'success' | 'fail'
 }
 
 export type AgentThinkingTrace = AgentThinkingThoughtTrace | AgentThinkingToolTrace
@@ -281,13 +340,13 @@ export interface AgentThinkingState {
 export interface AgentRunMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
-  /** 当前消息是否处于流式生成中，仅用于前端 UI 控制。 */
+  /** 褰撳墠娑堟伅鏄惁澶勪簬娴佸紡鐢熸垚涓紝浠呯敤浜庡墠绔?UI 鎺у埗銆?*/
   isStreaming?: boolean
-  /** 当前活跃的推导焦点。 */
+  /** 褰撳墠娲昏穬鐨勬帹瀵肩劍鐐广€?*/
   activeThought?: AgentThinkingThoughtTrace | null
-  /** 当前活跃的工具调用。 */
+  /** 褰撳墠娲昏穬鐨勫伐鍏疯皟鐢ㄣ€?*/
   activeTool?: AgentThinkingToolTrace | null
-  /** 已沉淀的思考/工具轨迹，用于可视化 Agentic 过程。 */
+  /** 宸叉矇娣€鐨勬€濊€?宸ュ叿杞ㄨ抗锛岀敤浜庡彲瑙嗗寲 Agentic 杩囩▼銆?*/
   historyTraces?: AgentThinkingTrace[]
 }
 
@@ -302,13 +361,14 @@ export interface AgentNoteFocus {
 export interface AgentRunRequest {
   tenantId: number
   userId: number
+  workroomId: number
   uiContext?: AgentRunContext
   documentId?: number | null
   messages: AgentRunMessage[]
   noteFocus?: AgentNoteFocus | null
-  /** 会话视图 ID，用于同一文档下区分不同编辑视图/标签的 Agent 会话 */
+  /** 浼氳瘽瑙嗗浘 ID锛岀敤浜庡悓涓€鏂囨。涓嬪尯鍒嗕笉鍚岀紪杈戣鍥?鏍囩鐨?Agent 浼氳瘽 */
   viewId?: string | null
-  /** 后端分配的 Agent 会话 ID，用于跨请求复用同一 LangGraph 线程 */
+  /** 鍚庣鍒嗛厤鐨?Agent 浼氳瘽 ID锛岀敤浜庤法璇锋眰澶嶇敤鍚屼竴 LangGraph 绾跨▼ */
   sessionId?: number | null
 }
 
@@ -356,50 +416,50 @@ export interface TranslationContext {
 }
 
 export interface AgentSendPayload {
-  /** 发送到 Copilot 输入框的原始文本，例如 "@题目3" 或自然语言指令 */
+  /** 鍙戦€佸埌 Copilot 杈撳叆妗嗙殑鍘熷鏂囨湰锛屼緥濡?"@棰樼洰3" 鎴栬嚜鐒惰瑷€鎸囦护 */
   text: string
-  /** 可选：关联的文档/笔记上下文，用于 DocumentReadTool */
+  /** 鍙€夛細鍏宠仈鐨勬枃妗?绗旇涓婁笅鏂囷紝鐢ㄤ簬 DocumentReadTool */
   noteFocus?: AgentNoteFocus
-  /** 可选：覆盖本轮对话的 uiContext，用于触发特定 LangGraph 分支（如 batch_question）。 */
+  /** 鍙€夛細瑕嗙洊鏈疆瀵硅瘽鐨?uiContext锛岀敤浜庤Е鍙戠壒瀹?LangGraph 鍒嗘敮锛堝 batch_question锛夈€?*/
   uiContextOverride?: AgentRunContext
-  /** 可选：批量出题相关的元信息，由题卡侧传入。 */
+  /** 鍙€夛細鎵归噺鍑洪鐩稿叧鐨勫厓淇℃伅锛岀敱棰樺崱渚т紶鍏ャ€?*/
   batchMeta?: {
     mode: 'batch_question'
     baseSequenceIndex?: number
     baseQuestionId?: number
-    /** 当前卡片剩余可用题数上限（例如 5 - 已有题数）。 */
+    /** 褰撳墠鍗＄墖鍓╀綑鍙敤棰樻暟涓婇檺锛堜緥濡?5 - 宸叉湁棰樻暟锛夈€?*/
     maxCapacity?: number
   }
 }
 
 export interface AgentRunResponse {
-  /** 后端返回的会话 ID，前端需在后续请求中继续携带 */
+  /** 鍚庣杩斿洖鐨勪細璇?ID锛屽墠绔渶鍦ㄥ悗缁姹備腑缁х画鎼哄甫 */
   sessionId?: number | null
   messages: AgentRunMessage[]
 }
 
-// ===== Agent 会话管理 =====
+// ===== Agent 浼氳瘽绠＄悊 =====
 
 export interface AgentConversationMeta {
-  /** 本地 UI 使用的 key，用于区分同一文档下多个会话视图 */
+  /** 鏈湴 UI 浣跨敤鐨?key锛岀敤浜庡尯鍒嗗悓涓€鏂囨。涓嬪涓細璇濊鍥?*/
   key: string
-  /** 后端会话 ID（agent_sessions.id），用于与 LangGraph 线程及历史记录关联 */
+  /** 鍚庣浼氳瘽 ID锛坅gent_sessions.id锛夛紝鐢ㄤ簬涓?LangGraph 绾跨▼鍙婂巻鍙茶褰曞叧鑱?*/
   sessionId: number | null
-  /** 租户 + 用户 + 文档 + 视图上下文 */
+  /** 绉熸埛 + 鐢ㄦ埛 + 鏂囨。 + 瑙嗗浘涓婁笅鏂?*/
   tenantId: number
   userId: number
   documentId: number | null
   viewId: string | null
-  /** 会话标题，由后端元数据或首条用户消息生成 */
+  /** 浼氳瘽鏍囬锛岀敱鍚庣鍏冩暟鎹垨棣栨潯鐢ㄦ埛娑堟伅鐢熸垚 */
   title: string
-  /** 最近一条消息摘要，便于在会话列表中预览 */
+  /** 鏈€杩戜竴鏉℃秷鎭憳瑕侊紝渚夸簬鍦ㄤ細璇濆垪琛ㄤ腑棰勮 */
   lastMessagePreview?: string | null
-  /** 累计消息数量 */
+  /** 绱娑堟伅鏁伴噺 */
   messageCount?: number
-  /** 会话状态与归档标记 */
+  /** 浼氳瘽鐘舵€佷笌褰掓。鏍囪 */
   status?: string
   archived?: boolean
-  /** 创建与更新时间戳（毫秒） */
+  /** 鍒涘缓涓庢洿鏂版椂闂存埑锛堟绉掞級 */
   createdAt: number
   updatedAt: number
 }
@@ -530,6 +590,7 @@ export interface GradeQuestionPayload {
 export interface GradeRunRequest {
   tenantId: number
   userId: number
+  workroomId: number
   documentId?: number | null
   title?: string | null
   questions: GradeQuestionPayload[]
@@ -571,9 +632,9 @@ export interface MindMapNodePayload {
   label: string
   type?: string
   /**
-   * parentId / side 用于支持 XMind 风格树形布局：
-   * - parentId 为空时视为根候选；
-   * - side 仅对紧贴根节点的一级节点有意义（left/right/center）。
+   * parentId / side 鐢ㄤ簬鏀寔 XMind 椋庢牸鏍戝舰甯冨眬锛?
+   * - parentId 涓虹┖鏃惰涓烘牴鍊欓€夛紱
+   * - side 浠呭绱ц创鏍硅妭鐐圭殑涓€绾ц妭鐐规湁鎰忎箟锛坙eft/right/center锛夈€?
    */
   parentId?: string | null
   side?: 'left' | 'right' | 'center' | null
@@ -598,7 +659,7 @@ export interface MindMapEdgePayload {
 export interface MindMapGraphResponse {
   nodes: MindMapNodePayload[]
   edges: MindMapEdgePayload[]
-  /** 可选的根节点 id，用于树形布局。 */
+  /** 鍙€夌殑鏍硅妭鐐?id锛岀敤浜庢爲褰㈠竷灞€銆?*/
   rootId?: string | null
   cached?: boolean
   hasQuestionRefs?: boolean
@@ -651,7 +712,7 @@ export interface ExportTemplatesResponse {
   templates: ExportTemplateInfo[]
 }
 
-// ===== 题型、科目、标签相关类型 =====
+// ===== 棰樺瀷銆佺鐩€佹爣绛剧浉鍏崇被鍨?=====
 
 export interface QuestionType {
   id: number
@@ -671,7 +732,7 @@ export interface Tag {
   created_at?: string
 }
 
-// ===== 题目相关类型 =====
+// ===== 棰樼洰鐩稿叧绫诲瀷 =====
 
 export interface Question {
   id: number
@@ -683,7 +744,7 @@ export interface Question {
   updated_at: string
 }
 
-// ===== 收藏题目相关类型 =====
+// ===== 鏀惰棌棰樼洰鐩稿叧绫诲瀷 =====
 
 export interface QuestionFavorite {
   id: number
@@ -753,3 +814,4 @@ export interface RemoveFavoriteResponse {
 export interface CheckFavoriteResponse {
   is_favorited: boolean
 }
+

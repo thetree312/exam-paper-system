@@ -45,17 +45,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <header
-      className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3"
+      className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3"
       style={headerStyle}
     >
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+        <div className="flex items-center gap-3 text-slate-900">
           <BrandIcon />
           <h2 className="text-lg font-bold leading-tight tracking-tight">{t('app.title')}</h2>
         </div>
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+        <div className="h-6 w-px bg-slate-200" />
         <div className="flex flex-col">
-          <h1 className="text-slate-900 dark:text-white text-sm font-bold leading-none">{t('app.subtitle')}</h1>
+          <h1 className="text-slate-900 text-sm font-bold leading-none">{t('app.subtitle')}</h1>
           <p className="text-[#4c739a] text-xs flex items-center gap-1 mt-1">
             <span className="material-symbols-outlined text-[12px]">
               {isUploading || isExtracting ? 'sync' : 'cloud_done'}
@@ -65,7 +65,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex items-center text-xs font-semibold rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center text-xs font-semibold rounded-full border border-slate-200 overflow-hidden">
           <button
             type="button"
             className={`px-2 py-1 transition-colors ${currentLang === 'zh' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
@@ -113,7 +113,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </div>
               </div>
               <div className="text-xs text-slate-400 mb-3">
-                {t('app.labels.tenant')}：{user.tenant_code ?? `#${user.tenant_id}`}
+                {t('app.labels.tenant')}：#{user.tenant_id}
               </div>
               <button
                 type="button"

@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
@@ -137,6 +137,7 @@ class ExtractionSession(Base):
     file_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
+    workroom_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum("pending", "processing", "done", "failed", name="session_status_enum"),
         nullable=False,
@@ -254,7 +255,8 @@ class Document(Base):
     session_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("extraction_sessions.id", ondelete="SET NULL"), nullable=True
     )
-    title: Mapped[str] = mapped_column(String(255), nullable=False, default="未命名试卷")
+    workroom_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled Question Set")
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -375,7 +377,7 @@ class Question(Base):
     document_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
-    # 同一张题卡（原题 + 类似题变体）通过 group_id 进行分组
+    # Group original and similar variants of one question card by group_id.
     group_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     sequence_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     page: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -438,20 +440,21 @@ class AgentSession(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    document_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    workroom_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    document_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
     )
     view_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    # LangGraph 线程 ID，用于与 checkpoint 存储关联
+    # LangGraph thread id for checkpoint persistence association.
     thread_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    # 会话标题与最近一条消息摘要，供前端会话列表与搜索使用
+    # Session title and latest message preview for list/search display.
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_message_preview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # 累计消息数量，便于排序与统计
+    # Message count for ordering and statistics.
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # 会话级画像（结构化偏好/进度等）与摘要文本，用于上下文压缩后的长期记忆
+    # Session-level profile and summary used for long-term compressed memory.
     profile_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     history_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -464,7 +467,7 @@ class AgentSession(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     user: Mapped[User] = relationship("User")
-    document: Mapped[Document] = relationship("Document")
+    document: Mapped[Optional[Document]] = relationship("Document")
     messages: Mapped[list["AgentMessage"]] = relationship(
         "AgentMessage", back_populates="session", cascade="all, delete-orphan"
     )
@@ -492,7 +495,7 @@ class AgentMessage(Base):
 
 
 class QuestionFavorite(Base):
-    """用户收藏的题目记录"""
+    """User favorite question mapping."""
     __tablename__ = "question_favorites"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -529,7 +532,7 @@ class QuestionFavorite(Base):
 
 
 class QuestionType(Base):
-    """题型"""
+    """棰樺瀷"""
     __tablename__ = "question_types"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -548,7 +551,7 @@ class QuestionType(Base):
 
 
 class Subject(Base):
-    """科目"""
+    """Subject model."""
     __tablename__ = "subjects"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -567,7 +570,7 @@ class Subject(Base):
 
 
 class Tag(Base):
-    """标签"""
+    """Tag model."""
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -589,7 +592,7 @@ class Tag(Base):
 
 
 class FlashcardConcept(Base):
-    """知识点闪卡：由 LLM 从文档/题目中抽取的知识点卡片"""
+    """Flashcard concept extracted from document/question content."""
     __tablename__ = "flashcard_concepts"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -629,7 +632,7 @@ class FlashcardConcept(Base):
 
 
 class FlashcardReview(Base):
-    """闪卡复习记录：记录用户每次自评结果与间隔重复调度"""
+    """Flashcard review history for spaced repetition."""
     __tablename__ = "flashcard_reviews"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -657,7 +660,7 @@ class FlashcardReview(Base):
 
 
 class FlashcardGenerationJob(Base):
-    """闪卡生成任务：跟踪异步知识点抽取进度"""
+    """Async job for flashcard generation."""
     __tablename__ = "flashcard_generation_jobs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -688,7 +691,7 @@ class FlashcardGenerationJob(Base):
 
 
 class FavoriteTag(Base):
-    """收藏与标签的关联表"""
+    """Association table between favorites and tags."""
     __tablename__ = "favorite_tags"
 
     favorite_id: Mapped[int] = mapped_column(
@@ -697,3 +700,88 @@ class FavoriteTag(Base):
     tag_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class Workroom(Base):
+    __tablename__ = "workrooms"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    workspace_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class WorkroomSourceBinding(Base):
+    __tablename__ = "workroom_source_bindings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    workroom_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    file_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkroomRuntimeState(Base):
+    __tablename__ = "workroom_runtime_states"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    workroom_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    active_file_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    active_session_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    active_tab_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    active_studio_document_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    active_agent_session_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    active_extraction_session_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    left_panel_state_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    center_panel_state_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    right_panel_state_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class WorkroomPanelArtifact(Base):
+    __tablename__ = "workroom_panel_artifacts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    workroom_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_ref_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_file_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    studio_document_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
