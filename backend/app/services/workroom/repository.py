@@ -248,6 +248,39 @@ class WorkroomRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_artifact(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int,
+        artifact_type: str,
+        artifact_ref_id: str,
+    ) -> dict[str, Any] | None:
+        row = self.db.execute(
+            text(
+                """
+                SELECT *
+                FROM workroom_panel_artifacts
+                WHERE tenant_id = :tenant_id
+                  AND user_id = :user_id
+                  AND workroom_id = :workroom_id
+                  AND artifact_type = :artifact_type
+                  AND artifact_ref_id = :artifact_ref_id
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "workroom_id": workroom_id,
+                "artifact_type": artifact_type,
+                "artifact_ref_id": artifact_ref_id,
+            },
+        ).mappings().first()
+        return dict(row) if row else None
+
     def upsert_artifact(
         self,
         *,

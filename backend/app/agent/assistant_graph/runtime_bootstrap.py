@@ -3,6 +3,7 @@
 import atexit
 import json
 import logging
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
@@ -22,7 +23,6 @@ from .adapters.message_adapter import (
     latest_tool_observation_summary as _latest_tool_observation_summary,
     latest_user_query as _latest_user_query,
     normalize_messages as _normalize_messages,
-    sanitize_tool_content_for_history as _sanitize_tool_content_for_history,
     strip_meta_system_messages as _strip_meta_system_messages,
 )
 from .llm_tools import (
@@ -37,6 +37,13 @@ from .router_runtime import (
     evolve_runtime_snapshot as _evolve_runtime_snapshot,
     normalize_stream_event as _normalize_stream_event,
 )
+from .evidence_register import (
+    build_evidence_frame as _build_evidence_frame,
+    build_tool_receipt_message as _build_tool_receipt_message,
+    merge_evidence_register as _merge_evidence_register,
+    select_carryforward_evidence_messages as _select_carryforward_evidence_messages,
+    summarize_evidence_register as _summarize_evidence_register,
+)
 from .world_model import (
     init_world_model as _init_world_model,
     observe_environment as _observe_environment,
@@ -48,16 +55,23 @@ from .world_model import (
 logger = logging.getLogger("agent.graph")
 
 _SHORT_TERM_ROUNDS = 12
-_A2UI_PROTOCOL_VERSION = "0.9"
+_OPENUI_SCHEMA_VERSION = "1.0"
 _META_TOOL_QUERY_ENV = "query_environment_model"
 _META_TOOL_REQUEST_CLARIFICATION = "request_user_clarification"
+_PSEUDO_INTERRUPT_TOOL_NAMES = {
+    "need_human",
+    "clarify",
+    "request_clarification",
+}
 _AGENT_POLICY_TEXT = (
     "你是嵌入网页工作区中的学习教练型智能体。"
     "你的职责是围绕用户当前问题，在当前网页环境中观察、定位对象、读取证据并给出帮助。"
     "可以调用提供的工具；禁止虚构事实、证据或工具。"
+    "当缺失关键约束需要用户补充时，调用工具 request_user_clarification。"
     "不确定时直接说明不确定，必要时再向用户提问。"
     "输出语言必须与最新用户消息一致。"
 )
+_DATA_URL_RE = re.compile(r"(data:[^;]+;base64,)([A-Za-z0-9+/=\s]{24,})", re.IGNORECASE)
 
 
 def _build_world_priors() -> dict[str, Any]:
@@ -94,8 +108,86 @@ def _append_messages(
     return out
 
 
+def _tool_message_key(message: dict[str, Any] | None) -> tuple[str, str]:
+    msg = message if isinstance(message, dict) else {}
+    return (
+        str(msg.get("tool_call_id") or "").strip(),
+        str(msg.get("name") or "").strip(),
+    )
+
+
+def _assistant_tool_call_keys(message: dict[str, Any] | None) -> list[tuple[str, str]]:
+    msg = message if isinstance(message, dict) else {}
+    role = str(msg.get("role") or "").strip().lower()
+    if role != "assistant":
+        return []
+    raw_calls = msg.get("tool_calls") if isinstance(msg.get("tool_calls"), list) else []
+    keys: list[tuple[str, str]] = []
+    for call in raw_calls:
+        if not isinstance(call, dict):
+            continue
+        call_id = str(call.get("id") or "").strip()
+        fn = call.get("function") if isinstance(call.get("function"), dict) else {}
+        tool_name = str(fn.get("name") or "").strip()
+        keys.append((call_id, tool_name))
+    return keys
+
+
+def _merge_messages_with_transient_tools(
+    *,
+    persisted_messages: list[dict[str, Any]],
+    transient_tool_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    transient_map: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in transient_tool_messages:
+        if str(item.get("role") or "").strip().lower() != "tool":
+            continue
+        key = _tool_message_key(item)
+        if key == ("", ""):
+            continue
+        transient_map[key] = item
+
+    if not transient_map:
+        return list(persisted_messages)
+
+    persisted_filtered: list[dict[str, Any]] = []
+    for item in persisted_messages:
+        role = str(item.get("role") or "").strip().lower()
+        if role != "tool":
+            persisted_filtered.append(item)
+            continue
+        if _tool_message_key(item) in transient_map:
+            continue
+        persisted_filtered.append(item)
+
+    merged: list[dict[str, Any]] = []
+    used: set[tuple[str, str]] = set()
+    for item in persisted_filtered:
+        merged.append(item)
+        for key in _assistant_tool_call_keys(item):
+            tool_msg = transient_map.get(key)
+            if not isinstance(tool_msg, dict):
+                continue
+            merged.append(tool_msg)
+            used.add(key)
+
+    unused = [key for key in transient_map.keys() if key not in used]
+    if unused:
+        logger.warning("agent.decide transient_tool_unmatched keys=%s", unused)
+        for key in unused:
+            tool_msg = transient_map.get(key)
+            if isinstance(tool_msg, dict):
+                merged.append(tool_msg)
+    return merged
+
+
 def _preview_text(value: Any, *, limit: int = 220) -> str:
     text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    def _mask_data_url(match: re.Match[str]) -> str:
+        payload = re.sub(r"\s+", "", match.group(2))
+        return f"{match.group(1)}{payload[:24]}...[base64_len={len(payload)}]"
+
+    text = _DATA_URL_RE.sub(_mask_data_url, text)
     if len(text) <= limit:
         return text
     return text[:limit] + f"...[truncated {len(text) - limit} chars]"
@@ -136,8 +228,6 @@ def _summarize_observation_packet_for_log(packet: dict[str, Any] | None) -> dict
     kb = packet.get("knowledge_base") if isinstance(packet.get("knowledge_base"), dict) else {}
     latest_tool = packet.get("latest_tool_observation") if isinstance(packet.get("latest_tool_observation"), dict) else {}
     resource_summary = studio.get("resource_summary") if isinstance(studio.get("resource_summary"), dict) else {}
-    world_model = packet.get("world_model") if isinstance(packet.get("world_model"), dict) else {}
-    focus = world_model.get("focus") if isinstance(world_model.get("focus"), dict) else {}
     return {
         "studio_document_id": studio.get("studio_document_id"),
         "studio_view": studio.get("studio_view"),
@@ -152,10 +242,6 @@ def _summarize_observation_packet_for_log(packet: dict[str, Any] | None) -> dict
             "tool_name": latest_tool.get("tool_name"),
             "status": latest_tool.get("status"),
             "summary": latest_tool.get("summary"),
-        },
-        "world_focus": {
-            "primary_surface": focus.get("primary_surface"),
-            "primary_object": focus.get("primary_object"),
         },
     }
 
@@ -182,6 +268,7 @@ class GraphState(TypedDict, total=False):
     short_term_rounds: int
     short_term_summary: str | None
     model_native_traces: Annotated[list[dict[str, Any]], _append_list]
+    evidence_register: list[dict[str, Any]]
     thinking_chain_id: str | None
     thinking_accumulator: str | None
     planning_packet: dict[str, Any] | None
@@ -255,13 +342,12 @@ def _build_model_snapshot(
     studio = observation_packet.get("studio") if isinstance(observation_packet.get("studio"), dict) else {}
     kb = observation_packet.get("knowledge_base") if isinstance(observation_packet.get("knowledge_base"), dict) else {}
     world_model = observation_packet.get("world_model") if isinstance(observation_packet.get("world_model"), dict) else {}
-    world_focus = world_model.get("focus") if isinstance(world_model.get("focus"), dict) else {}
+    world_facts = world_model.get("facts") if isinstance(world_model.get("facts"), dict) else {}
     resource_summary = studio.get("resource_summary") if isinstance(studio.get("resource_summary"), dict) else {}
     source_file_ids = list(kb.get("source_file_ids") or [])
     lines = [
         "[环境前景上下文]",
-        f"surface={str(world_focus.get('primary_surface') or studio.get('ui_context') or 'unknown')}",
-        f"focus={str(world_focus.get('primary_object') or 'none')}",
+        f"surface={str(studio.get('ui_context') or 'unknown')}",
         f"studio_document_id={str(studio.get('studio_document_id') or 'none')}",
         f"studio_view={str(studio.get('studio_view') or 'unknown')}",
         (
@@ -275,9 +361,41 @@ def _build_model_snapshot(
     ]
     if source_file_ids:
         lines.append("knowledge_base_source_ids=" + ",".join(str(item) for item in source_file_ids[:8]))
+    strategy_feedback = world_facts.get("strategy_feedback") if isinstance(world_facts.get("strategy_feedback"), dict) else {}
+    strategy_message = str(strategy_feedback.get("message") or "").strip()
+    if strategy_message:
+        signals = strategy_feedback.get("signals") if isinstance(strategy_feedback.get("signals"), dict) else {}
+        lines.extend(
+            [
+                "[策略提醒]",
+                strategy_message,
+                (
+                    "loop_signals="
+                    f"same_tool_streak:{int(signals.get('same_tool_streak') or 0)},"
+                    f"no_progress_streak:{int(signals.get('no_progress_streak') or 0)},"
+                    f"threshold:{int(signals.get('threshold') or 0)},"
+                    f"last_tool:{str(signals.get('last_tool_name') or '')}"
+                ),
+            ]
+        )
     memory_preview = memory_summary[:120].strip() if memory_summary else ""
     if memory_preview:
         lines.append("memory=" + memory_preview)
+    evidence_summary = _summarize_evidence_register(state.get("evidence_register") or [])
+    if evidence_summary:
+        lines.append("[可复用证据]")
+        for item in evidence_summary[-3:]:
+            refs = ",".join(item.get("source_refs") or [])
+            lines.append(
+                "evidence="
+                f"tool:{str(item.get('tool_name') or '')};"
+                f"query:{str(item.get('query') or '')};"
+                f"answerability:{str(item.get('answerability') or '')};"
+                f"target_resolution:{str(item.get('target_resolution') or '')};"
+                f"has_image:{'true' if bool(item.get('has_image')) else 'false'};"
+                f"source_refs:{refs};"
+                f"summary:{str(item.get('summary') or '')}"
+            )
     return "\n".join(lines)
 
 
@@ -285,53 +403,167 @@ def _build_interrupt_payload(
     prompt: str,
     *,
     form_fields: list[dict[str, Any]] | None = None,
-    a2ui_protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     interrupt_id = f"intr-{uuid.uuid4().hex}"
     prompt_text = str(prompt).strip()
     if not prompt_text:
         raise ValueError("interrupt_payload_error: empty_prompt")
-    normalized_fields = form_fields if isinstance(form_fields, list) and form_fields else []
-    if not isinstance(a2ui_protocol, dict):
-        if not normalized_fields:
-            raise ValueError("interrupt_payload_error: missing_a2ui_protocol_and_fields")
-        a2ui_action_payload = {
-            "type": "agent_to_client_actions",
-            "actions": [
-                {
-                    "id": "ask_user_form",
-                    "payload": {
-                        "kind": "form_request",
-                        "interrupt_id": interrupt_id,
-                        "prompt": prompt_text,
-                        "fields": normalized_fields,
-                        "submit_action": {"name": "ask_user.submit"},
-                    },
-                    "status": "completed",
-                }
-            ],
+    raw_fields = form_fields if isinstance(form_fields, list) else []
+    normalized_fields: list[dict[str, Any]] = []
+    for item in raw_fields:
+        if not isinstance(item, dict):
+            continue
+        field_id = str(item.get("id") or item.get("name") or "").strip()
+        if not field_id:
+            continue
+        field: dict[str, Any] = {
+            "id": field_id,
+            "name": field_id,
+            "label": str(item.get("label") or field_id),
+            "type": str(item.get("type") or "text"),
+            "required": bool(item.get("required", False)),
         }
-    else:
-        a2ui_action_payload = a2ui_protocol
+        if "options" in item and isinstance(item.get("options"), list):
+            field["options"] = item.get("options")
+        if "placeholder" in item and isinstance(item.get("placeholder"), str):
+            field["placeholder"] = str(item.get("placeholder"))
+        if "default" in item:
+            field["default"] = item.get("default")
+        if "min" in item and isinstance(item.get("min"), (int, float)):
+            field["min"] = item.get("min")
+        if "max" in item and isinstance(item.get("max"), (int, float)):
+            field["max"] = item.get("max")
+        normalized_fields.append(field)
+    if not normalized_fields:
+        raise ValueError("interrupt_payload_error: missing_fields")
+    openui_payload = {
+        "version": _OPENUI_SCHEMA_VERSION,
+        "type": "form",
+        "title": prompt_text,
+        "fields": normalized_fields,
+        "actions": [
+            {"id": "submit", "label": "确认", "variant": "primary"},
+            {"id": "cancel", "label": "取消", "variant": "secondary"},
+        ],
+    }
+    field_lines: list[str] = []
+    field_refs: list[str] = []
+    for idx, field in enumerate(normalized_fields, start=1):
+        ref = f"f{idx}"
+        field_refs.append(ref)
+        raw_type = str(field.get("type") or "text").strip().lower()
+        kind = (
+            "textarea"
+            if raw_type in {"longtext", "textarea"}
+            else "radio"
+            if raw_type in {"radio", "choice"}
+            else "select"
+            if raw_type in {"select", "dropdown"}
+            else "number"
+            if raw_type in {"number", "integer", "float"}
+            else "text"
+        )
+        option_values: list[str] = []
+        option_labels: list[str] = []
+        for option in field.get("options") if isinstance(field.get("options"), list) else []:
+            if isinstance(option, dict):
+                value = str(option.get("value") or option.get("id") or option.get("label") or "").strip()
+                if not value:
+                    continue
+                label = str(option.get("label") or value)
+            else:
+                value = str(option).strip()
+                if not value:
+                    continue
+                label = value
+            option_values.append(value)
+            option_labels.append(label)
+        default_value = field.get("default")
+        if default_value is None:
+            default_value = "" if kind in {"text", "textarea", "select", "radio"} else None
+        min_value = field.get("min") if isinstance(field.get("min"), (int, float)) else None
+        max_value = field.get("max") if isinstance(field.get("max"), (int, float)) else None
+        field_lines.append(
+            (
+                f"{ref} = HitlField("
+                f"{json.dumps(interrupt_id, ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('name') or field.get('id') or ''), ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('label') or field.get('id') or ''), ensure_ascii=False)}, "
+                f"{json.dumps(kind, ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('placeholder') or ''), ensure_ascii=False)}, "
+                f"{'true' if bool(field.get('required')) else 'false'}, "
+                f"{json.dumps(option_values, ensure_ascii=False)}, "
+                f"{json.dumps(option_labels, ensure_ascii=False)}, "
+                f"{json.dumps(default_value, ensure_ascii=False)}, "
+                f"{json.dumps(min_value, ensure_ascii=False)}, "
+                f"{json.dumps(max_value, ensure_ascii=False)}"
+                ")"
+            )
+        )
+    action_lines = [
+        f'a_submit = HitlAction("submit", "确认", "primary", {json.dumps(interrupt_id, ensure_ascii=False)})',
+        f'a_cancel = HitlAction("cancel", "取消", "secondary", {json.dumps(interrupt_id, ensure_ascii=False)})',
+    ]
+    openui_lang_lines = [
+        f'root = HitlForm({json.dumps(prompt_text, ensure_ascii=False)}, {json.dumps(interrupt_id, ensure_ascii=False)}, [{", ".join(field_refs)}], [a_submit, a_cancel])'
+    ]
+    openui_lang_lines.extend(field_lines)
+    openui_lang_lines.extend(action_lines)
+    openui_lang = "\n".join(openui_lang_lines)
     return {
         "interrupt_id": interrupt_id,
         "prompt": prompt_text,
-        "a2ui_protocol": a2ui_action_payload,
-        "a2ui_messages": [
-            {
-                "messageId": f"ask-user-{interrupt_id}",
-                "role": "agent",
-                "parts": [
-                    {"kind": "text", "text": prompt_text},
-                    {
-                        "kind": "data",
-                        "mimeType": f"application/vnd.a2ui+json;version={_A2UI_PROTOCOL_VERSION}",
-                        "data": a2ui_action_payload,
-                    },
-                ],
-            }
-        ],
+        "openui": openui_payload,
+        "openui_lang": openui_lang,
     }
+
+
+def _default_interrupt_fields() -> list[dict[str, Any]]:
+    return [{"id": "clarification", "name": "clarification", "label": "请补充说明", "type": "longText", "required": True}]
+
+
+def _normalize_interrupt_fields(raw_fields: Any) -> list[dict[str, Any]]:
+    parsed = raw_fields
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE).strip()
+            text = re.sub(r"\s*```$", "", text).strip()
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            parsed = []
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+    if not isinstance(parsed, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("id") or "").strip()
+        label = str(item.get("label") or name).strip()
+        if not name or not label:
+            continue
+        field: dict[str, Any] = {
+            "id": str(item.get("id") or name),
+            "name": name,
+            "label": label,
+            "type": str(item.get("type") or "text"),
+            "required": bool(item.get("required", False)),
+        }
+        if isinstance(item.get("options"), list):
+            field["options"] = item.get("options")
+        if isinstance(item.get("placeholder"), str) and str(item.get("placeholder")).strip():
+            field["placeholder"] = str(item.get("placeholder")).strip()
+        if "default" in item:
+            field["default"] = item.get("default")
+        if isinstance(item.get("min"), (int, float)):
+            field["min"] = item.get("min")
+        if isinstance(item.get("max"), (int, float)):
+            field["max"] = item.get("max")
+        out.append(field)
+    return out
 
 
 def _all_decision_tool_schemas() -> list[dict[str, Any]]:
@@ -356,7 +588,7 @@ def _all_decision_tool_schemas() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": _META_TOOL_REQUEST_CLARIFICATION,
-                "description": "当缺失关键约束时，向用户发起澄清中断。",
+                "description": "当缺失关键约束、需要用户确认偏好或进行高风险操作确认时，发起用户澄清中断。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -370,12 +602,16 @@ def _all_decision_tool_schemas() -> list[dict[str, Any]]:
                                     "label": {"type": "string"},
                                     "type": {"type": "string"},
                                     "required": {"type": "boolean"},
+                                    "options": {"type": "array"},
+                                    "placeholder": {"type": "string"},
+                                    "default": {},
+                                    "min": {"type": "number"},
+                                    "max": {"type": "number"},
                                 },
                                 "required": ["name", "label"],
-                                "additionalProperties": False,
+                                "additionalProperties": True,
                             },
                         },
-                        "a2ui_protocol": {"type": "object"},
                     },
                     "required": ["prompt"],
                     "additionalProperties": False,
@@ -434,34 +670,22 @@ def _execute_meta_tool(
         }
     if tool_name == _META_TOOL_REQUEST_CLARIFICATION:
         prompt = str(tool_arguments.get("prompt") or "").strip()
-        logger.info("agent.meta.request_clarification prompt=%s args=%s", _preview_text(prompt), tool_arguments)
-        protocol_obj = tool_arguments.get("a2ui_protocol") if isinstance(tool_arguments.get("a2ui_protocol"), dict) else None
-        fields_raw = tool_arguments.get("fields") if isinstance(tool_arguments.get("fields"), list) else []
-        fields: list[dict[str, Any]] = []
-        for item in fields_raw:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip()
-            label = str(item.get("label") or "").strip()
-            if not name or not label:
-                continue
-            fields.append(
-                {
-                    "name": name,
-                    "label": label,
-                    "type": str(item.get("type") or "text"),
-                    "required": bool(item.get("required", False)),
-                }
-            )
-        intr_payload = _build_interrupt_payload(
-            prompt=prompt,
-            form_fields=fields or None,
-            a2ui_protocol=protocol_obj,
-        )
+        if not prompt:
+            return {
+                "error": "invalid_meta_args",
+                "feedback": {"status": "error", "message": "request_user_clarification 缺少 prompt"},
+            }
+        fields = _normalize_interrupt_fields(tool_arguments.get("fields"))
+        if not fields:
+            fields = _default_interrupt_fields()
+        intr_payload = _build_interrupt_payload(prompt=prompt, form_fields=fields)
         return {
-            "feedback": {"status": "ok", "message": "已发起澄清请求"},
+            "feedback": {"status": "ok", "message": "已发起用户澄清中断"},
             "interrupt_request": intr_payload,
-            "model_message_content": {"interrupt_requested": True},
+            "model_message_content": {
+                "interrupt_requested": True,
+                "interrupt_id": intr_payload.get("interrupt_id"),
+            },
         }
     return {"error": "unknown_meta_tool", "tool_name": tool_name}
 
@@ -548,6 +772,7 @@ def _node_prepare(state: GraphState) -> dict[str, Any]:
         "short_term_rounds": _SHORT_TERM_ROUNDS,
         "short_term_summary": None,
         "model_native_traces": [],
+        "evidence_register": [],
         "thinking_chain_id": f"think-{uuid.uuid4().hex}",
         "thinking_accumulator": "",
         "planning_packet": None,
@@ -582,6 +807,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
         memory_summary = f"{memory_summary}\n{compressed_summary}".strip()
 
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     logger.info(
         "agent.memory_sync start step=%s memory_summary_preview=%s recent_changes=%s",
         step_count,
@@ -593,7 +819,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
     world_model_next, world_diff = _observe_environment(
         world_model_prev,
         observation_packet=observation_packet,
-        step_count=step_count,
+        step_count=next_step_count,
     )
     observation_packet["world_model"] = world_model_next
     model_snapshot = _build_model_snapshot(
@@ -613,6 +839,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
     return {
         "model_messages": model_messages,
         "model_turn": None,
+        "step_count": next_step_count,
         "observation_packet": observation_packet,
         "short_term_summary": memory_summary or None,
         "world_model": world_model_next,
@@ -628,7 +855,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
             previous=state.get("runtime_snapshot"),
             context=context,
             task_phase=phase,
-            step_count=step_count,
+            step_count=next_step_count,
         ),
     }
 
@@ -662,20 +889,44 @@ def _invoke_model_text(
 def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__"]]:
     context = state.get("context") or {}
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     persisted_messages = _normalize_messages(state.get("messages") or [])
+    transient_tool_messages = _normalize_messages(state.get("transient_tool_messages") or [])
+    carryforward_messages, updated_evidence_register = _select_carryforward_evidence_messages(
+        state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else [],
+        transient_tool_messages=transient_tool_messages,
+        step_count=next_step_count,
+    )
     model_messages = _normalize_messages(state.get("model_messages") or [])
-    llm_messages = list(persisted_messages)
+    llm_messages = _merge_messages_with_transient_tools(
+        persisted_messages=persisted_messages,
+        transient_tool_messages=transient_tool_messages,
+    )
+    if carryforward_messages:
+        llm_messages = [*llm_messages, *carryforward_messages]
     if model_messages:
         if llm_messages and str((llm_messages[0] or {}).get("role") or "").strip().lower() == "system":
             llm_messages = [llm_messages[0], *model_messages, *llm_messages[1:]]
         else:
             llm_messages = [*model_messages, *llm_messages]
+    image_part_count = 0
+    for msg in llm_messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if str(part.get("type") or "").strip().lower() == "image_url":
+                image_part_count += 1
     logger.info(
-        "agent.decide input step=%s llm_messages=%s model_messages=%s persisted_messages=%s",
+        "agent.decide input step=%s llm_messages=%s model_messages=%s persisted_messages=%s transient_tool_messages=%s image_parts=%s",
         step_count,
         _summarize_messages_for_log(llm_messages),
         _summarize_messages_for_log(model_messages),
         _summarize_messages_for_log(persisted_messages),
+        _summarize_messages_for_log(transient_tool_messages),
+        image_part_count,
     )
     client = _new_client()
     try:
@@ -695,6 +946,8 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
         change = {"change_type": "agent_decision_failed", "reason": str(exc)}
         return Command(
             update={
+                "evidence_register": updated_evidence_register,
+                "step_count": next_step_count,
                 "task_phase": "failed",
                 "halt_reason": "failed",
                 "last_error": f"agent_decision_error: {exc}",
@@ -703,7 +956,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="failed",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     recent_changes=[change],
                 ),
             },
@@ -727,6 +980,13 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
         tool_name = str(call.get("name") or "").strip()
         if not tool_name:
             continue
+        if tool_name.lower() in _PSEUDO_INTERRUPT_TOOL_NAMES:
+            logger.warning(
+                "agent.decide pseudo_interrupt_tool_call_detected step=%s tool=%s -> dropped",
+                step_count,
+                tool_name,
+            )
+            continue
         call_id = f"call-{uuid.uuid4().hex}"
         call_args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
         pending_calls.append({"name": tool_name, "arguments": call_args, "reason": "", "call_id": call_id})
@@ -739,17 +999,19 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
         )
 
     decision_snapshot = {
-        "step": step_count,
+        "step": next_step_count,
         "tool_count": len(pending_calls),
         "tool_names": [str(x.get("name") or "") for x in pending_calls],
         "response_len": len(str(response_text or "").strip()),
         "thinking_chunks": len([x for x in thinking_parts if str(x or "").strip()]),
+        "interrupt_requested": False,
     }
     logger.info("agent.decide snapshot=%s", decision_snapshot)
 
     model_turn = {
         "response_text": str(response_text or "").strip(),
         "tool_calls": pending_calls,
+        "interrupt_request": None,
         "assistant_tool_message": (
             {
                 "role": "assistant",
@@ -768,6 +1030,9 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
     return Command(
         update={
             "model_turn": model_turn,
+            "transient_tool_messages": [],
+            "evidence_register": updated_evidence_register,
+            "step_count": next_step_count,
             "last_model_decision": decision_snapshot,
             "task_phase": "acting",
             "model_native_traces": [
@@ -784,7 +1049,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
                 previous=state.get("runtime_snapshot"),
                 context=context,
                 task_phase="acting",
-                step_count=step_count,
+                step_count=next_step_count,
                 recent_changes=[change],
             ),
         },
@@ -825,7 +1090,17 @@ def _execute_tool_action(
         for x in _all_decision_tool_schemas()
         if str(x.get("function", {}).get("name") or "").strip()
     }
-    if tool_name not in allowed_tool_names:
+    if tool_name.lower() in _PSEUDO_INTERRUPT_TOOL_NAMES:
+        output = {
+            "error": f"protocol_violation:pseudo_interrupt_tool:{tool_name}",
+            "feedback": {"status": "error", "message": f"禁止将中断语义当作工具调用：{tool_name}"},
+            "model_message_content": {
+                "error": "protocol_violation",
+                "code": "pseudo_interrupt_tool",
+                "tool_name": tool_name,
+            },
+        }
+    elif tool_name not in allowed_tool_names:
         output: dict[str, Any] = {
             "error": f"unknown_tool:{tool_name}",
             "feedback": {"status": "error", "message": f"工具不存在：{tool_name}"},
@@ -849,6 +1124,19 @@ def _execute_tool_action(
     if not model_observation:
         model_observation = output.get("model_input") if isinstance(output.get("model_input"), dict) else output
     tool_payload = json.dumps(model_observation, ensure_ascii=False) if isinstance(model_observation, dict) else model_observation
+    receipt_message = _build_tool_receipt_message(
+        tool_name=tool_name,
+        tool_call_id=call_id,
+        trace=trace,
+        output=output,
+    )
+    evidence_frame = _build_evidence_frame(
+        tool_name=tool_name,
+        tool_call_id=call_id,
+        trace=trace,
+        output=output,
+        step_count=int(state_snapshot.get("step_count") or 0),
+    )
     logger.info(
         "agent.execute_tool done tool=%s ok=%s trace=%s output_preview=%s model_observation_preview=%s",
         tool_name,
@@ -860,18 +1148,14 @@ def _execute_tool_action(
     return {
         "tool_name": tool_name,
         "trace": trace,
-        "history_msg": {
-            "role": "tool",
-            "name": tool_name,
-            "tool_call_id": call_id,
-            "content": _sanitize_tool_content_for_history(tool_payload),
-        },
+        "history_msg": receipt_message,
         "transient_msg": {
             "role": "tool",
             "name": tool_name,
             "tool_call_id": call_id,
             "content": tool_payload,
         },
+        "evidence_frame": evidence_frame,
         "feedback": output.get("feedback") if isinstance(output.get("feedback"), dict) else {},
         "interrupt_request": output.get("interrupt_request") if isinstance(output.get("interrupt_request"), dict) else None,
     }
@@ -881,6 +1165,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     context = state.get("context") or {}
     persisted_messages = _normalize_messages(state.get("messages") or [])
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     reason = "模型决策执行"
     changes: list[dict[str, Any]] = []
     traces: list[dict[str, Any]] = []
@@ -890,6 +1175,8 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     requested_interrupt_payload: dict[str, Any] | None = None
 
     model_turn = state.get("model_turn") if isinstance(state.get("model_turn"), dict) else {}
+    if isinstance(model_turn.get("interrupt_request"), dict):
+        requested_interrupt_payload = model_turn.get("interrupt_request")
     pending_assistant_tool_message = (
         model_turn.get("assistant_tool_message")
         if isinstance(model_turn.get("assistant_tool_message"), dict)
@@ -927,11 +1214,14 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
         stream_writer = get_stream_writer()
 
         world_model = state.get("world_model") if isinstance(state.get("world_model"), dict) else {}
+        evidence_register = state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else []
         state_snapshot = {
             "observation_packet": state.get("observation_packet") if isinstance(state.get("observation_packet"), dict) else {},
             "world_model": world_model,
             "recent_changes": list(state.get("recent_changes") or []),
             "action_journal": list(state.get("action_journal") or []),
+            "step_count": next_step_count,
+            "evidence_register": evidence_register,
         }
         history_prefix: list[dict[str, Any]] = []
         if isinstance(pending_assistant_tool_message, dict):
@@ -994,6 +1284,9 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 traces.append(trace)
                 tool_messages_history.append(realized["history_msg"])
                 tool_messages_transient.append(realized["transient_msg"])
+                evidence_frame = realized.get("evidence_frame") if isinstance(realized.get("evidence_frame"), dict) else None
+                if evidence_frame:
+                    evidence_register = _merge_evidence_register(evidence_register, [evidence_frame])
                 intr_req = realized.get("interrupt_request")
                 if isinstance(intr_req, dict) and requested_interrupt_payload is None:
                     requested_interrupt_payload = intr_req
@@ -1016,11 +1309,11 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                         "feedback": realized.get("feedback") if isinstance(realized.get("feedback"), dict) else {},
                     }
                 )
-                world_model, world_diff = _record_tool_result(world_model, trace=trace, step_count=step_count)
+                world_model, world_diff = _record_tool_result(world_model, trace=trace, step_count=next_step_count)
                 changes.append({"change_type": "world_model_changed", "diff": world_diff})
                 action_journal_updates.append(
                     {
-                        "step": step_count,
+                        "step": next_step_count,
                         "phase": "execute_decision_tool",
                         "tool_name": realized["tool_name"],
                         "status": trace.get("status"),
@@ -1029,16 +1322,18 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 )
 
         if isinstance(requested_interrupt_payload, dict):
-            change = {"change_type": "decision_requires_user", "reason": reason, "source": _META_TOOL_REQUEST_CLARIFICATION}
+            change = {"change_type": "decision_requires_user", "reason": reason, "source": "tool_feedback_interrupt"}
             return Command(
                 update={
                     "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
                     "transient_tool_messages": tool_messages_transient,
                     "tool_results": traces,
+                    "step_count": next_step_count,
                     "recent_changes": [*changes, change],
                     "action_journal": action_journal_updates,
                     "model_turn": None,
                     "world_model": world_model,
+                    "evidence_register": evidence_register,
                     "task_phase": "awaiting_user",
                     "halt_reason": "interrupt",
                     "interrupt_payload": requested_interrupt_payload,
@@ -1046,7 +1341,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                         previous=state.get("runtime_snapshot"),
                         context=context,
                         task_phase="awaiting_user",
-                        step_count=step_count,
+                        step_count=next_step_count,
                         tool_results=traces,
                         recent_changes=[*changes, change],
                     ),
@@ -1059,21 +1354,44 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
                 "transient_tool_messages": tool_messages_transient,
                 "tool_results": traces,
+                "step_count": next_step_count,
                 "recent_changes": changes,
                 "action_journal": action_journal_updates,
                 "model_turn": None,
                 "world_model": world_model,
+                "evidence_register": evidence_register,
                 "task_phase": "observing",
                 "runtime_snapshot": _evolve_runtime_snapshot(
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="observing",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     tool_results=traces,
                     recent_changes=changes,
                 ),
             },
             goto="memory_sync",
+        )
+
+    if isinstance(requested_interrupt_payload, dict):
+        change = {"change_type": "decision_requires_user", "reason": reason, "source": "model_interrupt_directive"}
+        return Command(
+            update={
+                "model_turn": None,
+                "step_count": next_step_count,
+                "task_phase": "awaiting_user",
+                "halt_reason": "interrupt",
+                "interrupt_payload": requested_interrupt_payload,
+                "recent_changes": [change],
+                "runtime_snapshot": _evolve_runtime_snapshot(
+                    previous=state.get("runtime_snapshot"),
+                    context=context,
+                    task_phase="awaiting_user",
+                    step_count=next_step_count,
+                    recent_changes=[change],
+                ),
+            },
+            goto="interrupt_user",
         )
 
     if pending_response:
@@ -1083,6 +1401,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
             update={
                 "messages": _append_messages(persisted_messages, [assistant_turn]),
                 "model_turn": None,
+                "step_count": next_step_count,
                 "task_phase": "completed",
                 "halt_reason": "answered",
                 "recent_changes": [change],
@@ -1090,7 +1409,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="completed",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     recent_changes=[change],
                 ),
             },
@@ -1113,6 +1432,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     return Command(
         update={
             "recent_changes": [change],
+            "step_count": next_step_count,
             "task_phase": "failed",
             "halt_reason": "failed",
             "last_error": "execute_empty: no pending response or tool calls",
@@ -1131,7 +1451,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 previous=state.get("runtime_snapshot"),
                 context=context,
                 task_phase="failed",
-                step_count=step_count,
+                step_count=next_step_count,
                 recent_changes=[change],
             ),
         },
@@ -1139,29 +1459,132 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     )
 
 
-def _extract_clarification(resume_payload: Any) -> str:
-    def _search(value: Any) -> str:
+def _normalize_resume_submission(resume_payload: Any) -> dict[str, Any]:
+    if isinstance(resume_payload, dict):
+        form_state = (
+            resume_payload.get("form_state")
+            if isinstance(resume_payload.get("form_state"), dict)
+            else resume_payload.get("formState")
+            if isinstance(resume_payload.get("formState"), dict)
+            else None
+        )
+        params = (
+            resume_payload.get("params")
+            if isinstance(resume_payload.get("params"), dict)
+            else {}
+        )
+        action_id = str(
+            params.get("actionId")
+            or params.get("action_id")
+            or resume_payload.get("actionId")
+            or resume_payload.get("action_id")
+            or ""
+        ).strip()
+        interrupt_id = str(
+            resume_payload.get("interrupt_id")
+            or resume_payload.get("interruptId")
+            or ""
+        ).strip()
+
+        reserved_keys = {
+            "form_state",
+            "formState",
+            "params",
+            "actionId",
+            "action_id",
+            "interrupt_id",
+            "interruptId",
+        }
+        if form_state is None:
+            candidate = {k: v for k, v in resume_payload.items() if k not in reserved_keys}
+            if candidate:
+                form_state = candidate
+            else:
+                form_state = {}
+        return {
+            "interrupt_id": interrupt_id,
+            "action_id": action_id,
+            "form_state": form_state,
+            "raw": resume_payload,
+        }
+
+    if isinstance(resume_payload, str):
+        return {
+            "interrupt_id": "",
+            "action_id": "",
+            "form_state": {"clarification": resume_payload.strip()},
+            "raw": resume_payload,
+        }
+
+    return {
+        "interrupt_id": "",
+        "action_id": "",
+        "form_state": {},
+        "raw": resume_payload,
+    }
+
+
+def _render_resume_user_message(
+    *,
+    submission: dict[str, Any],
+    interrupt_payload: dict[str, Any],
+) -> str:
+    form_state = submission.get("form_state") if isinstance(submission.get("form_state"), dict) else {}
+    if not form_state:
+        return ""
+
+    openui = interrupt_payload.get("openui") if isinstance(interrupt_payload.get("openui"), dict) else {}
+    fields = openui.get("fields") if isinstance(openui.get("fields"), list) else []
+    field_meta: dict[str, dict[str, Any]] = {}
+    for item in fields:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("id") or "").strip()
+        if not name:
+            continue
+        field_meta[name] = item
+
+    def _format_value(value: Any) -> str:
         if isinstance(value, str):
             return value.strip()
-        if isinstance(value, dict):
-            for key in ("clarification", "answer", "text", "value"):
-                v = value.get(key)
-                if isinstance(v, str) and v.strip():
-                    return v.strip()
-            for v in value.values():
-                found = _search(v)
-                if found:
-                    return found
-            return ""
+        if isinstance(value, (int, float, bool)):
+            return str(value)
         if isinstance(value, list):
-            for v in value:
-                found = _search(v)
-                if found:
-                    return found
-            return ""
+            flat = [str(v).strip() for v in value if str(v).strip()]
+            return "、".join(flat)
+        if isinstance(value, dict):
+            for key in ("value", "label", "text"):
+                candidate = value.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+                if isinstance(candidate, (int, float, bool)):
+                    return str(candidate)
+            return json.dumps(value, ensure_ascii=False)
         return str(value or "").strip()
 
-    return _search(resume_payload)
+    known_lines: list[str] = []
+    used_keys: set[str] = set()
+    for key, meta in field_meta.items():
+        if key not in form_state:
+            continue
+        text = _format_value(form_state.get(key))
+        if not text:
+            continue
+        label = str(meta.get("label") or key).strip()
+        known_lines.append(f"- {label}（{key}）：{text}")
+        used_keys.add(key)
+
+    extra_lines: list[str] = []
+    for key, value in form_state.items():
+        if key in used_keys:
+            continue
+        text = _format_value(value)
+        if not text:
+            continue
+        extra_lines.append(f"- {key}：{text}")
+
+    summary_lines = ["用户通过中断表单补充了以下信息：", *known_lines, *extra_lines]
+    return "\n".join(summary_lines).strip()
 
 
 def _node_interrupt_user(state: GraphState) -> Command[Literal["memory_sync", "__end__"]]:
@@ -1188,26 +1611,30 @@ def _node_interrupt_user(state: GraphState) -> Command[Literal["memory_sync", "_
         )
 
     resume_value = interrupt({"interrupt_payload": intr, "messages": _normalize_messages(state.get("messages") or [])})
-    clarification = _extract_clarification(resume_value)
+    submission = _normalize_resume_submission(resume_value)
+    clarification = _render_resume_user_message(submission=submission, interrupt_payload=intr)
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
 
     updates: dict[str, Any] = {
         "interrupt_payload": None,
+        "transient_tool_messages": [],
         "halt_reason": None,
+        "step_count": next_step_count,
         "task_phase": "observing",
         "model_turn": None,
         "runtime_snapshot": _evolve_runtime_snapshot(
             previous=state.get("runtime_snapshot"),
             context=context,
             task_phase="observing",
-            step_count=step_count,
+            step_count=next_step_count,
         ),
     }
     if clarification:
         world_model, world_diff = _record_user_input(
             state.get("world_model") if isinstance(state.get("world_model"), dict) else {},
             text=clarification,
-            step_count=step_count,
+            step_count=next_step_count,
         )
         updates["messages"] = _append_messages(
             persisted_messages,
@@ -1215,7 +1642,10 @@ def _node_interrupt_user(state: GraphState) -> Command[Literal["memory_sync", "_
         )
         updates["goal_anchor"] = clarification
         updates["world_model"] = world_model
-        updates["recent_changes"] = [{"change_type": "world_model_changed", "diff": world_diff}]
+        updates["recent_changes"] = [
+            {"change_type": "interrupt_resumed", "resume_submission": submission},
+            {"change_type": "world_model_changed", "diff": world_diff},
+        ]
     return Command(update=updates, goto="memory_sync")
 
 def _normalize_checkpoint_conn_string(conn: str) -> str:
@@ -1270,16 +1700,26 @@ class _CompiledAgentApp:
     def _interrupt_to_result(interrupt_chunk: Any, fallback_messages: list[dict[str, Any]]) -> dict[str, Any]:
         messages = list(fallback_messages)
         intr_payload: dict[str, Any] | None = None
+        payload_items: list[dict[str, Any]] = []
         if isinstance(interrupt_chunk, (list, tuple)) and interrupt_chunk:
-            first = interrupt_chunk[0]
-            value = getattr(first, "value", None)
-            if isinstance(value, dict):
+            for idx, item in enumerate(interrupt_chunk):
+                value = getattr(item, "value", None)
+                if not isinstance(value, dict):
+                    continue
                 maybe_messages = value.get("messages")
-                if isinstance(maybe_messages, list):
+                if idx == 0 and isinstance(maybe_messages, list):
                     messages = _normalize_messages(maybe_messages)
                 payload = value.get("interrupt_payload")
-                if isinstance(payload, dict):
-                    intr_payload = payload
+                if not isinstance(payload, dict):
+                    continue
+                interrupt_id = str(getattr(item, "id", None) or payload.get("interrupt_id") or "").strip()
+                payload_items.append({"interrupt_id": interrupt_id or f"interrupt-{idx + 1}", "payload": payload})
+            if payload_items:
+                intr_payload = dict(payload_items[0]["payload"])
+                if len(payload_items) > 1:
+                    intr_payload["interrupt_mode"] = "multiple"
+                    intr_payload["primary_interrupt_id"] = payload_items[0]["interrupt_id"]
+                    intr_payload["interrupts"] = payload_items
         if intr_payload is None:
             raise RuntimeError("interrupt_mapping_error: missing_interrupt_payload")
 
@@ -1299,10 +1739,10 @@ class _CompiledAgentApp:
             "interrupt_payload": intr_payload,
             "ag_ui_events": [
                 {
-                    "action": "a2ui.protocol.actions",
+                    "action": "openui.render",
                     "payload": {
-                        "protocol": intr_payload.get("a2ui_protocol") or {},
-                        "messages": intr_payload.get("a2ui_messages") or [],
+                        "response": intr_payload.get("openui_lang") or "",
+                        "openui": intr_payload.get("openui") or {},
                         "interrupt_id": intr_payload.get("interrupt_id"),
                     },
                 }

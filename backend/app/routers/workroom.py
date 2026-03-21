@@ -106,3 +106,22 @@ def put_workroom_artifact(
     )
     return WorkroomArtifactOut(**row)
 
+
+@router.get("/{workroom_id}/artifacts/{artifact_type}/{artifact_ref_id}", response_model=WorkroomArtifactOut | None)
+def get_workroom_artifact(
+    workroom_id: int,
+    artifact_type: str,
+    artifact_ref_id: str,
+    tenant_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+) -> WorkroomArtifactOut | None:
+    row = WorkroomService(db).get_artifact(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+        artifact_type=artifact_type,
+        artifact_ref_id=artifact_ref_id,
+    )
+    return WorkroomArtifactOut(**row) if row else None
+

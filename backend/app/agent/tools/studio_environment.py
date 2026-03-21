@@ -9,7 +9,7 @@ from sqlalchemy import text
 from ...db import SessionLocal
 from .common import build_feedback, normalize_int
 
-_DEFAULT_TOP_K = 5
+_DEFAULT_TOP_K = 3
 _MAX_TOP_K = 10
 _MAX_CANDIDATE_SCAN = 300
 _MAX_PREVIEW_CHARS = 160

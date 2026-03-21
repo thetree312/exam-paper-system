@@ -33,7 +33,7 @@ def tool_definitions() -> list[ToolDefinition]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
-                    "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+                    "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
                 },
                 "required": ["query"],
                 "additionalProperties": False,

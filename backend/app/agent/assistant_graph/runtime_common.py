@@ -36,6 +36,7 @@ from .router_runtime import (
     evolve_runtime_snapshot as _evolve_runtime_snapshot,
     normalize_stream_event as _normalize_stream_event,
 )
+from .evidence_register import summarize_evidence_register as _summarize_evidence_register
 from .state import (
     _derive_default_exec_state,
     _derive_default_task_model,
@@ -56,7 +57,7 @@ INTERRUPT_REASON_CODES = {
 }
 
 _SHORT_TERM_ROUNDS = 12
-_A2UI_PROTOCOL_VERSION = "0.9"
+_OPENUI_SCHEMA_VERSION = "1.0"
 _META_TOOL_QUERY_ENV = "query_environment_model"
 _META_TOOL_REQUEST_CLARIFICATION = "request_user_clarification"
 _AGENT_POLICY_TEXT = (
@@ -128,6 +129,7 @@ class GraphState(TypedDict, total=False):
     short_term_rounds: int
     short_term_summary: str | None
     model_native_traces: Annotated[list[dict[str, Any]], _append_list]
+    evidence_register: list[dict[str, Any]]
     thinking_chain_id: str | None
     thinking_accumulator: str | None
     planning_packet: dict[str, Any] | None
@@ -204,10 +206,10 @@ def _build_model_snapshot(
     )
     world_state = observation_packet.get("world_state") if isinstance(observation_packet.get("world_state"), dict) else {}
     world_facts = world_state.get("facts") if isinstance(world_state.get("facts"), dict) else {}
-    world_focus = world_state.get("focus") if isinstance(world_state.get("focus"), dict) else {}
     world_topology = world_state.get("topology") if isinstance(world_state.get("topology"), dict) else {}
     recent_tools = world_state.get("recent_tool_results") if isinstance(world_state.get("recent_tool_results"), list) else []
     recent_users = world_state.get("recent_user_inputs") if isinstance(world_state.get("recent_user_inputs"), list) else []
+    evidence_register_summary = _summarize_evidence_register(state.get("evidence_register") or [])
     return {
         "最新用户请求": latest_user_query,
         "记忆摘要": memory_summary[:300] if memory_summary else "",
@@ -225,11 +227,11 @@ def _build_model_snapshot(
                 "version": int(world_state.get("version") or 0),
                 "last_step": int(world_state.get("last_step") or 0),
                 "topology": world_topology,
-                "focus": world_focus,
                 "facts": world_facts,
                 "recent_tool_results": recent_tools[-3:],
                 "recent_user_inputs": recent_users[-3:],
             },
+            "evidence_register": evidence_register_summary[-3:],
         },
         "按需查询": {
             "instruction": "默认仅使用当前显著状态。需要细节时，再调用 query_environment_model。",
@@ -237,7 +239,6 @@ def _build_model_snapshot(
                 "world_model.environment",
                 "world_model.entities",
                 "world_model.relations",
-                "world_model.focus",
                 "world_model.recent_tool_results",
                 "observation_packet.studio",
                 "observation_packet.knowledge_base",
@@ -258,45 +259,115 @@ def _build_interrupt_payload(
         reason_code = "required_missing"
     interrupt_id = f"intr-{uuid.uuid4().hex}"
     prompt = str(prompt_override or "").strip() or f"需要用户补充信息（{reason_code}）。"
-    normalized_fields = form_fields if isinstance(form_fields, list) and form_fields else [
-        {"name": "clarification", "label": "请补充说明", "type": "longText", "required": True}
+    raw_fields = form_fields if isinstance(form_fields, list) and form_fields else [
+        {"id": "clarification", "name": "clarification", "label": "请补充说明", "type": "longText", "required": True}
     ]
-    a2ui_action_payload = {
-        "type": "agent_to_client_actions",
+    normalized_fields: list[dict[str, Any]] = []
+    for item in raw_fields:
+        if not isinstance(item, dict):
+            continue
+        field_id = str(item.get("id") or item.get("name") or "").strip()
+        if not field_id:
+            continue
+        field: dict[str, Any] = {
+            "id": field_id,
+            "name": field_id,
+            "label": str(item.get("label") or field_id),
+            "type": str(item.get("type") or "text"),
+            "required": bool(item.get("required", False)),
+        }
+        if "options" in item and isinstance(item.get("options"), list):
+            field["options"] = item.get("options")
+        if "placeholder" in item and isinstance(item.get("placeholder"), str):
+            field["placeholder"] = str(item.get("placeholder"))
+        if "default" in item:
+            field["default"] = item.get("default")
+        if "min" in item and isinstance(item.get("min"), (int, float)):
+            field["min"] = item.get("min")
+        if "max" in item and isinstance(item.get("max"), (int, float)):
+            field["max"] = item.get("max")
+        normalized_fields.append(field)
+    openui_payload = {
+        "version": _OPENUI_SCHEMA_VERSION,
+        "type": "form",
+        "title": prompt,
+        "reason_code": reason_code,
+        "fields": normalized_fields,
         "actions": [
-            {
-                "id": "ask_user_form",
-                "payload": {
-                    "kind": "form_request",
-                    "interrupt_id": interrupt_id,
-                    "reason_code": reason_code,
-                    "prompt": prompt,
-                    "fields": normalized_fields,
-                    "submit_action": {"name": "ask_user.submit"},
-                },
-                "status": "completed",
-            }
+            {"id": "submit", "label": "确认", "variant": "primary"},
+            {"id": "cancel", "label": "取消", "variant": "secondary"},
         ],
     }
+    field_lines: list[str] = []
+    field_refs: list[str] = []
+    for idx, field in enumerate(normalized_fields, start=1):
+        ref = f"f{idx}"
+        field_refs.append(ref)
+        raw_type = str(field.get("type") or "text").strip().lower()
+        kind = (
+            "textarea"
+            if raw_type in {"longtext", "textarea"}
+            else "radio"
+            if raw_type in {"radio", "choice"}
+            else "select"
+            if raw_type in {"select", "dropdown"}
+            else "number"
+            if raw_type in {"number", "integer", "float"}
+            else "text"
+        )
+        option_values: list[str] = []
+        option_labels: list[str] = []
+        for option in field.get("options") if isinstance(field.get("options"), list) else []:
+            if isinstance(option, dict):
+                value = str(option.get("value") or option.get("id") or option.get("label") or "").strip()
+                if not value:
+                    continue
+                label = str(option.get("label") or value)
+            else:
+                value = str(option).strip()
+                if not value:
+                    continue
+                label = value
+            option_values.append(value)
+            option_labels.append(label)
+        default_value = field.get("default")
+        if default_value is None:
+            default_value = "" if kind in {"text", "textarea", "select", "radio"} else None
+        min_value = field.get("min") if isinstance(field.get("min"), (int, float)) else None
+        max_value = field.get("max") if isinstance(field.get("max"), (int, float)) else None
+        field_lines.append(
+            (
+                f"{ref} = HitlField("
+                f"{json.dumps(interrupt_id, ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('name') or field.get('id') or ''), ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('label') or field.get('id') or ''), ensure_ascii=False)}, "
+                f"{json.dumps(kind, ensure_ascii=False)}, "
+                f"{json.dumps(str(field.get('placeholder') or ''), ensure_ascii=False)}, "
+                f"{'true' if bool(field.get('required')) else 'false'}, "
+                f"{json.dumps(option_values, ensure_ascii=False)}, "
+                f"{json.dumps(option_labels, ensure_ascii=False)}, "
+                f"{json.dumps(default_value, ensure_ascii=False)}, "
+                f"{json.dumps(min_value, ensure_ascii=False)}, "
+                f"{json.dumps(max_value, ensure_ascii=False)}"
+                ")"
+            )
+        )
+    action_lines = [
+        f'a_submit = HitlAction("submit", "确认", "primary", {json.dumps(interrupt_id, ensure_ascii=False)})',
+        f'a_cancel = HitlAction("cancel", "取消", "secondary", {json.dumps(interrupt_id, ensure_ascii=False)})',
+    ]
+    openui_lang_lines = [
+        f'root = HitlForm({json.dumps(prompt, ensure_ascii=False)}, {json.dumps(interrupt_id, ensure_ascii=False)}, [{", ".join(field_refs)}], [a_submit, a_cancel])'
+    ]
+    openui_lang_lines.extend(field_lines)
+    openui_lang_lines.extend(action_lines)
+    openui_lang = "\n".join(openui_lang_lines)
     return {
         "interrupt_id": interrupt_id,
         "reason_code": reason_code,
         "prompt": prompt,
-        "a2ui_protocol": a2ui_action_payload,
-        "a2ui_messages": [
-            {
-                "messageId": f"ask-user-{interrupt_id}",
-                "role": "agent",
-                "parts": [
-                    {"kind": "text", "text": prompt},
-                    {
-                        "kind": "data",
-                        "mimeType": f"application/vnd.a2ui+json;version={_A2UI_PROTOCOL_VERSION}",
-                        "data": a2ui_action_payload,
-                    },
-                ],
-            }
-        ],
+        "openui": openui_payload,
+        "openui_lang": openui_lang,
     }
 
 
@@ -502,6 +573,7 @@ def _node_prepare(state: GraphState) -> dict[str, Any]:
         "short_term_rounds": _SHORT_TERM_ROUNDS,
         "short_term_summary": None,
         "model_native_traces": [],
+        "evidence_register": [],
         "thinking_chain_id": f"think-{uuid.uuid4().hex}",
         "thinking_accumulator": "",
         "planning_packet": None,
@@ -534,12 +606,13 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
         memory_summary = f"{memory_summary}\n{compressed_summary}".strip()
 
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     observation_packet = _build_observation_packet(state, context=context)
     world_model_prev = state.get("world_state") if isinstance(state.get("world_state"), dict) else {}
     world_model_next, world_diff = _observe_environment(
         world_model_prev,
         observation_packet=observation_packet,
-        step_count=step_count,
+        step_count=next_step_count,
     )
     observation_packet["world_state"] = world_model_next
     next_exec_state = _derive_default_exec_state(state.get("exec_state") if isinstance(state.get("exec_state"), dict) else None)
@@ -554,6 +627,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
     return {
         "model_messages": model_messages,
         "exec_state": next_exec_state,
+        "step_count": next_step_count,
         "observation_packet": observation_packet,
         "short_term_summary": memory_summary or None,
         "world_state": world_model_next,
@@ -569,7 +643,7 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
             previous=state.get("runtime_snapshot"),
             context=context,
             task_phase=phase,
-            step_count=step_count,
+            step_count=next_step_count,
         ),
     }
 

@@ -1,7 +1,10 @@
 ﻿from __future__ import annotations
 
 import copy
+import json
 from typing import Any
+
+_LOOP_ALERT_THRESHOLD = 3
 
 
 def init_world_model(previous: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -37,11 +40,10 @@ def init_world_model(previous: dict[str, Any] | None = None) -> dict[str, Any]:
         }
     if not isinstance(base.get("relations"), list):
         base["relations"] = []
-    if not isinstance(base.get("focus"), dict):
-        base["focus"] = {"primary_surface": "studio", "primary_object": None, "intent_anchor": ""}
-
     base["version"] = int(base.get("version") or 0)
     base["last_step"] = int(base.get("last_step") or 0)
+    if "focus" in base:
+        base.pop("focus", None)
     return base
 
 
@@ -83,10 +85,21 @@ def _entity_ref(kind: str, value: Any) -> str:
     return f"{kind}:{value}" if value is not None and str(value) else ""
 
 
+def _stable_tool_signature(tool_name: str, args: dict[str, Any]) -> str:
+    name = str(tool_name or "").strip()
+    try:
+        encoded = json.dumps(args or {}, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        encoded = "{}"
+    return f"{name}:{encoded}"
+
+
 def _derive_evidence_status(*, source_refs: list[str], output_obj: dict[str, Any]) -> str:
     answerability = str(output_obj.get("answerability") or "").strip().lower()
     if answerability in {"answerable", "supported", "grounded"}:
         return "sufficient"
+    if answerability in {"partial_evidence", "visual_evidence_only", "visual_evidence_available", "evidence_available"}:
+        return "readable"
     if source_refs:
         return "readable"
     if output_obj.get("insufficiency") is not None:
@@ -228,18 +241,6 @@ def observe_environment(
             relations.append({"src": src_ref, "rel": "can_support", "dst": wr_doc_ref})
     after["relations"] = _trim_relations(relations)
 
-    focus = after.get("focus") if isinstance(after.get("focus"), dict) else {}
-    if studio_doc_id:
-        focus["primary_surface"] = "studio"
-        focus["primary_object"] = _entity_ref("studio_document", studio_doc_id)
-    elif kb_sources:
-        focus["primary_surface"] = "knowledge_base"
-        focus["primary_object"] = _entity_ref("kb_file", kb_sources[0].get("file_id"))
-    else:
-        focus["primary_surface"] = "agent_panel"
-        focus["primary_object"] = None
-    after["focus"] = focus
-
     recent = list(after.get("recent_observations") or [])
     recent.append(
         {
@@ -317,6 +318,49 @@ def record_tool_result(
     if query_text:
         after["facts"]["target_object"] = query_text
 
+    args_obj = trace.get("arguments") if isinstance(trace.get("arguments"), dict) else {}
+    signature = _stable_tool_signature(tool_name, args_obj)
+    prev_signature = str(before.get("facts", {}).get("last_tool_signature") or "")
+    same_tool_streak = int(before.get("facts", {}).get("same_tool_streak") or 0) + 1 if signature and signature == prev_signature else 1
+
+    prev_refs = set(str(x) for x in (before.get("facts", {}).get("last_source_refs") or []) if str(x).strip())
+    current_refs = set(source_refs)
+    has_new_refs = bool(current_refs - prev_refs)
+
+    summary_obj = output_obj.get("evidence_summary") if isinstance(output_obj.get("evidence_summary"), dict) else {}
+    current_evidence_count = int(summary_obj.get("evidence_count") or len(source_refs or []))
+    prev_evidence_count = int(before.get("facts", {}).get("last_evidence_count") or 0)
+    answerability = str(output_obj.get("answerability") or "").strip().lower()
+    progress_detected = has_new_refs or (current_evidence_count > prev_evidence_count) or (
+        answerability in {"answerable", "partial_evidence", "visual_evidence_only", "visual_evidence_available"}
+    )
+    no_progress_streak = 0 if progress_detected else int(before.get("facts", {}).get("no_progress_streak") or 0) + 1
+
+    after["facts"]["last_tool_signature"] = signature
+    after["facts"]["same_tool_streak"] = int(same_tool_streak)
+    after["facts"]["no_progress_streak"] = int(no_progress_streak)
+    after["facts"]["last_tool_progress"] = bool(progress_detected)
+    after["facts"]["last_source_refs"] = list(source_refs)
+    after["facts"]["last_evidence_count"] = int(current_evidence_count)
+
+    if same_tool_streak >= _LOOP_ALERT_THRESHOLD or no_progress_streak >= _LOOP_ALERT_THRESHOLD:
+        after["facts"]["strategy_feedback"] = {
+            "status": "warning",
+            "reason": "loop_detected",
+            "message": (
+                "你已连续多次调用工具但进展有限。请切换策略：收窄目标范围、改用不同工具，"
+                "或向用户请求更具体约束。"
+            ),
+            "signals": {
+                "same_tool_streak": int(same_tool_streak),
+                "no_progress_streak": int(no_progress_streak),
+                "threshold": int(_LOOP_ALERT_THRESHOLD),
+                "last_tool_name": tool_name,
+            },
+        }
+    else:
+        after["facts"]["strategy_feedback"] = {}
+
     studio_doc_id = (after.get("facts") or {}).get("studio_document_id")
     wr_doc_ref = _entity_ref("studio_document", studio_doc_id)
     relations = list(after.get("relations") or [])
@@ -344,20 +388,6 @@ def record_tool_result(
     after["entities"] = entities
     after["relations"] = _trim_relations(relations)
 
-    focus = after.get("focus") if isinstance(after.get("focus"), dict) else {}
-    if source_refs:
-        first_ref = str(source_refs[0] or "").strip()
-        if first_ref.startswith("file:"):
-            focus["primary_surface"] = "knowledge_base"
-            focus["primary_object"] = first_ref
-        elif first_ref.startswith("question:"):
-            focus["primary_surface"] = "studio"
-            focus["primary_object"] = first_ref
-    elif studio_doc_id:
-        focus["primary_surface"] = "studio"
-        focus["primary_object"] = _entity_ref("studio_document", studio_doc_id)
-    after["focus"] = focus
-
     return after, _diff_dict(before, after)
 
 
@@ -383,12 +413,6 @@ def record_user_input(
     after["facts"]["target_candidates_count"] = 0
     after["facts"]["evidence_status"] = "none"
 
-    focus = after.get("focus") if isinstance(after.get("focus"), dict) else {}
-    focus["intent_anchor"] = normalized
-    if not str(focus.get("primary_surface") or "").strip():
-        focus["primary_surface"] = "studio"
-    after["focus"] = focus
-
     return after, _diff_dict(before, after)
 
 
@@ -409,7 +433,6 @@ def query_world_model(
         "topology": wm.get("topology") if isinstance(wm.get("topology"), dict) else {},
         "entities": wm.get("entities") if isinstance(wm.get("entities"), dict) else {},
         "relations": list(wm.get("relations") or [])[-tail:],
-        "focus": wm.get("focus") if isinstance(wm.get("focus"), dict) else {},
         "recent_observations": list(wm.get("recent_observations") or [])[-tail:],
         "recent_tool_results": list(wm.get("recent_tool_results") or [])[-tail:],
         "recent_user_inputs": list(wm.get("recent_user_inputs") or [])[-tail:],

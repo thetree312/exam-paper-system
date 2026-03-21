@@ -73,16 +73,26 @@ class _CompiledAgentApp:
     def _interrupt_to_result(interrupt_chunk: Any, fallback_messages: list[dict[str, Any]]) -> dict[str, Any]:
         messages = list(fallback_messages)
         intr_payload: dict[str, Any] | None = None
+        payload_items: list[dict[str, Any]] = []
         if isinstance(interrupt_chunk, (list, tuple)) and interrupt_chunk:
-            first = interrupt_chunk[0]
-            value = getattr(first, "value", None)
-            if isinstance(value, dict):
+            for idx, item in enumerate(interrupt_chunk):
+                value = getattr(item, "value", None)
+                if not isinstance(value, dict):
+                    continue
                 maybe_messages = value.get("messages")
-                if isinstance(maybe_messages, list):
+                if idx == 0 and isinstance(maybe_messages, list):
                     messages = _normalize_messages(maybe_messages)
                 payload = value.get("interrupt_payload")
-                if isinstance(payload, dict):
-                    intr_payload = payload
+                if not isinstance(payload, dict):
+                    continue
+                interrupt_id = str(getattr(item, "id", None) or payload.get("interrupt_id") or "").strip()
+                payload_items.append({"interrupt_id": interrupt_id or f"interrupt-{idx + 1}", "payload": payload})
+            if payload_items:
+                intr_payload = dict(payload_items[0]["payload"])
+                if len(payload_items) > 1:
+                    intr_payload["interrupt_mode"] = "multiple"
+                    intr_payload["primary_interrupt_id"] = payload_items[0]["interrupt_id"]
+                    intr_payload["interrupts"] = payload_items
         if intr_payload is None:
             intr_payload = _build_interrupt_payload("required_missing")
 
@@ -103,10 +113,10 @@ class _CompiledAgentApp:
             "interrupt_payload": intr_payload,
             "ag_ui_events": [
                 {
-                    "action": "a2ui.protocol.actions",
+                    "action": "openui.render",
                     "payload": {
-                        "protocol": intr_payload.get("a2ui_protocol") or {},
-                        "messages": intr_payload.get("a2ui_messages") or [],
+                        "response": intr_payload.get("openui_lang") or "",
+                        "openui": intr_payload.get("openui") or {},
                         "reason_code": intr_payload.get("reason_code"),
                         "interrupt_id": intr_payload.get("interrupt_id"),
                     },

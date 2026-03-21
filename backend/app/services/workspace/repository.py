@@ -205,6 +205,37 @@ class WorkspaceRepository:
         self.db.execute(
             text(
                 f"""
+                DELETE FROM kb_unit_embeddings
+                WHERE unit_id IN (
+                    SELECT u.id
+                    FROM kb_units u
+                    JOIN kb_sources s ON s.id = u.source_id
+                    WHERE s.tenant_id = :tenant_id
+                      AND s.user_id = :user_id
+                      AND s.workroom_id IN ({scoped_workroom_sql})
+                )
+                """
+            ),
+            {"workspace_id": workspace_id, "tenant_id": tenant_id, "user_id": user_id},
+        )
+        self.db.execute(
+            text(
+                f"""
+                DELETE FROM kb_units
+                WHERE source_id IN (
+                    SELECT s.id
+                    FROM kb_sources s
+                    WHERE s.tenant_id = :tenant_id
+                      AND s.user_id = :user_id
+                      AND s.workroom_id IN ({scoped_workroom_sql})
+                )
+                """
+            ),
+            {"workspace_id": workspace_id, "tenant_id": tenant_id, "user_id": user_id},
+        )
+        self.db.execute(
+            text(
+                f"""
                 DELETE FROM kb_chunk_embeddings
                 WHERE chunk_id IN (
                     SELECT c.id

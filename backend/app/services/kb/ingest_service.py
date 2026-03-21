@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ...models import File
-from .chunk_builders import build_page_image_chunk_rows, build_text_chunk_rows
+from .chunk_builders import build_page_image_chunk_rows, build_page_unit_rows, build_text_chunk_rows
 from .embedding_service import KBEmbeddingService
 from .extractors import ImageKBExtractor, PdfKBExtractor, WordKBExtractor
 from .repository import KBRepository
@@ -53,11 +53,49 @@ class KBIngestService:
             image_rows = build_page_image_chunk_rows(pages)
             all_rows = text_rows + image_rows
             vectors = self._embedding.embed_rows(all_rows) if all_rows else []
+            unit_rows = build_page_unit_rows(blocks, pages, title=str(file.original_name or ""))
+            text_unit_rows = [row for row in unit_rows if row.text_content]
+            image_unit_rows = [row for row in unit_rows if row.primary_image_path]
+            text_unit_vectors = (
+                self._embedding.embed_rows(
+                    [
+                        type(
+                            "UnitEmbedRow",
+                            (),
+                            {"embed_input": {"text": row.text_content}, "token_count": row.token_count},
+                        )()
+                        for row in text_unit_rows
+                    ]
+                )
+                if text_unit_rows
+                else []
+            )
+            image_unit_vectors = (
+                self._embedding.embed_rows(
+                    [
+                        type(
+                            "UnitEmbedRow",
+                            (),
+                            {"embed_input": {"image": row.primary_image_path}, "token_count": 1},
+                        )()
+                        for row in image_unit_rows
+                    ]
+                )
+                if image_unit_rows
+                else []
+            )
             self._repo.replace_source_pages(source_id=int(source["id"]), pages=pages)
             self._repo.replace_source_chunks_and_embeddings(
                 source=source,
                 chunk_rows=all_rows,
                 vectors=vectors,
+                model_name=self._embedding.model_name,
+            )
+            self._repo.replace_source_units_and_embeddings(
+                source=source,
+                unit_rows=unit_rows,
+                text_vectors=text_unit_vectors,
+                image_vectors=image_unit_vectors,
                 model_name=self._embedding.model_name,
             )
             self._repo.sync_binding_source_ids(
@@ -73,6 +111,7 @@ class KBIngestService:
                 "source_id": int(source["id"]),
                 "page_count": len(pages),
                 "chunk_count": len(all_rows),
+                "unit_count": len(unit_rows),
             }
         except Exception as exc:
             self._db.rollback()

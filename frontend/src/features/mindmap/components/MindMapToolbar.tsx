@@ -1,143 +1,172 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import type { MindMapLayoutStyle } from './MindMapFlow'
 
 export interface MindMapToolbarProps {
   mode: 'document' | 'file'
   onModeChange: (next: 'document' | 'file') => void
+  layoutMode: 'side' | 'left' | 'right'
+  onCycleLayout: () => void
   canUseDocument: boolean
   canUseFile: boolean
-  layoutStyle: MindMapLayoutStyle
-  onLayoutChange: (style: MindMapLayoutStyle) => void
   onRefresh: () => void
   refreshDisabled: boolean
   refreshLabel: string
   showSave: boolean
   onSave: () => void
   saveDisabled: boolean
+  canControlView: boolean
+  onUndo: () => void
+  onRedo: () => void
+  onFitView: () => void
+  onExpandAll: () => void
+  onCollapseAll: () => void
+  onExportPng: () => void
 }
-
-const MODE_BUTTON_SIZE = 36
-const MODE_BUTTON_GAP = 6
-const MODE_BUTTON_PADDING = 6
 
 const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
   mode,
   onModeChange,
+  layoutMode,
+  onCycleLayout,
   canUseDocument,
   canUseFile,
-  layoutStyle,
-  onLayoutChange,
   onRefresh,
   refreshDisabled,
   refreshLabel,
   showSave,
   onSave,
   saveDisabled,
+  canControlView,
+  onUndo,
+  onRedo,
+  onFitView,
+  onExpandAll,
+  onCollapseAll,
+  onExportPng,
 }) => {
   const { t } = useTranslation('common')
-  const modeOptions: Array<{
-    key: 'document' | 'file'
-    icon: string
-    label: string
-    disabled: boolean
-  }> = [
-    { key: 'document', icon: 'contextual_token_add', label: t('mindmap_toolbar.document_mode'), disabled: !canUseDocument },
-    { key: 'file', icon: 'article', label: t('mindmap_toolbar.file_mode'), disabled: !canUseFile },
-  ]
-  const layoutOptions: Array<{ key: MindMapLayoutStyle; icon: string; title: string }> = [
-    { key: 'xmind', icon: 'schema', title: t('mindmap_toolbar.xmind_layout') },
-    { key: 'hierarchy', icon: 'account_tree', title: t('mindmap_toolbar.hierarchy_layout') },
-    { key: 'grid', icon: 'family_history', title: t('mindmap_toolbar.grid_layout') },
-  ]
-
-  const activeModeIndex = modeOptions.findIndex((opt) => opt.key === mode)
-  const highlightOffset = activeModeIndex * (MODE_BUTTON_SIZE + MODE_BUTTON_GAP)
-
-  const toolbarButtonClasses = (active: boolean) =>
-    [
-      'w-8 h-8 flex items-center justify-center rounded-lg transition-colors duration-150',
-      'text-[18px] material-symbols-outlined leading-none',
-      active ? 'text-slate-900 drop-shadow-sm' : 'text-slate-400 hover:text-slate-900',
-      'disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400',
-    ].join(' ')
-
-  const actionButtonClasses =
-    'w-8 h-8 flex items-center justify-center rounded-lg text-[18px] material-symbols-outlined leading-none text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed'
+  const layoutIcon =
+    layoutMode === 'left' ? 'left_panel_open' : layoutMode === 'right' ? 'right_panel_open' : 'account_tree'
+  const layoutTitle =
+    layoutMode === 'left'
+      ? t('mindmap_toolbar.layout_left')
+      : layoutMode === 'right'
+        ? t('mindmap_toolbar.layout_right')
+        : t('mindmap_toolbar.layout_side')
 
   return (
-    <div className="absolute top-6 right-6 z-10">
-      <div className="flex flex-col items-center gap-3 rounded-[26px] border border-slate-200 bg-white/90 backdrop-blur px-2.5 py-3 shadow-lg w-[66px]">
-        <div className="relative flex flex-col items-center gap-[6px] rounded-full border border-slate-200 bg-slate-50/90 px-2 py-2 w-full">
-          <span
-            className="absolute rounded-full bg-slate-900 transition-transform duration-200 ease-out shadow-lg"
-            style={{
-              width: MODE_BUTTON_SIZE,
-              height: MODE_BUTTON_SIZE,
-              left: '50%',
-              top: MODE_BUTTON_PADDING + highlightOffset,
-              transform: 'translateX(-50%)',
-            }}
-          />
-          {modeOptions.map((option) => {
-            const isActive = option.key === mode
-            return (
-              <button
-                key={option.key}
-                type="button"
-                title={option.label}
-                disabled={option.disabled}
-                onClick={() => onModeChange(option.key)}
-                className={[
-                  'relative z-10 rounded-full flex items-center justify-center transition-colors duration-150',
-                  isActive ? 'text-white' : 'text-slate-500 hover:text-slate-900',
-                  option.disabled ? 'opacity-40 cursor-not-allowed hover:text-slate-500' : '',
-                ].join(' ')}
-                style={{ width: MODE_BUTTON_SIZE, height: MODE_BUTTON_SIZE }}
-              >
-                <span className="material-symbols-outlined text-[22px] leading-none">{option.icon}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="w-8 h-px bg-slate-200" />
-
-        <div className="flex flex-col items-center gap-1.5">
-          {layoutOptions.map((option) => {
-            const isActive = layoutStyle === option.key
-            return (
-              <button
-                key={option.key}
-                type="button"
-                title={option.title}
-                onClick={() => onLayoutChange(option.key)}
-                className={toolbarButtonClasses(isActive)}
-              >
-                <span className="material-symbols-outlined text-[16px] leading-none">{option.icon}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="w-6 h-px bg-slate-200" />
-
-        <div className="flex flex-col items-center gap-1.5">
+    <div className="absolute inset-x-2 bottom-3 z-10 flex justify-center lg:inset-x-auto lg:bottom-auto lg:right-6 lg:top-6">
+      <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-[22px] border border-slate-200 bg-white/92 px-2 py-2 shadow-lg backdrop-blur scrollbar-hidden lg:flex-col lg:items-center lg:gap-3 lg:rounded-[26px] lg:px-2.5 lg:py-3">
+        <div className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50/90 p-1.5 lg:flex-col lg:p-2">
           <button
             type="button"
-            title={refreshLabel}
-            onClick={onRefresh}
-            disabled={refreshDisabled}
-            className={actionButtonClasses}
+            title={t('mindmap_toolbar.document_mode')}
+            disabled={!canUseDocument}
+            onClick={() => onModeChange('document')}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
+              mode === 'document' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+            } disabled:cursor-not-allowed disabled:opacity-30`}
           >
-            <span className="material-symbols-outlined text-[16px] leading-none">refresh</span>
+            <span className="material-symbols-outlined text-[20px] leading-none">description</span>
           </button>
-          {showSave && (
-            <button type="button" title={t('mindmap_toolbar.save_mindmap')} onClick={onSave} disabled={saveDisabled} className={actionButtonClasses}>
-              <span className="material-symbols-outlined text-[16px] leading-none">save</span>
-            </button>
-          )}
+          <button
+            type="button"
+            title={t('mindmap_toolbar.file_mode')}
+            disabled={!canUseFile}
+            onClick={() => onModeChange('file')}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
+              mode === 'file' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+            } disabled:cursor-not-allowed disabled:opacity-30`}
+          >
+            <span className="material-symbols-outlined text-[20px] leading-none">article</span>
+          </button>
         </div>
+
+        <div className="h-8 w-px shrink-0 bg-slate-200 lg:h-px lg:w-8" />
+
+        <button
+          type="button"
+          title={layoutTitle}
+          onClick={onCycleLayout}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">{layoutIcon}</span>
+        </button>
+        <button
+          type="button"
+          title={refreshLabel}
+          onClick={onRefresh}
+          disabled={refreshDisabled}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">refresh</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.undo')}
+          onClick={onUndo}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">undo</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.redo')}
+          onClick={onRedo}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">redo</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.fit_view')}
+          onClick={onFitView}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">fit_screen</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.expand_all')}
+          onClick={onExpandAll}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">unfold_more</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.collapse_all')}
+          onClick={onCollapseAll}
+          disabled={!canControlView}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">unfold_less</span>
+        </button>
+        <button
+          type="button"
+          title={t('mindmap_toolbar.export_png')}
+          onClick={onExportPng}
+          disabled={!canControlView}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-[18px] leading-none">download</span>
+        </button>
+        {showSave && (
+          <button
+            type="button"
+            title={t('mindmap_toolbar.save_mindmap')}
+            onClick={onSave}
+            disabled={saveDisabled}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <span className="material-symbols-outlined text-[18px] leading-none">save</span>
+          </button>
+        )}
       </div>
     </div>
   )

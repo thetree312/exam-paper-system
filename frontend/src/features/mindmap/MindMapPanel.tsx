@@ -1,251 +1,625 @@
-import React, { useState, useMemo, useCallback } from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { ReactFlowProvider } from 'reactflow'
-import 'reactflow/dist/style.css'
 
-import { useMindMapGraph } from '../../hooks/useMindMapGraph'
-import type {
-  MindMapEdgePayload,
-  MindMapNavigateTarget,
-  MindMapNodePayload,
-  MindMapSourceRef,
-  UserInfo,
-} from '../../types'
-import type { Connection, EdgeChange } from 'reactflow'
-import { saveMindMapGraph } from '../../services/mindMapApi'
-import MindMapToolbar from './components/MindMapToolbar'
-import { MindMapFlow } from './components/MindMapFlow'
-import type { MindMapLayoutStyle } from './components/MindMapFlow'
+import type { MindMapNavigateTarget, MindMapSourceRef, UserInfo } from '../../types'
+import { fetchWorkroomArtifact, upsertWorkroomArtifact } from '../../services/workroomApi'
+import { generateMindMap, saveMindMap } from './api/mindmapApi'
 import MindMapNodeEditor from './components/MindMapNodeEditor'
+import MindMapContextActions from './components/MindMapContextActions'
 import { MindMapLoadingAnimation } from './components/MindMapLoadingAnimation'
-import { useEditableMindMap } from './hooks/useEditableMindMap'
+import MindMapRadialMenu from './components/MindMapRadialMenu'
+import MindMapToolbar from './components/MindMapToolbar'
+import { findNodeById, firstQuestionRef, updateNodeById } from './domain/tree'
+import type { MindMapDocumentPayload, MindMapNodeTree, MindMapViewState } from './domain/types'
+import {
+  MindElixirCanvas,
+  type MindMapEditorController,
+  type MindMapActionResult,
+  type MindMapNodeContextMenuRequest,
+  type MindMapEditorSelectionState,
+} from './editor/MindElixirCanvas'
 
 interface MindMapPanelProps {
   backendBaseUrl: string
   documentId: number | null
   fileId: number | null
   user: UserInfo | null
+  workroomId?: number | null
   onBack?: () => void
   onNavigateToQuestion?: (target: MindMapNavigateTarget) => void
 }
-
-const generateEdgeId = () => `edge_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
 export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   backendBaseUrl,
   documentId,
   fileId,
   user,
-  onBack,
+  workroomId = null,
   onNavigateToQuestion,
 }) => {
-  const { t } = useTranslation('common')
-  const [mode, setMode] = useState<'document' | 'file'>(() => (documentId ? 'document' : 'file'))
-  const [layoutStyle, setLayoutStyle] = useState<MindMapLayoutStyle>('xmind')
-  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set())
-  const [isSaving, setIsSaving] = useState(false)
+  const { t, i18n } = useTranslation('common')
+  const [mode, setMode] = React.useState<'document' | 'file'>(() => (documentId ? 'document' : 'file'))
+  const [document, setDocument] = React.useState<MindMapDocumentPayload | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null)
+  const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null)
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [editorReady, setEditorReady] = React.useState(false)
+  const [viewState, setViewState] = React.useState<MindMapViewState | null>(null)
+  const [layoutMode, setLayoutMode] = React.useState<'side' | 'left' | 'right'>('side')
+  const [isCoarsePointer, setIsCoarsePointer] = React.useState(false)
+  const [radialMenu, setRadialMenu] = React.useState<MindMapNodeContextMenuRequest | null>(null)
+  const [actionHint, setActionHint] = React.useState<string | null>(null)
+  const [isFocusMode, setIsFocusMode] = React.useState(false)
+  const [selectionState, setSelectionState] = React.useState<MindMapEditorSelectionState>({
+    selectedNodeCount: 0,
+    hasSelectedArrow: false,
+    hasSelectedSummary: false,
+  })
+  const editorControllerRef = React.useRef<MindMapEditorController | null>(null)
+  const actionHintTimerRef = React.useRef<number | null>(null)
+  const handleControllerReady = React.useCallback((controller: MindMapEditorController | null) => {
+    editorControllerRef.current = controller
+    setEditorReady(Boolean(controller))
+  }, [])
 
   const source: MindMapSourceRef | null = React.useMemo(() => {
     if (!user) return null
-    if (mode === 'document' && documentId) {
-      return { sourceType: 'exam_document', sourceId: documentId, kind: 'knowledge' }
-    }
-    if (mode === 'file' && fileId) {
-      return { sourceType: 'uploaded_file', sourceId: fileId, kind: 'knowledge' }
-    }
+    if (mode === 'document' && documentId) return { sourceType: 'exam_document', sourceId: documentId, kind: 'knowledge' }
+    if (mode === 'file' && fileId) return { sourceType: 'uploaded_file', sourceId: fileId, kind: 'knowledge' }
     return null
   }, [user, mode, documentId, fileId])
 
-  const { data, isLoading, error, refresh } = useMindMapGraph(
-    backendBaseUrl,
-    source,
-    user?.tenant_id ?? null,
-    user?.id ?? null,
+  const editingNode = React.useMemo(
+    () => (document && editingNodeId ? findNodeById(document.root, editingNodeId) : null),
+    [document, editingNodeId],
   )
-  const {
-    nodes: editableNodes,
-    edges: editableEdges,
-    setNodes: setEditableNodes,
-    setEdges: setEditableEdges,
-  } = useEditableMindMap(data?.nodes, data?.edges)
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const selectedNode = useMemo(
-    () => editableNodes.find((node) => node.id === selectedNodeId) ?? null,
-    [selectedNodeId, editableNodes],
-  )
-
-  const showQuestionAnchors = mode === 'document'
-  const hasGraph = editableNodes.length > 0
-  const primaryButtonLabel = isLoading ? t('mindmap.generating') : hasGraph ? t('mindmap.regenerate') : t('mindmap.generate')
 
   const canUseDocument = Boolean(documentId)
   const canUseFile = Boolean(fileId)
-  const canGenerateCurrent = Boolean(source)
+  const canGenerateCurrent = Boolean(source && user && workroomId)
 
-  const handleNavigate = useCallback(
-    (node: MindMapNodePayload) => {
-      if (!onNavigateToQuestion) return
-      const target: MindMapNavigateTarget = {
-        questionId: node.data?.questionIds?.[0],
-        sequenceIndex: node.data?.sequenceIndexes?.[0],
-        page: node.data?.page,
-        label: node.label,
-        rawNode: node,
+  const loadDocument = React.useCallback(
+    async (force = false) => {
+      if (!source || !user || !workroomId) return
+      setIsLoading(true)
+      setError(null)
+      try {
+        const generated = await generateMindMap(
+          backendBaseUrl,
+          source,
+          user.tenant_id,
+          workroomId,
+          user.id,
+          force,
+        )
+        setDocument(generated)
+      } catch (err) {
+        console.error('[mindmap] load failed', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
+        setDocument(null)
+      } finally {
+        setIsLoading(false)
       }
-      onNavigateToQuestion(target)
+    },
+    [backendBaseUrl, source, user, workroomId],
+  )
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mediaQuery = window.matchMedia('(pointer: coarse)')
+    const updatePointerMode = () => setIsCoarsePointer(mediaQuery.matches)
+    updatePointerMode()
+    mediaQuery.addEventListener?.('change', updatePointerMode)
+    return () => mediaQuery.removeEventListener?.('change', updatePointerMode)
+  }, [])
+
+  React.useEffect(() => {
+    setSelectedNodeId(null)
+    setEditingNodeId(null)
+    setLayoutMode('side')
+    setRadialMenu(null)
+    setActionHint(null)
+    setIsFocusMode(false)
+    setSelectionState({
+      selectedNodeCount: 0,
+      hasSelectedArrow: false,
+      hasSelectedSummary: false,
+    })
+    void loadDocument(false)
+  }, [loadDocument])
+
+  React.useEffect(() => {
+    if (!document || !source || !user || !workroomId) return
+    setViewState(null)
+    let cancelled = false
+    void fetchWorkroomArtifact(
+      backendBaseUrl,
+      workroomId,
+      user.tenant_id,
+      user.id,
+      'mindmap_panel',
+      'current',
+    )
+      .then((artifact) => {
+        if (cancelled || !artifact) return
+        const payload = artifact.payload_json ?? {}
+        const artifactSourceType = payload.sourceType
+        const artifactSourceId = payload.sourceId
+        const artifactMindmapId = payload.mindmapId
+        const artifactSelectedNodeId = payload.selectedNodeId
+        const artifactViewState = payload.viewState
+        const artifactLayoutMode = payload.layoutMode
+        if (artifactSourceType !== source.sourceType || artifactSourceId !== source.sourceId) return
+        if (typeof artifactSelectedNodeId === 'string') {
+          setSelectedNodeId(artifactSelectedNodeId)
+        }
+        if (artifactLayoutMode === 'side' || artifactLayoutMode === 'left' || artifactLayoutMode === 'right') {
+          setLayoutMode(artifactLayoutMode)
+        } else {
+          setLayoutMode('side')
+        }
+        if (
+          artifactMindmapId === document.id &&
+          artifactViewState &&
+          typeof artifactViewState === 'object' &&
+          typeof (artifactViewState as Record<string, unknown>).scale === 'number' &&
+          typeof (artifactViewState as Record<string, unknown>).translateX === 'number' &&
+          typeof (artifactViewState as Record<string, unknown>).translateY === 'number'
+        ) {
+          setViewState(artifactViewState as MindMapViewState)
+        } else {
+          setViewState(null)
+        }
+      })
+      .catch((err) => {
+        console.error('[mindmap] failed to load panel state', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [backendBaseUrl, document?.id, source, user, workroomId])
+
+  React.useEffect(() => {
+    if (!radialMenu) return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.mindmap-radial-menu')) return
+      setRadialMenu(null)
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRadialMenu(null)
+    }
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [radialMenu])
+
+  React.useEffect(() => {
+    if (!radialMenu) return
+    if (selectedNodeId !== radialMenu.nodeId || isCoarsePointer) {
+      setRadialMenu(null)
+    }
+  }, [radialMenu, selectedNodeId, isCoarsePointer])
+
+  React.useEffect(() => {
+    if (!document || !user || !workroomId) return
+    const timer = window.setTimeout(() => {
+      void upsertWorkroomArtifact(
+        backendBaseUrl,
+        workroomId,
+        user.tenant_id,
+        user.id,
+        'mindmap_panel',
+        'current',
+        {
+          source_file_id: mode === 'file' ? fileId ?? undefined : undefined,
+          studio_document_id: mode === 'document' ? documentId ?? undefined : undefined,
+          payload_json: {
+            mindmapId: document.id,
+            sourceType: document.source.type,
+            sourceId: document.source.id,
+            selectedNodeId,
+            viewState,
+            layoutMode,
+          },
+        },
+      ).catch((err) => {
+        console.error('[mindmap] failed to persist panel state', err)
+      })
+    }, 220)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    backendBaseUrl,
+    workroomId,
+    user,
+    document?.id,
+    document?.source?.type,
+    document?.source?.id,
+    selectedNodeId,
+    viewState,
+    layoutMode,
+    mode,
+    fileId,
+    documentId,
+  ])
+
+  const handleSave = React.useCallback(async () => {
+    if (!document || !user || !workroomId) return
+    setIsSaving(true)
+    try {
+      const snapshot = editorControllerRef.current?.flushSnapshot() ?? document
+      const saved = await saveMindMap(backendBaseUrl, user.tenant_id, workroomId, user.id, snapshot)
+      setDocument(saved)
+    } catch (err) {
+      console.error('[mindmap] save failed', err)
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setIsSaving(false)
+    }
+  }, [backendBaseUrl, document, user, workroomId])
+
+  const handleNavigate = React.useCallback(
+    (node: MindMapNodeTree) => {
+      if (!onNavigateToQuestion) return
+      const ref = firstQuestionRef(node)
+      onNavigateToQuestion({
+        questionId: ref?.questionId ?? null,
+        sequenceIndex: ref?.sequenceIndex ?? null,
+        page: ref?.page ?? null,
+        label: node.topic,
+      })
     },
     [onNavigateToQuestion],
   )
 
-  const handleNodeSelect = useCallback((node: MindMapNodePayload) => {
-    setSelectedNodeId(node.id)
+  const closeRadialMenu = React.useCallback(() => {
+    setRadialMenu(null)
   }, [])
 
-  const handleNodeUpdate = useCallback(
-    (updated: MindMapNodePayload) => {
-      setEditableNodes((prev) => prev.map((node) => (node.id === updated.id ? updated : node)))
-    },
-    [setEditableNodes],
-  )
-
-  const handleEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
-      setEditableEdges((prev) => {
-        let next = [...prev]
-        changes.forEach((change) => {
-          if (change.type === 'remove') {
-            next = next.filter((edge) => edge.id !== change.id)
-          }
-        })
-        return next
-      })
-    },
-    [setEditableEdges],
-  )
-
-  const handleConnect = useCallback(
-    (connection: Connection) => {
-      if (!connection.source || !connection.target) return
-      setEditableEdges((prev) => [
-        ...prev,
-        {
-          id: generateEdgeId(),
-          source: connection.source,
-          target: connection.target,
-          label: '',
-          type: 'hierarchy',
-        },
-      ])
-    },
-    [setEditableEdges],
-  )
+  const showActionHint = React.useCallback((message: string) => {
+    if (actionHintTimerRef.current !== null) {
+      window.clearTimeout(actionHintTimerRef.current)
+    }
+    setActionHint(message)
+    actionHintTimerRef.current = window.setTimeout(() => {
+      setActionHint(null)
+      actionHintTimerRef.current = null
+    }, 1800)
+  }, [])
 
   React.useEffect(() => {
-    if (selectedNodeId && !editableNodes.some((node) => node.id === selectedNodeId)) {
-      setSelectedNodeId(null)
+    return () => {
+      if (actionHintTimerRef.current !== null) {
+        window.clearTimeout(actionHintTimerRef.current)
+      }
     }
-  }, [editableNodes, selectedNodeId])
+  }, [])
 
-  const handleToggleCollapse = (nodeId: string) => {
-    setCollapsedNodeIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(nodeId)) next.delete(nodeId)
-      else next.add(nodeId)
-      return next
-    })
-  }
+  const isZh = React.useMemo(() => {
+    const lang = (i18n.resolvedLanguage ?? i18n.language ?? '').toLowerCase()
+    return lang.startsWith('zh')
+  }, [i18n.language, i18n.resolvedLanguage])
 
-  const handleSave = async () => {
-    if (!hasGraph || !user || !source) return
-    if (isSaving) return
-    setIsSaving(true)
-    try {
-      const rootId =
-        data?.rootId ?? editableNodes.find((n) => !n.parentId)?.id ?? null
-      await saveMindMapGraph(backendBaseUrl, {
-        source,
-        tenantId: user.tenant_id,
-        userId: user.id,
-        rootId,
-        nodes: editableNodes,
-        edges: editableEdges,
+  const menuLabel = React.useCallback(
+    (zh: string, en: string) => (isZh ? zh : en),
+    [isZh],
+  )
+
+  const radialActions = React.useMemo(() => {
+    const controller = editorControllerRef.current
+    const selectedCount = selectionState.selectedNodeCount
+    const hasSelectedArrow = selectionState.hasSelectedArrow
+    const hasSelectedSummary = selectionState.hasSelectedSummary
+
+    const run = (action: () => void) => () => {
+      action()
+      closeRadialMenu()
+    }
+
+    const runBoolean = (
+      action: () => boolean | undefined,
+      okMessage: string,
+      failMessage: string,
+    ) =>
+      run(() => {
+        const ok = Boolean(action())
+        showActionHint(ok ? okMessage : failMessage)
       })
-    } catch (err) {
-      // 这里不弹 toast，交给上层或控制台
-      console.error('[mindmap] save failed', err)
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
-  if (!user || (!documentId && !fileId)) {
+    return [
+      {
+        icon: 'edit_note',
+        label: menuLabel('编辑节点', 'Edit Node'),
+        angle: -120,
+        onClick: run(() => {
+          if (selectedNodeId) setEditingNodeId(selectedNodeId)
+        }),
+      },
+      {
+        icon: 'account_tree',
+        label: menuLabel('新增子节点', 'Add Child'),
+        angle: -75,
+        onClick: runBoolean(
+          () => controller?.addChildNode(),
+          menuLabel('已新增子节点', 'Child node added'),
+          menuLabel('无法新增子节点', 'Unable to add child node'),
+        ),
+      },
+      {
+        icon: 'add_2',
+        label: menuLabel('新增同级', 'Add Sibling'),
+        angle: -30,
+        onClick: runBoolean(
+          () => controller?.addSiblingNode(),
+          menuLabel('已新增同级节点', 'Sibling node added'),
+          menuLabel('无法新增同级节点', 'Unable to add sibling node'),
+        ),
+      },
+      {
+        icon: 'timeline',
+        label: selectedCount === 2 ? menuLabel('创建连线', 'Create Link') : menuLabel('连线模式', 'Link Mode'),
+        angle: 15,
+        onClick: run(() => {
+          if (selectedCount === 2) {
+            controller?.createArrow()
+            showActionHint(menuLabel('已创建连线', 'Link created'))
+            return
+          }
+          if (controller?.beginLinkMode(false)) {
+            showActionHint(menuLabel('请点击目标节点完成连线', 'Select target node to finish link'))
+          }
+        }),
+      },
+      {
+        icon: 'swap_horiz',
+        label:
+          selectedCount === 2
+            ? menuLabel('双向连线', 'Bidirectional Link')
+            : menuLabel('双向连线模式', 'Bidirectional Mode'),
+        angle: 60,
+        onClick: run(() => {
+          if (selectedCount === 2) {
+            const ok = controller?.createBidirectionalArrow()
+            showActionHint(
+              ok
+                ? menuLabel('已创建双向连线', 'Bidirectional link created')
+                : menuLabel('无法创建双向连线', 'Unable to create bidirectional link'),
+            )
+            return
+          }
+          if (controller?.beginLinkMode(true)) {
+            showActionHint(menuLabel('请点击目标节点完成双向连线', 'Select target node to finish bidirectional link'))
+          }
+        }),
+      },
+      {
+        icon: 'join_inner',
+        label:
+          selectedCount >= 2 ? menuLabel('总结', 'Summary') : menuLabel('总结（需先多选）', 'Summary (multi-select)'),
+        angle: 105,
+        disabled: selectedCount < 2,
+        onClick: run(() => {
+          const result: MindMapActionResult = controller?.createSummary() ?? { ok: false, reason: 'unknown' }
+          if (result.ok) {
+            showActionHint(menuLabel('已创建总结，可继续创建更多总结', 'Summary created, you can add more'))
+            return
+          }
+          if (result.reason === 'requires_multiple_nodes') {
+            showActionHint(menuLabel('请先多选至少两个节点', 'Select at least two nodes'))
+            return
+          }
+          if (result.reason === 'requires_same_parent') {
+            showActionHint(menuLabel('请选择同一主节点下的多个同级节点', 'Select sibling nodes under the same main topic'))
+            return
+          }
+          showActionHint(menuLabel('当前选择无法创建总结', 'Cannot create summary for current selection'))
+        }),
+      },
+      {
+        icon: 'edit',
+        label: hasSelectedSummary ? menuLabel('编辑总结', 'Edit Summary') : menuLabel('编辑总结（需先选中）', 'Edit Summary (select first)'),
+        angle: 128,
+        disabled: !hasSelectedSummary,
+        onClick: runBoolean(
+          () => controller?.editSummary(),
+          menuLabel('已进入总结编辑', 'Summary edit opened'),
+          menuLabel('请先选中一个总结', 'Select a summary first'),
+        ),
+      },
+      {
+        icon: 'delete_sweep',
+        label: hasSelectedSummary ? menuLabel('删除总结', 'Remove Summary') : menuLabel('删除总结（需先选中）', 'Remove Summary (select first)'),
+        angle: 144,
+        disabled: !hasSelectedSummary,
+        onClick: runBoolean(
+          () => controller?.removeSummary(),
+          menuLabel('已删除总结', 'Summary removed'),
+          menuLabel('请先选中一个总结', 'Select a summary first'),
+        ),
+      },
+      {
+        icon: 'filter_center_focus',
+        label: isFocusMode ? menuLabel('退出聚焦', 'Cancel Focus') : menuLabel('退出聚焦（未启用）', 'Cancel Focus (inactive)'),
+        angle: 150,
+        disabled: !isFocusMode,
+        onClick: run(() => {
+          if (controller?.cancelFocusMode()) {
+            setIsFocusMode(false)
+            showActionHint(menuLabel('已退出聚焦模式', 'Focus mode cancelled'))
+          }
+        }),
+      },
+      {
+        icon: 'center_focus_strong',
+        label: menuLabel('聚焦模式', 'Focus Mode'),
+        angle: 195,
+        onClick: run(() => {
+          if (controller?.focusNode()) {
+            setIsFocusMode(true)
+            showActionHint(menuLabel('已进入聚焦模式', 'Focus mode enabled'))
+          }
+        }),
+      },
+      {
+        icon: 'delete',
+        label: menuLabel('删除节点', 'Delete Node'),
+        angle: 240,
+        tone: 'danger' as const,
+        onClick: runBoolean(
+          () => controller?.removeSelection(),
+          menuLabel('已删除当前对象', 'Current selection removed'),
+          menuLabel('当前没有可删除对象', 'Nothing selected to remove'),
+        ),
+      },
+      {
+        icon: 'playlist_add',
+        label: menuLabel('新增父节点', 'Add Parent'),
+        angle: 285,
+        onClick: runBoolean(
+          () => controller?.addParentNode(),
+          menuLabel('已新增父节点', 'Parent node added'),
+          menuLabel('无法新增父节点', 'Unable to add parent node'),
+        ),
+      },
+      {
+        icon: 'arrow_upward',
+        label: menuLabel('上移节点', 'Move Up'),
+        angle: 330,
+        onClick: runBoolean(
+          () => controller?.moveNodeUp(),
+          menuLabel('已上移节点', 'Node moved up'),
+          menuLabel('该节点无法上移', 'Node cannot be moved up'),
+        ),
+      },
+      {
+        icon: 'arrow_downward',
+        label: menuLabel('下移节点', 'Move Down'),
+        angle: 375,
+        onClick: runBoolean(
+          () => controller?.moveNodeDown(),
+          menuLabel('已下移节点', 'Node moved down'),
+          menuLabel('该节点无法下移', 'Node cannot be moved down'),
+        ),
+      },
+      {
+        icon: 'edit_square',
+        label: hasSelectedArrow ? menuLabel('编辑连线', 'Edit Link') : menuLabel('编辑连线（需先选中）', 'Edit Link (select first)'),
+        angle: 30,
+        disabled: !hasSelectedArrow,
+        onClick: runBoolean(
+          () => controller?.editArrow(),
+          menuLabel('已进入连线编辑', 'Link edit opened'),
+          menuLabel('请先选中一条连线', 'Select a link first'),
+        ),
+      },
+      {
+        icon: 'link_off',
+        label: hasSelectedArrow ? menuLabel('删除连线', 'Remove Link') : menuLabel('删除连线（需先选中）', 'Remove Link (select first)'),
+        angle: 46,
+        disabled: !hasSelectedArrow,
+        onClick: runBoolean(
+          () => controller?.removeArrow(),
+          menuLabel('已删除连线', 'Link removed'),
+          menuLabel('请先选中一条连线', 'Select a link first'),
+        ),
+      },
+    ]
+  }, [
+    closeRadialMenu,
+    isFocusMode,
+    menuLabel,
+    selectedNodeId,
+    selectionState.hasSelectedArrow,
+    selectionState.hasSelectedSummary,
+    selectionState.selectedNodeCount,
+    showActionHint,
+  ])
+
+  if (!user || !workroomId || (!documentId && !fileId)) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
-        <p>
-          {!user
-            ? t('mindmap.login_required')
-            : t('mindmap.no_source')}
-        </p>
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-slate-500">
+        <p>{!user ? t('mindmap.login_required') : !workroomId ? 'Workroom context required' : t('mindmap.no_source')}</p>
       </div>
     )
   }
 
-  const handleModeChange = (nextMode: 'document' | 'file') => {
-    if (nextMode === 'document' && mode !== 'document') {
-      setMode('document')
-    }
-    if (nextMode === 'file' && mode !== 'file') {
-      setMode('file')
-    }
-  }
-
-  const toolbarRefreshDisabled = isLoading || !canGenerateCurrent
-
   return (
-    <div className="h-full w-full flex flex-col bg-white">
-      <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50 pr-44">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Knowledge Map</p>
-          <h2 className="text-xl font-semibold text-slate-900">{t('mindmap_panel.title')}</h2>
-          {data?.cached && (
-            <span className="text-xs text-emerald-600 font-semibold">{t('mindmap_panel.cached')}</span>
-          )}
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-transparent">
+      <div className="flex shrink-0 flex-col gap-1 px-2 py-2 sm:px-3 sm:py-2">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 sm:text-[11px]">Mindmap Workspace</p>
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+            <h2 className="truncate text-base font-semibold leading-none text-slate-900 sm:text-lg">{t('mindmap_panel.title')}</h2>
+            {document && (
+              <span className="shrink-0 pb-0.5 text-[11px] font-semibold text-emerald-600 sm:text-xs">
+                {'v' + document.version + ' | ' + document.meta.generatedBy}
+              </span>
+            )}
+          </div>
         </div>
-      </header>
-      <div className="flex-1 relative">
+      </div>
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white/88 shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:border sm:border-slate-200">
         <MindMapToolbar
           mode={mode}
-          onModeChange={handleModeChange}
+          onModeChange={setMode}
+          layoutMode={layoutMode}
+          onCycleLayout={() => {
+            const nextLayout = layoutMode === 'side' ? 'left' : layoutMode === 'left' ? 'right' : 'side'
+            setLayoutMode(nextLayout)
+            editorControllerRef.current?.setLayout(nextLayout)
+          }}
           canUseDocument={canUseDocument}
           canUseFile={canUseFile}
-          layoutStyle={layoutStyle}
-          onLayoutChange={setLayoutStyle}
-          onRefresh={refresh}
-          refreshDisabled={toolbarRefreshDisabled}
-          refreshLabel={primaryButtonLabel}
-          showSave={hasGraph}
-          onSave={handleSave}
-          saveDisabled={isSaving}
+          onRefresh={() => void loadDocument(true)}
+          refreshDisabled={!canGenerateCurrent || isLoading}
+          refreshLabel={isLoading ? t('mindmap.generating') : document ? t('mindmap.regenerate') : t('mindmap.generate')}
+          showSave={Boolean(document)}
+          onSave={() => void handleSave()}
+          saveDisabled={isSaving || !document}
+          canControlView={Boolean(document && editorReady)}
+          onUndo={() => {
+            editorControllerRef.current?.undo()
+          }}
+          onRedo={() => {
+            editorControllerRef.current?.redo()
+          }}
+          onFitView={() => editorControllerRef.current?.fitView()}
+          onExpandAll={() => editorControllerRef.current?.expandAll()}
+          onCollapseAll={() => editorControllerRef.current?.collapseAll()}
+          onExportPng={() => {
+            void editorControllerRef.current?.exportPng()
+          }}
         />
+        {actionHint && (
+          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur">
+            {actionHint}
+          </div>
+        )}
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
             <MindMapLoadingAnimation />
           </div>
         )}
-        {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-rose-600 text-sm gap-3">
+        {error && !isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-center text-sm text-rose-600">
             <p>{t('mindmap_panel.load_failed', { error })}</p>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-600 hover:bg-rose-50"
-              onClick={refresh}
+              className="rounded-full border border-rose-200 px-3 py-1.5 text-rose-600 hover:bg-rose-50"
+              onClick={() => void loadDocument(true)}
             >
               {t('mindmap_panel.retry')}
             </button>
           </div>
         )}
-        {!hasGraph && !isLoading && !error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-4">
+        {!document && !isLoading && !error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-4 text-center text-slate-500">
             <p className="text-sm">
               {mode === 'document'
                 ? canUseDocument
@@ -257,39 +631,130 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             </p>
             <button
               type="button"
-              className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm shadow-lg hover:bg-slate-800"
-              onClick={refresh}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg hover:bg-slate-800"
+              onClick={() => void loadDocument(true)}
               disabled={!canGenerateCurrent}
             >
               {t('mindmap_panel.generate_now')}
             </button>
           </div>
         )}
-        {hasGraph && (
-          <ReactFlowProvider>
-            <MindMapFlow
-              nodes={editableNodes}
-              edges={editableEdges}
-              layoutStyle={layoutStyle}
-              rootId={data?.rootId}
-              collapsedIds={collapsedNodeIds}
-              onNodeSelect={handleNodeSelect}
-              onEdgesChange={handleEdgesChange}
-              onConnect={handleConnect}
-              showQuestionAnchors={showQuestionAnchors}
-            />
-          </ReactFlowProvider>
+        {document && (
+          <MindElixirCanvas
+            document={document}
+            onDocumentChange={setDocument}
+            onNodeSelect={(nodeId) => {
+              setSelectedNodeId(nodeId)
+              if (radialMenu && radialMenu.nodeId !== nodeId) setRadialMenu(null)
+            }}
+            onNodeDoubleClick={(nodeId) => {
+              setRadialMenu(null)
+              setEditingNodeId(nodeId)
+            }}
+            onNodeContextMenu={(request) => {
+              if (isCoarsePointer) return
+              setRadialMenu(request)
+            }}
+            initialViewState={viewState}
+            onViewStateChange={setViewState}
+            onSelectionStateChange={setSelectionState}
+            onControllerReady={handleControllerReady}
+          />
+        )}
+        <MindMapRadialMenu
+          anchor={radialMenu ? { x: radialMenu.x, y: radialMenu.y } : null}
+          visible={Boolean(radialMenu && editorReady && !isCoarsePointer)}
+          actions={radialActions}
+          onClose={closeRadialMenu}
+          uiLabels={{
+            close: menuLabel('关闭菜单', 'Close menu'),
+            more: menuLabel('更多操作', 'More actions'),
+            back: menuLabel('返回主菜单', 'Back to primary'),
+          }}
+        />
+        {isCoarsePointer && (
+          <MindMapContextActions
+            canEditNode={
+              selectionState.selectedNodeCount === 1 &&
+              !selectionState.hasSelectedArrow &&
+              !selectionState.hasSelectedSummary &&
+              editorReady
+            }
+            canAddChild={
+              selectionState.selectedNodeCount === 1 &&
+              !selectionState.hasSelectedArrow &&
+              !selectionState.hasSelectedSummary &&
+              editorReady
+            }
+            canAddSibling={
+              selectionState.selectedNodeCount === 1 &&
+              !selectionState.hasSelectedArrow &&
+              !selectionState.hasSelectedSummary &&
+              editorReady
+            }
+            canRemoveSelection={
+              selectionState.selectedNodeCount === 1 &&
+              !selectionState.hasSelectedArrow &&
+              !selectionState.hasSelectedSummary &&
+              editorReady
+            }
+            onEditNode={() => {
+              if (selectedNodeId) setEditingNodeId(selectedNodeId)
+            }}
+            onAddChild={() => {
+              editorControllerRef.current?.addChildNode()
+            }}
+            onAddSibling={() => {
+              editorControllerRef.current?.addSiblingNode()
+            }}
+            onRemoveSelection={() => {
+              editorControllerRef.current?.removeSelection()
+            }}
+            canCreateArrow={selectionState.selectedNodeCount === 2 && editorReady}
+            canEditArrow={selectionState.hasSelectedArrow && editorReady}
+            canRemoveArrow={selectionState.hasSelectedArrow && editorReady}
+            onCreateArrow={() => {
+              editorControllerRef.current?.createArrow()
+            }}
+            onEditArrow={() => {
+              editorControllerRef.current?.editArrow()
+            }}
+            onRemoveArrow={() => {
+              editorControllerRef.current?.removeArrow()
+            }}
+            canCreateSummary={selectionState.selectedNodeCount >= 2 && editorReady}
+            canEditSummary={selectionState.hasSelectedSummary && editorReady}
+            canRemoveSummary={selectionState.hasSelectedSummary && editorReady}
+            onCreateSummary={() => {
+              editorControllerRef.current?.createSummary()
+            }}
+            onEditSummary={() => {
+              editorControllerRef.current?.editSummary()
+            }}
+            onRemoveSummary={() => {
+              editorControllerRef.current?.removeSummary()
+            }}
+          />
         )}
         <MindMapNodeEditor
-          node={selectedNode}
-          onClose={() => setSelectedNodeId(null)}
-          onSubmit={(updated) => {
-            handleNodeUpdate(updated)
-            setSelectedNodeId(null)
-          }}
+          node={editingNode}
+          onClose={() => setEditingNodeId(null)}
           onNavigate={handleNavigate}
+          onSubmit={(updated) => {
+            if (!document) return
+            setDocument({
+              ...document,
+              root: updateNodeById(document.root, updated.id, () => updated),
+              meta: {
+                ...document.meta,
+                updatedAt: new Date().toISOString(),
+              },
+            })
+            setEditingNodeId(null)
+          }}
         />
       </div>
     </div>
   )
 }
+

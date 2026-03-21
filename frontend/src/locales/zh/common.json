@@ -421,7 +421,16 @@
     "xmind_layout": "XMind 风格",
     "hierarchy_layout": "知识脉络",
     "grid_layout": "总览网格",
-    "save_mindmap": "保存思维导图"
+    "save_mindmap": "保存思维导图",
+    "layout_side": "布局：双侧",
+    "layout_left": "布局：左侧",
+    "layout_right": "布局：右侧",
+    "undo": "撤销",
+    "redo": "重做",
+    "fit_view": "适配视图",
+    "expand_all": "展开全部",
+    "collapse_all": "收起全部",
+    "export_png": "导出 PNG"
   },
   "mindmap_panel": {
     "title": "知识点思维导图",

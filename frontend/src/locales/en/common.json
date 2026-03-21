@@ -447,7 +447,16 @@
     "xmind_layout": "XMind Style",
     "hierarchy_layout": "Knowledge Hierarchy",
     "grid_layout": "Grid Overview",
-    "save_mindmap": "Save Mind Map"
+    "save_mindmap": "Save Mind Map",
+    "layout_side": "Layout: Side",
+    "layout_left": "Layout: Left",
+    "layout_right": "Layout: Right",
+    "undo": "Undo",
+    "redo": "Redo",
+    "fit_view": "Fit View",
+    "expand_all": "Expand All",
+    "collapse_all": "Collapse All",
+    "export_png": "Export PNG"
   },
   "mindmap_panel": {
     "title": "Knowledge Mind Map",

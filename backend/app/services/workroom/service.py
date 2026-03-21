@@ -93,6 +93,23 @@ class WorkroomService:
     def list_sources(self, *, tenant_id: int, user_id: int, workroom_id: int) -> list[dict[str, Any]]:
         return self.repo.list_sources(tenant_id=tenant_id, user_id=user_id, workroom_id=workroom_id)
 
+    def get_artifact(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int,
+        artifact_type: str,
+        artifact_ref_id: str,
+    ) -> dict[str, Any] | None:
+        return self.repo.get_artifact(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            workroom_id=workroom_id,
+            artifact_type=artifact_type,
+            artifact_ref_id=artifact_ref_id,
+        )
+
     def upsert_artifact(
         self,
         *,

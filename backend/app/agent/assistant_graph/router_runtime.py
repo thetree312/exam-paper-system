@@ -256,27 +256,45 @@ def build_agent_environment_model(
         doc_row = db.execute(
             text(
                 """
-                SELECT title, mindmap_cache
-                FROM documents
-                WHERE id = :document_id
-                  AND tenant_id = :tenant_id
-                  AND owner_user_id = :user_id
+                SELECT d.title, m.graph_json
+                FROM documents AS d
+                LEFT JOIN mindmaps AS m
+                  ON m.tenant_id = d.tenant_id
+                 AND m.workroom_id = :workroom_id
+                 AND m.source_type = 'exam_document'
+                 AND m.source_id = d.id
+                 AND m.kind = 'knowledge'
+                 AND m.is_active = TRUE
+                WHERE d.id = :document_id
+                  AND d.tenant_id = :tenant_id
+                  AND d.owner_user_id = :user_id
                 LIMIT 1
                 """
             ),
-            {"document_id": int(resolved_document_id), "tenant_id": int(tenant_id), "user_id": int(user_id)},
+            {
+                "document_id": int(resolved_document_id),
+                "tenant_id": int(tenant_id),
+                "user_id": int(user_id),
+                "workroom_id": int(workroom_id),
+            },
         ).fetchone()
         if doc_row:
             studio_title = str(doc_row[0] or "")
-            raw_mindmap = str(doc_row[1] or "").strip()
-            if raw_mindmap:
+            graph_json = doc_row[1] if isinstance(doc_row[1], dict) else None
+            if graph_json:
                 try:
-                    parsed = json.loads(raw_mindmap)
-                    if isinstance(parsed, dict):
-                        nodes = parsed.get("nodes") if isinstance(parsed.get("nodes"), list) else []
-                        edges = parsed.get("edges") if isinstance(parsed.get("edges"), list) else []
-                        mindmap_node_count = len(nodes)
-                        mindmap_edge_count = len(edges)
+                    root = graph_json.get("root") if isinstance(graph_json, dict) else None
+                    relations = graph_json.get("relations") if isinstance(graph_json, dict) else []
+
+                    def _count_tree_nodes(node: dict | None) -> int:
+                        if not isinstance(node, dict):
+                            return 0
+                        children = node.get("children")
+                        child_nodes = children if isinstance(children, list) else []
+                        return 1 + sum(_count_tree_nodes(child) for child in child_nodes)
+
+                    mindmap_node_count = _count_tree_nodes(root)
+                    mindmap_edge_count = len(relations) if isinstance(relations, list) else 0
                 except Exception:
                     mindmap_node_count = 0
                     mindmap_edge_count = 0

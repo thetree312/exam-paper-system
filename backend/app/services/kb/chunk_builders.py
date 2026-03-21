@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Iterable
 
-from .types import KBChunkRow
+from .types import KBChunkRow, KBUnitRow
 
 
 def _estimate_tokens(text: str) -> int:
@@ -97,3 +97,57 @@ def build_page_image_chunk_rows(
             )
         )
     return rows
+
+
+def build_page_unit_rows(
+    blocks: Iterable[Any],
+    pages: Iterable[dict[str, Any]],
+    *,
+    title: str | None = None,
+) -> list[KBUnitRow]:
+    text_by_page: dict[int, list[str]] = {}
+    for block in blocks:
+        page_no_raw = getattr(block, "page_num", None)
+        content = str(getattr(block, "content", "") or "").strip()
+        if not content:
+            continue
+        page_no = int(page_no_raw or 1)
+        if page_no <= 0:
+            page_no = 1
+        text_by_page.setdefault(page_no, []).append(content)
+
+    pages_by_no: dict[int, dict[str, Any]] = {}
+    for page in pages:
+        page_no = int(page.get("page_no") or 1)
+        if page_no <= 0:
+            page_no = 1
+        pages_by_no[page_no] = dict(page)
+
+    all_page_nos = sorted(set(text_by_page.keys()) | set(pages_by_no.keys()))
+    if not all_page_nos:
+        return []
+
+    unit_rows: list[KBUnitRow] = []
+    for page_no in all_page_nos:
+        page = pages_by_no.get(page_no) or {}
+        text_content = "\n".join(text_by_page.get(page_no) or []).strip() or None
+        primary_image_path = str(page.get("preview_image_path") or "").strip() or None
+        preview_text = str(page.get("preview_text") or "").strip() or None
+        merged_text = text_content or preview_text
+        token_count = _estimate_tokens(merged_text or "")
+        content_hash = _hash_payload("unit", page_no, merged_text, primary_image_path, title)
+        unit_rows.append(
+            KBUnitRow(
+                unit_key=f"page:{page_no}",
+                unit_type="page",
+                page_no_start=page_no,
+                page_no_end=page_no,
+                title=title,
+                text_content=merged_text,
+                primary_image_path=primary_image_path,
+                token_count=max(1, token_count) if (merged_text or primary_image_path) else 0,
+                metadata_json={"page_no": page_no, "unit_type": "page"},
+                content_hash=content_hash,
+            )
+        )
+    return unit_rows

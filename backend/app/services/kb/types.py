@@ -26,3 +26,17 @@ class KBPageBundle:
     primary_image: dict[str, Any] | None = None
     preview_image_path: str | None = None
     source_refs: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class KBUnitRow:
+    unit_key: str
+    unit_type: str
+    page_no_start: int | None
+    page_no_end: int | None
+    title: str | None
+    text_content: str | None
+    primary_image_path: str | None
+    token_count: int
+    metadata_json: dict[str, Any] = field(default_factory=dict)
+    content_hash: str = ""

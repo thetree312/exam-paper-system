@@ -67,6 +67,11 @@ def normalize_messages(raw: list[Any] | None) -> list[dict[str, Any]]:
 
 
 def sanitize_tool_content_for_history(content: Any) -> Any:
+    if isinstance(content, str):
+        text = content
+        if len(text) > 1600:
+            text = text[:1600] + f"...[truncated {len(text) - 1600} chars]"
+        return text
     if isinstance(content, list):
         sanitized: list[dict[str, Any]] = []
         for item in content:

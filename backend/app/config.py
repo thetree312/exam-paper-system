@@ -60,6 +60,9 @@ class Settings:
         self.alibaba_model_qwen_plus: str = os.getenv(
             "ALIBABA_MODEL_QWEN_PLUS", "qwen3.5-plus"
         )
+        self.alibaba_model_qwen_long: str = os.getenv(
+            "ALIBABA_MODEL_QWEN_LONG", "qwen-long"
+        )
         self.alibaba_explicit_cache_enabled: bool = (
             os.getenv("ALIBABA_EXPLICIT_CACHE_ENABLED", "true").strip().lower() == "true"
         )
@@ -117,6 +120,12 @@ class Settings:
         )
         self.max_upload_bytes: int = int(
             os.getenv("MAX_UPLOAD_BYTES", str(300 * 1024 * 1024))
+        )
+        self.bailian_file_retention_days: int = int(
+            os.getenv("BAILIAN_FILE_RETENTION_DAYS", "30")
+        )
+        self.bailian_file_cleanup_batch_size: int = int(
+            os.getenv("BAILIAN_FILE_CLEANUP_BATCH_SIZE", "200")
         )
 
     def _parse_allowed_origins(self) -> list[str]:

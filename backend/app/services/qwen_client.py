@@ -72,6 +72,7 @@ class QwenClient:
             raise RuntimeError("ALIBABA_API_KEY is not configured")
         self.base_url = settings.alibaba_base_url.rstrip("/")
         self._chat_path = "compatible-mode/v1/chat/completions"
+        self._files_path = "compatible-mode/v1/files"
         self.api_key = settings.alibaba_api_key
         self.model = model or settings.alibaba_model_qwen_plus
         self.max_output_tokens = max_output_tokens
@@ -272,6 +273,87 @@ class QwenClient:
             elapsed_ms,
         )
         return content, usage
+
+    def upload_file(self, file_path: str | Path, *, purpose: str = "file-extract") -> dict[str, Any]:
+        path = Path(file_path).expanduser().resolve()
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError(f"Bailian upload file not found: {path}")
+
+        url = _build_dashscope_url(self.base_url, self._files_path)
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        files = {
+            "file": (path.name, path.open("rb"), mimetypes.guess_type(path.name)[0] or "application/octet-stream"),
+        }
+        data = {"purpose": purpose}
+        start = time.perf_counter()
+        try:
+            resp = requests.post(url, headers=headers, files=files, data=data, timeout=300)
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            text_logger.exception(
+                "qwen.files.upload http_error path=%s status=%s elapsed_ms=%.1f body=%s",
+                str(path),
+                getattr(exc.response, "status_code", None) or getattr(resp, "status_code", None),
+                elapsed_ms,
+                (getattr(resp, "text", "") or "")[:400],
+            )
+            raise QwenRequestError(
+                f"Qwen file upload failed: status={resp.status_code}, body={resp.text}",
+                response_text=resp.text,
+            ) from exc
+        except requests.RequestException as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            text_logger.exception("qwen.files.upload request_error path=%s elapsed_ms=%.1f", str(path), elapsed_ms)
+            raise QwenRequestError(f"Qwen file upload request error: {exc}") from exc
+        finally:
+            files["file"][1].close()
+
+        payload = resp.json()
+        text_logger.info(
+            "qwen.files.upload success path=%s purpose=%s file_id=%s elapsed_ms=%.1f",
+            str(path),
+            purpose,
+            payload.get("id"),
+            (time.perf_counter() - start) * 1000,
+        )
+        return payload
+
+    def get_file(self, file_id: str) -> dict[str, Any]:
+        url = _build_dashscope_url(self.base_url, f"{self._files_path}/{file_id}")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        try:
+            resp = requests.get(url, headers=headers, timeout=60)
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise QwenRequestError(
+                f"Qwen get file failed: status={resp.status_code}, body={resp.text}",
+                response_text=resp.text,
+            ) from exc
+        except requests.RequestException as exc:
+            raise QwenRequestError(f"Qwen get file request error: {exc}") from exc
+        return resp.json()
+
+    def delete_file(self, file_id: str) -> dict[str, Any]:
+        url = _build_dashscope_url(self.base_url, f"{self._files_path}/{file_id}")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        try:
+            resp = requests.delete(url, headers=headers, timeout=60)
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise QwenRequestError(
+                f"Qwen delete file failed: status={resp.status_code}, body={resp.text}",
+                response_text=resp.text,
+            ) from exc
+        except requests.RequestException as exc:
+            raise QwenRequestError(f"Qwen delete file request error: {exc}") from exc
+        return resp.json() if resp.content else {"id": file_id, "deleted": True}
 
     def chat_with_tools(
         self,

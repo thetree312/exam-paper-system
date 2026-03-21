@@ -1,170 +1,145 @@
-import json
-from datetime import datetime
-from typing import List, Optional
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+import logging
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import MindMap
-from ..agent.router import (
-    MindMapNode,
-    MindMapEdge,
-    MindMapResponse,
-    MindMapRequest,
-    _generate_mindmap_core,
-    ensure_question_flag,
+from ..services.workroom_scope_service import assert_studio_document_scope, assert_workroom_scope
+from ..services.mindmap import MindMapService
+from ..services.mindmap.schemas import (
+    MindMapCurrentQuery,
+    MindMapDocument,
+    MindMapGenerateRequest,
+    MindMapSaveRequest,
 )
 
+
 router = APIRouter(prefix="/api/mindmaps", tags=["mindmaps"])
+logger = logging.getLogger("mindmap.router")
 
 
-class MindMapSource(BaseModel):
-    tenant_id: int
-    user_id: Optional[int] = None
-    source_type: str  # e.g. exam_document, uploaded_file
-    source_id: int
-    kind: str = "knowledge"
-
-
-class MindMapGenerateRequest(MindMapSource):
-    force: bool = False
-
-
-def _find_active_mindmap(
-    db: Session, tenant_id: int, source_type: str, source_id: int, kind: str
-) -> Optional[MindMap]:
-    return (
-        db.query(MindMap)
-        .filter(
-            MindMap.tenant_id == tenant_id,
-            MindMap.source_type == source_type,
-            MindMap.source_id == source_id,
-            MindMap.kind == kind,
-            MindMap.is_active == 1,
-        )
-        .order_by(MindMap.version.desc())
-        .first()
-    )
-
-
-@router.post("/generate", response_model=MindMapResponse)
-def generate_mindmap_generic(
-    payload: MindMapGenerateRequest, db: Session = Depends(get_db)
-) -> MindMapResponse:
-    """通用思维导图生成接口。
-
-    目前支持的 source_type：
-    - exam_document: 基于试卷 Document（document_id == source_id）
-    - uploaded_file: 基于原始文件 File（file_id == source_id）
-    """
-
-    existing = None if payload.force else _find_active_mindmap(
-        db,
+@router.post("/generate", response_model=MindMapDocument)
+def generate_mindmap(payload: MindMapGenerateRequest, db: Session = Depends(get_db)) -> MindMapDocument:
+    assert_workroom_scope(
+        db=db,
         tenant_id=payload.tenant_id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        kind=payload.kind,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
     )
-    if existing is not None:
-        data = ensure_question_flag(existing.graph_json or {})
-        # 标记为缓存命中
-        return MindMapResponse(**data, cached=True)
-
-    # 映射到旧的 MindMapRequest，复用核心生成逻辑
     if payload.source_type == "exam_document":
-        core_req = MindMapRequest(mode="document", document_id=payload.source_id)
-    elif payload.source_type == "uploaded_file":
-        core_req = MindMapRequest(mode="file", file_id=payload.source_id)
-    else:
-        raise HTTPException(status_code=400, detail="不支持的 source_type")
-
-    resp = _generate_mindmap_core(core_req, db)
-
-    # 写入 mindmaps 版本库
-    latest = _find_active_mindmap(
-        db,
+        assert_studio_document_scope(
+            db=db,
+            tenant_id=payload.tenant_id,
+            user_id=payload.user_id,
+            workroom_id=payload.workroom_id,
+            studio_document_id=payload.source_id,
+        )
+    logger.info(
+        "mindmap.route.generate tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s kind=%s force=%s",
+        payload.tenant_id,
+        payload.user_id,
+        payload.workroom_id,
+        payload.source_type,
+        payload.source_id,
+        payload.kind,
+        payload.force,
+    )
+    return MindMapService(db).generate(
         tenant_id=payload.tenant_id,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
         source_type=payload.source_type,
         source_id=payload.source_id,
         kind=payload.kind,
+        force=payload.force,
     )
-    next_version = (latest.version + 1) if latest is not None else 1
 
-    # 取消旧版本激活
-    if latest is not None:
-        latest.is_active = 0
-        db.add(latest)
 
-    graph_json = resp.model_dump(exclude={"cached"})
+@router.get("/current", response_model=MindMapDocument)
+def get_current_mindmap(
+    tenant_id: int,
+    user_id: int,
+    workroom_id: int,
+    source_type: str,
+    source_id: int,
+    kind: str = "knowledge",
+    db: Session = Depends(get_db),
+) -> MindMapDocument:
+    assert_workroom_scope(
+        db=db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+    )
+    if source_type == "exam_document":
+        assert_studio_document_scope(
+            db=db,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            workroom_id=workroom_id,
+            studio_document_id=source_id,
+        )
+    logger.info(
+        "mindmap.route.current tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s kind=%s",
+        tenant_id,
+        user_id,
+        workroom_id,
+        source_type,
+        source_id,
+        kind,
+    )
+    query = MindMapCurrentQuery(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+        source_type=source_type,
+        source_id=source_id,
+        kind=kind,
+    )
+    return MindMapService(db).get_current(
+        tenant_id=query.tenant_id,
+        workroom_id=query.workroom_id,
+        source_type=query.source_type,
+        source_id=query.source_id,
+        kind=query.kind,
+    )
 
-    record = MindMap(
+
+@router.put("/{mindmap_id}", response_model=MindMapDocument)
+def save_mindmap(
+    mindmap_id: int,
+    payload: MindMapSaveRequest,
+    db: Session = Depends(get_db),
+) -> MindMapDocument:
+    assert_workroom_scope(
+        db=db,
         tenant_id=payload.tenant_id,
-        created_by_user_id=payload.user_id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        kind=payload.kind,
-        title=None,
-        graph_json=graph_json,
-        version=next_version,
-        is_active=1,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
     )
-    db.add(record)
-    db.commit()
-
-    return resp
-
-
-class MindMapSaveRequest(MindMapSource):
-    map_id: Optional[int] = None
-    root_id: Optional[str] = None
-    nodes: List[MindMapNode]
-    edges: List[MindMapEdge]
-
-
-@router.post("/save", response_model=MindMapResponse)
-def save_mindmap_generic(
-    payload: MindMapSaveRequest, db: Session = Depends(get_db)
-) -> MindMapResponse:
-    """通用思维导图保存接口，用于前端编辑后的整图持久化。"""
-
-    existing = _find_active_mindmap(
-        db,
+    if payload.document.source.type == "exam_document":
+        assert_studio_document_scope(
+            db=db,
+            tenant_id=payload.tenant_id,
+            user_id=payload.user_id,
+            workroom_id=payload.workroom_id,
+            studio_document_id=payload.document.source.id,
+        )
+    logger.info(
+        "mindmap.route.save tenant_id=%s user_id=%s workroom_id=%s mindmap_id=%s source_type=%s source_id=%s",
+        payload.tenant_id,
+        payload.user_id,
+        payload.workroom_id,
+        mindmap_id,
+        payload.document.source.type,
+        payload.document.source.id,
+    )
+    return MindMapService(db).save(
         tenant_id=payload.tenant_id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        kind=payload.kind,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
+        mindmap_id=mindmap_id,
+        document=payload.document,
     )
-
-    next_version = 1
-    if existing is not None:
-        next_version = existing.version + 1
-        existing.is_active = 0
-        db.add(existing)
-
-    graph_json = ensure_question_flag({
-        "root_id": payload.root_id,
-        "nodes": [n.model_dump() for n in payload.nodes],
-        "edges": [e.model_dump() for e in payload.edges],
-    })
-
-    record = MindMap(
-        tenant_id=payload.tenant_id,
-        created_by_user_id=payload.user_id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        kind=payload.kind,
-        title=None,
-        graph_json=graph_json,
-        version=next_version,
-        is_active=1,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
-    db.add(record)
-    db.commit()
-
-    return MindMapResponse(**graph_json, cached=True)

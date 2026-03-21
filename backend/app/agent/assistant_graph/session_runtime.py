@@ -180,9 +180,13 @@ def resolve_resume_runtime_context(
 
     svc = AgentService(db)
     session = svc.get_session(tenant_id=tenant_id, session_id=payload_session_id, user_id=user_id)
+    session_thread_id = str(getattr(session, "thread_id", "") or "").strip()
+    requested_thread_id = str(payload_thread_id or "").strip()
+    if requested_thread_id and session_thread_id and requested_thread_id != session_thread_id:
+        raise HTTPException(status_code=409, detail="thread_id does not match session thread")
     return {
         "session_id": session.id,
-        "thread_id": payload_thread_id or session.thread_id or f"agent:{tenant_id}:{user_id}:w{workroom_id}:{studio_document_id or 'no-doc'}",
+        "thread_id": requested_thread_id or session_thread_id or f"agent:{tenant_id}:{user_id}:w{workroom_id}:{studio_document_id or 'no-doc'}",
         "session_profile": getattr(session, "profile_json", None),
         "history_summary": getattr(session, "history_summary", None),
     }

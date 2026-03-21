@@ -6,7 +6,6 @@ import re
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,10 +38,9 @@ from .assistant_graph.router_runtime import (
     persist_agent_messages,
 )
 from .services.agent_service import AgentService
-from ..services.qwen_client import QwenClient, QwenRequestError
+from ..services.qwen_client import QwenClient
 from ..services.workroom_scope_service import assert_workroom_scope, assert_studio_document_scope
-from ..services.fulltext_service import FulltextService
-from ..models import AgentSession, AgentMessage, Document, File, Question
+from ..models import AgentSession, AgentMessage
 from ..utils.rate_limiter import rate_limit
 
 logger = logging.getLogger("agent.router")
@@ -57,7 +55,6 @@ grade_limit = rate_limit("agent-grade", limit=10, window_seconds=60)
 split_limit = rate_limit("agent-split", limit=10, window_seconds=60)
 sync_limit = rate_limit("agent-sync", limit=60, window_seconds=60)
 snapshot_limit = rate_limit("agent-snapshot", limit=60, window_seconds=60)
-mindmap_limit = rate_limit("mindmap-generate", limit=5, window_seconds=60)
 
 class AgentMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
@@ -97,7 +94,7 @@ class AgentResumeRequest(BaseModel):
     studio_document_id: int | None = None
     session_id: Optional[int] = None
     thread_id: Optional[str] = None
-    resume_payload: dict
+    resume_payload: Any
     agent_max_steps: Optional[int] = None
 
 
@@ -203,94 +200,12 @@ class SplitQuestionsResponse(BaseModel):
     questions: List[SplitQuestionItem]
 
 
-class MindMapRequest(BaseModel):
-    """Request payload for mind map generation.
-
-    mode:
-      - "document": generate from a specific studio_document_id.
-      - "file": generate directly from an uploaded file_id.
-    """
-
-    mode: Literal["document", "file"] = "document"
-    studio_document_id: Optional[int] = None
-    file_id: Optional[int] = None
-
-
-class MindMapNode(BaseModel):
-    """Single node in mind map graph.
-
-    Additional optional fields:
-    - parent_id: parent node id for tree layout.
-    - side: left/right/center hint for branch placement.
-    """
-
-    id: str
-    label: str
-    type: str = "topic"
-    parent_id: Optional[str] = None
-    side: Optional[Literal["left", "right", "center"]] = None
-    data: dict = {}
-
-
-class MindMapEdge(BaseModel):
-    id: str
-    source: str
-    target: str
-    label: Optional[str] = None
-    type: str = "default"
-
-
-class MindMapResponse(BaseModel):
-    """Mind map graph returned to the frontend.
-
-    root_id can be null; frontend may infer root when needed.
-    """
-
-    nodes: List[MindMapNode] = []
-    edges: List[MindMapEdge] = []
-    root_id: Optional[str] = None
-    cached: bool = False
-    has_question_refs: bool = False
-
-
 class DeleteQuestionRequest(BaseModel):
     tenant_id: int
     user_id: int
     workroom_id: int
     studio_document_id: int
     question_id: int
-
-
-def _infer_question_refs_from_nodes(nodes: Any) -> bool:
-    if not nodes:
-        return False
-    for node in nodes:
-        data = None
-        if isinstance(node, MindMapNode):
-            data = node.data
-        elif isinstance(node, dict):
-            data = node.get("data")
-        else:
-            data = getattr(node, "data", None)
-        if not data:
-            continue
-        question_ids = data.get("questionIds") or data.get("question_ids")
-        if isinstance(question_ids, list):
-            for qid in question_ids:
-                if qid not in (None, "", []):
-                    return True
-    return False
-
-
-def ensure_question_flag(payload: dict) -> dict:
-    """Ensure payload contains the has_question_refs marker."""
-
-    if not isinstance(payload, dict):
-        return payload
-    if "has_question_refs" not in payload:
-        payload["has_question_refs"] = _infer_question_refs_from_nodes(payload.get("nodes"))
-    return payload
-
 
 def _log_messages_preview(tag: str, messages: List[dict]) -> None:
     preview: List[dict] = []
@@ -533,397 +448,6 @@ def _extract_final_conclusion(reasoning: Optional[str]) -> dict | None:
         "student_answer": match.group("student").strip(),
         "judgement": judgement,
     }
-
-
-def _generate_mindmap_core(payload: MindMapRequest, db: Session) -> MindMapResponse:
-    """Core implementation for generating a mind map.
-
-    This function encapsulates the previous /v2/mindmap logic so it can be reused
-    by other routers (e.g. generic /api/mindmaps endpoints) without duplicating
-    the LLM and fulltext wiring.
-    """
-
-    file: File | None = None
-    doc_for_cache: Document | None = None
-
-    if payload.mode == "document":
-        if not payload.studio_document_id:
-            raise HTTPException(status_code=400, detail="studio_document_id 不能为空")
-
-        doc_for_cache = (
-            db.query(Document)
-            .filter(Document.id == payload.studio_document_id)
-            .first()
-        )
-        if doc_for_cache is None:
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        if doc_for_cache.file_id is None:
-            raise HTTPException(
-                status_code=400,
-                detail="文档未绑定原始文件，无法生成思维导图",
-            )
-
-        file = db.query(File).filter(File.id == doc_for_cache.file_id).first()
-        if file is None:
-            raise HTTPException(status_code=404, detail="文档关联的文件不存在")
-
-        # 命中缓存直接返回
-        if doc_for_cache.mindmap_cache:
-            try:
-                cached_data = ensure_question_flag(json.loads(doc_for_cache.mindmap_cache))
-                logger.info("mindmap: hit cache studio_document_id=%s", doc_for_cache.id)
-                return MindMapResponse(**cached_data, cached=True)
-            except Exception:
-                logger.warning(
-                    "mindmap: invalid cache for studio_document_id=%s, ignore",
-                    doc_for_cache.id,
-                )
-
-    else:  # payload.mode == "file"
-        if not payload.file_id:
-            raise HTTPException(status_code=400, detail="file_id 不能为空")
-
-        file = db.query(File).filter(File.id == payload.file_id).first()
-        if file is None:
-            raise HTTPException(status_code=404, detail="文件不存在")
-
-        # 若该文件之前已被同步为某个 Document，则尽量复用以便缓存与题目概览
-        doc_for_cache = (
-            db.query(Document)
-            .filter(Document.file_id == file.id)
-            .order_by(Document.id.desc())
-            .first()
-        )
-
-        # 如果找到了对应的 Document 且已有思维导图缓存，则直接复用
-        if doc_for_cache is not None and doc_for_cache.mindmap_cache:
-            try:
-                cached_data = ensure_question_flag(json.loads(doc_for_cache.mindmap_cache))
-                logger.info(
-                    "mindmap: hit cache via file mode studio_document_id=%s file_id=%s",
-                    doc_for_cache.id,
-                    file.id,
-                )
-                return MindMapResponse(**cached_data, cached=True)
-            except Exception:
-                logger.warning(
-                    "mindmap: invalid cache for studio_document_id=%s via file mode, ignore",
-                    doc_for_cache.id,
-                )
-
-    assert file is not None  # for type checker
-
-    # 2) 全文抽取
-    fulltext_service = FulltextService(db)
-    blocks = fulltext_service.get_or_extract_fulltext(file.id)
-    if not blocks:
-        raise HTTPException(status_code=400, detail="未能提取到文件全文内容")
-
-    full_content = "\n\n".join(b.content for b in blocks if b.content)
-
-    # 3) 题目内容（如有）——仅在基于 document 的模式下作为补充上下文
-    questions: List[Question] = []
-    if payload.mode == "document" and doc_for_cache is not None:
-        questions = (
-            db.query(Question)
-            .filter(Question.document_id == doc_for_cache.id)
-            .order_by(Question.sequence_index.asc())
-            .all()
-        )
-
-    question_snippets: list[str] = []
-    for q in questions:
-        preview = (q.content or "").strip()
-        if len(preview) > 400:
-            preview = preview[:400] + "..."
-        question_snippets.append(
-            f"题目 {q.sequence_index + 1} (id={q.id}, page={q.page}):\n{preview}"
-        )
-
-    # 4) 构造 LLM 输入
-    #
-    # Groundbase 设计：基于真实树结构深度的思维导图生成
-    # 前端会根据 parent_id 计算真实深度，而非依赖 type 字段
-    # 因此模型只需要正确设置 parent_id 关系，前端会自动处理视觉层级
-    #
-    # 层级结构：
-    # - 第 1 层：整份文档或课程主题（root）
-    # - 第 2 层：单元 / 篇章 / 模块（结构性分组）
-    # - 第 3 层：具体知识点
-    # - 第 4 层：知识点的细化要点（type: detail）
-    # - 第 5 层：进一步细化（type: sub_detail），仅在必要时
-    json_template = (
-        '{'
-        '\n  "root_id": "k_root",'
-        '\n  "nodes": ['
-        '\n    {"id": "k_root", "label": "整份文档的主题", "type": "topic",'
-        '\n     "parent_id": null, "side": "center", "data": {'
-        '\n       "description": "一句话高度概括整份文档的主题",'
-        '\n       "source": "可以是题号、页码或原文摘要",'
-        '\n       "questionIds": [1, 2]'
-        '\n     }},'
-        '\n    {"id": "k1", "label": "某一部分或章节的主题", "type": "subtopic",'
-        '\n     "parent_id": "k_root", "side": "left", "data": {'
-        '\n       "description": "简短说明本部分内容（建议不超过约 40 个汉字）",'
-        '\n       "source": "本部分在原文中的标题或位置说明"'
-        '\n     }},'
-        '\n    {"id": "k1_1", "label": "本部分下的第 1 个具体知识点", "type": "concept",'
-        '\n     "parent_id": "k1", "data": {'
-        '\n       "description": "用 1-2 句解释该知识点的含义或要点",'
-        '\n       "source": "该知识点在原文中的小节标题或定位"'
-        '\n     }},'
-        '\n    {"id": "k1_1_1", "label": "知识点 k1_1 的第 1 个细化要点", "type": "detail",'
-        '\n     "parent_id": "k1_1", "data": {'
-        '\n       "description": "进一步细化该知识点的某个方面（例如：定义、作用、例子等）"'
-        '\n     }},'
-        '\n    {"id": "k1_1_1_1", "label": "对细化要点的进一步说明", "type": "sub_detail",'
-        '\n     "parent_id": "k1_1_1", "data": {'
-        '\n       "description": "仅在内容非常复杂时才添加第 5 层"'
-        '\n     }},'
-        '\n    {"id": "k1_2", "label": "本部分下的第 2 个具体知识点", "type": "concept",'
-        '\n     "parent_id": "k1"}'
-        '\n  ],'
-        '\n  "edges": ['
-        '\n    {"id": "e1", "source": "k_root", "target": "k1", "label": "包含", "type": "hierarchy"},'
-        '\n    {"id": "e2", "source": "k1", "target": "k1_1", "label": "从属", "type": "hierarchy"},'
-        '\n    {"id": "e3", "source": "k1_1", "target": "k1_1_1", "label": "细化", "type": "hierarchy"},'
-        '\n    {"id": "e4", "source": "k1_1_1", "target": "k1_1_1_1", "label": "深化", "type": "hierarchy"}'
-        '\n  ]'
-        '\n}'
-    )
-
-    system_prompt = (
-        "你是一个知识点提炼专家，负责将整份文档（试卷、讲义、学习笔记等）整理为知识点思维导图。"
-        "\n\n请严格按如下 JSON 结构输出，仅输出 JSON 本身，不要包含 ``` 等 Markdown 包裹："
-        "\n" + json_template +
-        "\n分层要求（根据文档复杂度自适应）："
-        "\n- 简单文档（知识点 < 10 个）：生成 3-4 层。"
-        "\n- 中等文档（知识点 10-30 个）：生成 4 层。"
-        "\n- 复杂文档（知识点 > 30 个）：生成 4-5 层。"
-        "\n- 第 1 层：root（文档主题）。"
-        "\n- 第 2 层：结构性分组（章节/单元/主题簇），2-7 个节点。"
-        "\n- 第 3 层：具体知识点，每个分组下 2-8 个。"
-        "\n- 第 4 层（可选）：知识点的细化要点（type: detail）。"
-        "\n- 第 5 层（可选）：对第 4 层的进一步细化（type: sub_detail），仅在必要时。"
-        "\n- 禁止把大量知识点直接挂在 root。"
-        "\n- 每一对 parent_id 关系都必须在 edges 中有对应的边。"
-        "\n- type 可使用：topic / subtopic / concept / detail / sub_detail / stage / timeline / question_ref / example。"
-        "\n- 严禁输出除 JSON 以外的任何文字，严禁使用 ```json 或 ``` 包裹。"
-    )
-
-    user_parts: list[str] = []
-    title = None
-    if doc_for_cache is not None:
-        title = (doc_for_cache.title or "未命名文档").strip()
-    else:
-        # 在仅文件模式下，退化为使用原始文件名作为标题
-        title = getattr(file, "original_name", None) or "未命名文档"
-
-    user_parts.append(f"文档标题：{title}")
-
-    if question_snippets:
-        user_parts.append("\n已解析出的题目：")
-        user_parts.append("\n\n".join(question_snippets))
-
-    user_parts.append("\n全文内容：")
-    user_parts.append(full_content)
-
-    user_content = "\n\n".join(user_parts)
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
-    ]
-
-    settings = get_settings()
-    client = QwenClient(
-        model=settings.alibaba_model_qwen_flash,
-        max_output_tokens=30000,
-    )
-    document_identifier = getattr(doc_for_cache, "id", None)
-
-    def persist_raw_reply(content: str | None, *, suffix: str) -> None:
-        if not content:
-            return
-        try:
-            logs_dir = Path(__file__).resolve().parent.parent / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            reply_path = logs_dir / f"mindmap_reply_{document_identifier or 'no_doc'}_{timestamp}_{suffix}.json"
-            reply_path.write_text(content, encoding="utf-8")
-            logger.info("mindmap: raw reply stored at %s", reply_path)
-        except Exception:
-            logger.exception("mindmap: failed to persist %s reply studio_document_id=%s", suffix, document_identifier)
-
-    try:
-        reply, usage = client.chat(messages)
-        reply_length = len(reply or "")
-        logger.info(
-            "mindmap: qwen reply tokens=%s chars=%s studio_document_id=%s",
-            getattr(usage, "output_tokens", None),
-            reply_length,
-            document_identifier,
-        )
-        persist_raw_reply(reply, suffix="success")
-    except QwenRequestError as exc:
-        logger.exception("mindmap: qwen chat failed studio_document_id=%s", document_identifier)
-        persist_raw_reply(getattr(exc, "response_text", None), suffix="error")
-        raise HTTPException(status_code=502, detail=f"知识点提炼失败: {exc}") from exc
-    except Exception as exc:  # pragma: no cover - 网络/服务异常
-        logger.exception("mindmap: qwen chat failed studio_document_id=%s", document_identifier)
-        raise HTTPException(status_code=502, detail=f"知识点提炼失败: {exc}") from exc
-
-    def sanitize_json_text(text: str) -> str:
-        """Escape lone backslashes that break JSON decoding."""
-        if not text:
-            return text
-        pattern = re.compile(r"(?<!\\)\\(?![\\\/\"bfnrtu])")
-        return pattern.sub(r"\\\\", text)
-
-    safe_reply = sanitize_json_text(reply or "")
-    if safe_reply != (reply or ""):
-        logger.warning(
-            "mindmap: sanitized raw reply to escape invalid backslashes studio_document_id=%s",
-            document_identifier,
-        )
-
-    try:
-        data = ensure_question_flag(json.loads(safe_reply))
-    except Exception as exc:
-        preview = (reply or "")[:400]
-        logger.exception(
-            "mindmap: invalid JSON reply studio_document_id=%s preview=%s",
-            getattr(doc_for_cache, "id", None),
-            preview,
-        )
-        raise HTTPException(status_code=500, detail=f"模型返回非 JSON 内容: {exc}")
-
-    # 5) 写入缓存
-    if doc_for_cache is not None:
-        try:
-            doc_for_cache.mindmap_cache = json.dumps(data, ensure_ascii=False)
-            doc_for_cache.mindmap_generated_at = datetime.utcnow()
-            db.add(doc_for_cache)
-            db.commit()
-        except Exception:
-            logger.exception(
-                "mindmap: failed to persist cache studio_document_id=%s", doc_for_cache.id
-            )
-
-    return MindMapResponse(**data, cached=False)
-
-
-@router.post("/v2/mindmap", response_model=MindMapResponse, dependencies=[Depends(mindmap_limit)])
-def generate_mindmap(payload: MindMapRequest, db: Session = Depends(get_db)) -> MindMapResponse:
-    """生成知识点思维导图（向后兼容的 HTTP 包装层）。"""
-
-    doc_for_cache: Document | None = None
-    if payload.mode == "document" and payload.studio_document_id:
-        doc_for_cache = (
-            db.query(Document)
-            .filter(Document.id == payload.studio_document_id)
-            .first()
-        )
-    elif payload.mode == "file" and payload.file_id:
-        doc_for_cache = (
-            db.query(Document)
-            .filter(Document.file_id == payload.file_id)
-            .order_by(Document.id.desc())
-            .first()
-        )
-
-    if doc_for_cache and doc_for_cache.mindmap_cache:
-        try:
-            cached = ensure_question_flag(json.loads(doc_for_cache.mindmap_cache))
-            logger.info(
-                "mindmap: return cached result studio_document_id=%s mode=%s",
-                doc_for_cache.id,
-                payload.mode,
-            )
-            return MindMapResponse(**cached, cached=True)
-        except Exception:
-            logger.warning(
-                "mindmap: cached json invalid studio_document_id=%s, regenerating",
-                doc_for_cache.id,
-            )
-
-    return _generate_mindmap_core(payload, db)
-
-
-class MindMapSaveRequest(BaseModel):
-    """保存前端编辑后的思维导图结构。
-
-    与 MindMapRequest 相同的定位信息 + 完整图结构，覆盖原有缓存。
-    """
-
-    mode: Literal["document", "file"] = "document"
-    studio_document_id: Optional[int] = None
-    file_id: Optional[int] = None
-    root_id: Optional[str] = None
-    nodes: List[MindMapNode]
-    edges: List[MindMapEdge]
-
-
-@router.post("/v2/mindmap/save", response_model=MindMapResponse)
-def save_mindmap(payload: MindMapSaveRequest, db: Session = Depends(get_db)) -> MindMapResponse:
-    """持久化已编辑的思维导图到 Document.mindmap_cache。
-
-    若处于 document 模式，则要求有效的 studio_document_id；
-    若处于 file 模式，则会寻找该文件最近同步出的 Document 并写入其缓存。
-    """
-
-    file: File | None = None
-    doc_for_cache: Document | None = None
-
-    if payload.mode == "document":
-        if not payload.studio_document_id:
-            raise HTTPException(status_code=400, detail="studio_document_id 不能为空")
-
-        doc_for_cache = (
-            db.query(Document).filter(Document.id == payload.studio_document_id).first()
-        )
-        if doc_for_cache is None:
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        file = doc_for_cache.file
-    else:  # file 模式
-        if not payload.file_id:
-            raise HTTPException(status_code=400, detail="file_id 不能为空")
-
-        file = db.query(File).filter(File.id == payload.file_id).first()
-        if file is None:
-            raise HTTPException(status_code=404, detail="文件不存在")
-
-        doc_for_cache = (
-            db.query(Document)
-            .filter(Document.file_id == file.id)
-            .order_by(Document.id.desc())
-            .first()
-        )
-
-    if doc_for_cache is None:
-        raise HTTPException(status_code=400, detail="当前模式下无法定位可写入的文档缓存")
-
-    # 统一写入缓存
-    data = {
-        "root_id": payload.root_id,
-        "nodes": [n.model_dump() for n in payload.nodes],
-        "edges": [e.model_dump() for e in payload.edges],
-    }
-
-    try:
-        doc_for_cache.mindmap_cache = json.dumps(data, ensure_ascii=False)
-        doc_for_cache.mindmap_generated_at = datetime.utcnow()
-        db.add(doc_for_cache)
-        db.commit()
-    except Exception:
-        logger.exception(
-            "mindmap: failed to persist edited cache studio_document_id=%s", doc_for_cache.id
-        )
-        raise HTTPException(status_code=500, detail="保存思维导图失败")
-
-    return MindMapResponse(**data, cached=True)
 
 
 @router.post("/run", response_model=AgentRunResponse, dependencies=[Depends(agent_run_limit)])
@@ -1921,6 +1445,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                             continue
                         emitted_text[message_id] = previous + delta if message_id else previous
                         stream_stats["assistant_chunks"] += 1
+                        emitted_final_text = True
                         stream_queue.put({"type": "delta", "role": "assistant", "delta": delta})
                         continue
                     if kind == "agent_trace":
@@ -2395,6 +1920,8 @@ def agent_run_resume_stream(payload: AgentResumeRequest, db: Session = Depends(g
                             continue
                         emitted_text[message_id] = previous + delta if message_id else previous
                         stream_stats["assistant_chunks"] += 1
+                        emitted_final_text = True
+                        stream_queue.put({"type": "delta", "role": "assistant", "delta": delta})
                         continue
                     if kind == "agent_trace":
                         payload_obj = trace_event.get("payload")
@@ -2474,4 +2001,3 @@ def agent_run_resume_stream(payload: AgentResumeRequest, db: Session = Depends(g
             yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return StreamingResponse(merged_stream(), media_type="text/plain; charset=utf-8")
-

@@ -122,6 +122,9 @@ class File(Base):
     fulltext_blocks: Mapped[list["FulltextBlock"]] = relationship(
         "FulltextBlock", back_populates="file", cascade="all, delete-orphan"
     )
+    bailian_files: Mapped[list["BailianFileRegistry"]] = relationship(
+        "BailianFileRegistry", back_populates="local_file", cascade="all, delete-orphan"
+    )
 
 
 class ExtractionSession(Base):
@@ -264,10 +267,6 @@ class Document(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
-    mindmap_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    mindmap_generated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
     ocr_md_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ocr_layout_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ocr_cache_generated_at: Mapped[Optional[datetime]] = mapped_column(
@@ -332,6 +331,9 @@ class MindMap(Base):
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    workroom_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("workrooms.id", ondelete="CASCADE"), nullable=True
+    )
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     kind: Mapped[str] = mapped_column(String(64), nullable=False, default="knowledge")
@@ -348,6 +350,45 @@ class MindMap(Base):
 
     tenant: Mapped["Tenant"] = relationship("Tenant")
     created_by: Mapped[Optional["User"]] = relationship("User")
+    workroom: Mapped[Optional["Workroom"]] = relationship("Workroom")
+
+
+class BailianFileRegistry(Base):
+    __tablename__ = "bailian_file_registry"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "local_file_id",
+            "provider",
+            "purpose",
+            "content_hash",
+            name="uk_bailian_file_registry_scope",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    local_file_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("files.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="dashscope")
+    purpose: Mapped[str] = mapped_column(String(64), nullable=False, default="file-extract")
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    bailian_file_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    local_file: Mapped[File] = relationship("File", back_populates="bailian_files")
 
 
 class FulltextBlock(Base):

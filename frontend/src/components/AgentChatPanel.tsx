@@ -12,6 +12,7 @@ import { AgentConversationHistory } from './AgentConversationHistory'
 import { MetalInputBox } from './MetalInputBox'
 import { useQuestionTypeOptions } from '../hooks/useQuestionTypeOptions'
 import { QuestionTypeSelectField } from './QuestionTypeSelectField'
+import { OpenUiHitlRenderer } from './OpenUiHitlRenderer'
 
 interface AgentChatPanelProps {
   backendBaseUrl: string
@@ -122,7 +123,67 @@ function normalizeFormUiCandidate(raw: unknown): any | null {
   if (!raw || typeof raw !== 'object') return null
   const ui = raw as Record<string, any>
   if (ui.type === 'form' || Array.isArray(ui.fields)) {
-    return { ...ui, type: 'form' }
+    const normalized = { ...ui, type: 'form' } as Record<string, any>
+    if (Array.isArray(normalized.actions)) {
+      const actions = normalized.actions.filter((action: any) => action && typeof action === 'object')
+      const submitAction =
+        actions.find((action: any) => String(action.id || '').toLowerCase() === 'submit') ||
+        actions.find((action: any) => String(action.variant || '').toLowerCase() === 'primary')
+      const cancelAction =
+        actions.find((action: any) => String(action.id || '').toLowerCase() === 'cancel') ||
+        actions.find((action: any) => String(action.variant || '').toLowerCase() === 'secondary')
+      if (submitAction?.label) {
+        normalized.submit = { ...(normalized.submit || {}), label: String(submitAction.label) }
+      }
+      if (cancelAction?.label) {
+        normalized.cancel = { ...(normalized.cancel || {}), label: String(cancelAction.label) }
+      }
+    }
+    if (Array.isArray(normalized.fields)) {
+      normalized.fields = normalized.fields
+        .map((field: any) => {
+          if (!field || typeof field !== 'object') return null
+          const fieldId = String(field.id || field.name || '').trim()
+          if (!fieldId) return null
+          const rawType = String(field.type || 'text').trim().toLowerCase()
+          const normalizedType =
+            rawType === 'longtext' || rawType === 'textarea'
+              ? 'textarea'
+              : rawType === 'radio' || rawType === 'choice'
+                ? 'radio'
+                : rawType
+          const out: Record<string, any> = {
+            ...field,
+            id: fieldId,
+            name: String(field.name || fieldId),
+            label: String(field.label || fieldId),
+            type: normalizedType || 'text',
+          }
+          if (Array.isArray(field.options)) {
+            out.options = field.options
+              .map((opt: any) => {
+                if (opt == null) return null
+                if (typeof opt === 'string' || typeof opt === 'number' || typeof opt === 'boolean') {
+                  const value = String(opt)
+                  return { value, label: value }
+                }
+                if (typeof opt === 'object') {
+                  const value = String((opt as any).value ?? (opt as any).id ?? (opt as any).label ?? '').trim()
+                  if (!value) return null
+                  return { value, label: String((opt as any).label ?? value) }
+                }
+                return null
+              })
+              .filter(Boolean)
+          }
+          if (Object.prototype.hasOwnProperty.call(field, 'defaultValue') && !Object.prototype.hasOwnProperty.call(field, 'default')) {
+            out.default = field.defaultValue
+          }
+          return out
+        })
+        .filter(Boolean)
+    }
+    return normalized
   }
   return null
 }
@@ -136,23 +197,26 @@ function extractInterruptFormFromAgUiEvent(rawEvent: unknown): any | null {
     return normalizeFormUiCandidate(event?.payload?.ui)
   }
 
-  if (action !== 'a2ui.render') {
+  if (action !== 'openui.render') {
     return null
   }
 
-  const a2ui = event?.payload?.a2ui
-  if (!a2ui || typeof a2ui !== 'object') return null
-
-  const components = Array.isArray((a2ui as any).components) ? (a2ui as any).components : []
-  for (const component of components) {
-    if (!component || typeof component !== 'object') continue
-    const type = String((component as any).type || '')
-    if (type !== 'form') continue
-    const props = (component as any).props
-    const ui = normalizeFormUiCandidate(props)
+  const openui = event?.payload?.openui
+  if (openui && typeof openui === 'object') {
+    const ui = normalizeFormUiCandidate(openui)
     if (ui) return ui
   }
 
+  return null
+}
+
+function extractOpenUiResponseFromAgUiEvent(rawEvent: unknown): string | null {
+  if (!rawEvent || typeof rawEvent !== 'object') return null
+  const event = rawEvent as Record<string, any>
+  if (String(event.action || '') !== 'openui.render') return null
+  const payload = event.payload as Record<string, any>
+  const response = payload?.response
+  if (typeof response === 'string' && response.trim()) return response
   return null
 }
 
@@ -175,6 +239,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const [input, setInput] = useState('')
   const [inputHeight, setInputHeight] = useState(36)
   const [hitlFormUi, setHitlFormUi] = useState<any | null>(null)
+  const [hitlOpenUiResponse, setHitlOpenUiResponse] = useState<string | null>(null)
   const [hitlFormValues, setHitlFormValues] = useState<Record<string, any>>({})
   const [isSubmittingHitlForm, setIsSubmittingHitlForm] = useState(false)
   const [hitlAnchorIndex, setHitlAnchorIndex] = useState<number | null>(null)
@@ -263,6 +328,20 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     viewId,
     onAgUiEvent: (event) => {
         const inner = event.event as any
+        const openUiResponse = extractOpenUiResponseFromAgUiEvent(inner)
+        if (openUiResponse) {
+          if (isSubmittingHitlForm || hitlResumeInFlightRef.current) {
+            return
+          }
+          setHitlOpenUiResponse(openUiResponse)
+          setHitlFormUi(null)
+          setHitlFormValues({})
+          setIsSubmittingHitlForm(false)
+          if (onAgUiEvent) {
+            onAgUiEvent(inner)
+          }
+          return
+        }
         const ui = extractInterruptFormFromAgUiEvent(inner)
         if (ui) {
           // 如果当前正处于提交过程中，则忽略新的 form.show，避免在同一轮 resume 过程中
@@ -296,6 +375,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             }
           }
           setHitlFormValues(initial)
+          setHitlOpenUiResponse(null)
           setIsSubmittingHitlForm(false)
         }
         if (onAgUiEvent) {
@@ -373,7 +453,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   }, [appendToken, onAppendTokenConsumed])
 
   useEffect(() => {
-    if (hitlFormUi && hitlAnchorIndex == null) {
+    if ((hitlFormUi || hitlOpenUiResponse) && hitlAnchorIndex == null) {
       for (let idx = deferredMessages.length - 1; idx >= 0; idx -= 1) {
         if (deferredMessages[idx]?.role === 'assistant') {
           setHitlAnchorIndex(idx)
@@ -381,10 +461,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         }
       }
     }
-    if (!hitlFormUi && hitlAnchorIndex != null) {
+    if (!hitlFormUi && !hitlOpenUiResponse && hitlAnchorIndex != null) {
       setHitlAnchorIndex(null)
     }
-  }, [hitlFormUi, hitlAnchorIndex, deferredMessages])
+  }, [hitlFormUi, hitlOpenUiResponse, hitlAnchorIndex, deferredMessages])
 
   const handleSend = useCallback(
     async (evt?: React.FormEvent) => {
@@ -490,9 +570,79 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     ],
   )
 
+  const handleOpenUiContinue = useCallback(
+    async (evt: { params: Record<string, any>; formState: Record<string, any> }) => {
+      if (!resumeWithPayload) return
+      const actionId = String(evt?.params?.actionId || '').toLowerCase()
+      if (actionId === 'cancel') {
+        hitlResumeInFlightRef.current = false
+        setHitlOpenUiResponse(null)
+        setHitlFormUi(null)
+        setHitlFormValues({})
+        setIsSubmittingHitlForm(false)
+        return
+      }
+      const payload: Record<string, any> = { ...(evt?.formState || {}) }
+      setIsSubmittingHitlForm(true)
+      try {
+        if (typeof payload.question_type === 'string') {
+          payload.question_type = payload.question_type.trim()
+        }
+        const maxCapacity = typeof batchMeta?.maxCapacity === 'number' ? batchMeta.maxCapacity : undefined
+        if (typeof payload.count === 'number' && typeof maxCapacity === 'number') {
+          payload.count = Math.max(1, Math.min(payload.count, maxCapacity))
+        }
+        if (batchMeta) {
+          payload.maxCapacity = maxCapacity
+          if (batchMeta.baseQuestionId != null) payload.baseQuestionId = batchMeta.baseQuestionId
+          if (batchMeta.baseSequenceIndex != null) payload.baseSequenceIndex = batchMeta.baseSequenceIndex
+        }
+        if (questionTypeField) {
+          const rawType = typeof payload.question_type === 'string' ? payload.question_type.trim() : ''
+          if (rawType) {
+            payload.question_type = rawType
+            if (!questionTypeOptionSet.has(rawType)) {
+              setIsQuestionTypeEnsuring(true)
+              try {
+                const ensuredName = await ensureQuestionTypeExists(rawType)
+                if (ensuredName) {
+                  payload.question_type = ensuredName
+                  refreshQuestionTypeOptions()
+                }
+              } finally {
+                setIsQuestionTypeEnsuring(false)
+              }
+            }
+          }
+        }
+        hitlResumeInFlightRef.current = true
+        setHitlOpenUiResponse(null)
+        setHitlFormUi(null)
+        setHitlFormValues({})
+        setHitlAnchorIndex(null)
+        await resumeWithPayload(payload)
+        hitlResumeInFlightRef.current = false
+      } catch (err) {
+        hitlResumeInFlightRef.current = false
+        throw err
+      } finally {
+        setIsSubmittingHitlForm(false)
+      }
+    },
+    [
+      batchMeta,
+      ensureQuestionTypeExists,
+      questionTypeField,
+      questionTypeOptionSet,
+      refreshQuestionTypeOptions,
+      resumeWithPayload,
+    ],
+  )
+
   const handleHitlCancel = useCallback(() => {
     hitlResumeInFlightRef.current = false
     setHitlFormUi(null)
+    setHitlOpenUiResponse(null)
     setHitlFormValues({})
     setIsSubmittingHitlForm(false)
   }, [])
@@ -574,6 +724,18 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         const hasTrace = traces.length > 0
         const hasContent = Boolean(msg.content?.trim())
         const showPendingOnly = Boolean(msg.isStreaming) && !hasContent && !hasTrace
+        const [traceExpanded, setTraceExpanded] = useState(Boolean(msg.isStreaming) && hasTrace)
+        useEffect(() => {
+          if (!hasTrace) {
+            setTraceExpanded(false)
+            return
+          }
+          if (msg.isStreaming) {
+            setTraceExpanded(true)
+            return
+          }
+          setTraceExpanded(false)
+        }, [hasTrace, msg.isStreaming])
         if (!hasContent && !hasTrace && !showPendingOnly) {
           return null
         }
@@ -586,26 +748,43 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             <div className="flex-1 min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">{keyLabel}</div>
               {hasTrace && (
-                <div className="mb-3 space-y-1.5">
-                  {traces.map((trace: any, idx: number) => (
-                    <div key={trace.id ?? `${trace.type}-${idx}`} className="text-[12px] leading-relaxed text-slate-500">
-                      {trace.type === 'tool' ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[16px] leading-none text-slate-500">build_circle</span>
-                          <span>{trace.name || 'tool'}</span>
-                          {trace.status === 'calling' ? (
-                            <span className="material-symbols-outlined text-[16px] leading-none text-slate-400 animate-spin">progress_activity</span>
-                          ) : trace.status === 'success' ? (
-                            <span className="material-symbols-outlined text-[16px] leading-none text-emerald-600">check</span>
-                          ) : trace.status === 'fail' ? (
-                            <span className="material-symbols-outlined text-[16px] leading-none text-rose-600">close</span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span className="whitespace-pre-wrap">{trace.text || ''}</span>
-                      )}
+                <div className={`mb-3 ${(Boolean(msg.isStreaming) || traceExpanded) ? 'border-l border-slate-200 pl-3' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => setTraceExpanded((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-700 transition-colors"
+                    aria-expanded={traceExpanded}
+                  >
+                    <span className={`material-symbols-outlined text-[14px] leading-none transition-transform ${traceExpanded ? 'rotate-90' : ''}`}>
+                      chevron_right
+                    </span>
+                    <span>思考过程</span>
+                  </button>
+                  {traceExpanded && (
+                    <div className="mt-1.5 space-y-1.5">
+                      {traces.map((trace: any, idx: number) => (
+                        <div key={trace.id ?? `${trace.type}-${idx}`} className="text-[12px] leading-relaxed text-slate-500">
+                          {trace.type === 'tool' ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[16px] leading-none text-slate-500">build_circle</span>
+                              <span>{trace.name || 'tool'}</span>
+                              {trace.status === 'calling' ? (
+                                <span className="material-symbols-outlined text-[16px] leading-none text-slate-400 animate-spin">progress_activity</span>
+                              ) : trace.status === 'success' ? (
+                                <span className="material-symbols-outlined text-[16px] leading-none text-emerald-600">check</span>
+                              ) : trace.status === 'fail' ? (
+                                <span className="material-symbols-outlined text-[16px] leading-none text-rose-600">close</span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <div className="prose prose-slate max-w-none text-[12px] leading-relaxed [&_.katex]:text-[12px] [&_.katex-display]:my-1.5">
+                              <MarkdownWithMath>{normalizeAiMarkdown(String(trace.text || ''))}</MarkdownWithMath>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
 
@@ -814,9 +993,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                   <div className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-neutral-200' : ''}`}>
                     <div className="flex flex-col gap-4 text-sm text-slate-700 min-h-[340px]">
                       {deferredMessages.map((msg, idx) => {
-                        const key = `${msg.role}-${idx}-${String(msg.content || '').slice(0, 24)}`
+                        const key = `${msg.role}-${idx}`
                         const isAssistant = msg.role === 'assistant'
-                        const shouldShowHitlForm = Boolean(hitlFormUi) && hitlAnchorIndex === idx && isAssistant
+                        const shouldShowHitlForm = Boolean(hitlFormUi || hitlOpenUiResponse) && hitlAnchorIndex === idx && isAssistant
 
                         return (
                           <React.Fragment key={key}>
@@ -827,11 +1006,14 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                   <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
                                     {t('agent_chat.form_title')}
                                   </div>
-                                  <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm px-4 py-3">
-                                    {hitlFormUi?.title && (
-                                      <div className="text-xs font-semibold text-slate-600 mb-2">{hitlFormUi.title}</div>
-                                    )}
-                                    <form onSubmit={handleHitlSubmit} className="space-y-3">
+                                  {hitlOpenUiResponse ? (
+                                    <OpenUiHitlRenderer response={hitlOpenUiResponse} onContinue={handleOpenUiContinue} />
+                                  ) : (
+                                    <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm px-4 py-3">
+                                      {hitlFormUi?.title && (
+                                        <div className="text-xs font-semibold text-slate-600 mb-2">{hitlFormUi.title}</div>
+                                      )}
+                                      <form onSubmit={handleHitlSubmit} className="space-y-3">
                                       {Array.isArray(hitlFormUi?.fields) &&
                                         hitlFormUi.fields.map((field: any) => {
                                           if (!field || !field.id) return null
@@ -854,6 +1036,64 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                                   }
                                                   className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
                                                 />
+                                              </div>
+                                            )
+                                          }
+                                          if (field.type === 'text' || field.type === 'textarea') {
+                                            return (
+                                              <div key={field.id} className="flex flex-col gap-1">
+                                                <label className="text-xs text-slate-500">{field.label || field.id}</label>
+                                                {field.type === 'textarea' ? (
+                                                  <textarea
+                                                    value={value}
+                                                    disabled={isSubmittingHitlForm}
+                                                    placeholder={field.placeholder || ''}
+                                                    onChange={(e) => handleHitlFieldChange(field.id, e.target.value)}
+                                                    className="w-full min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+                                                  />
+                                                ) : (
+                                                  <input
+                                                    type="text"
+                                                    value={value}
+                                                    disabled={isSubmittingHitlForm}
+                                                    placeholder={field.placeholder || ''}
+                                                    onChange={(e) => handleHitlFieldChange(field.id, e.target.value)}
+                                                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+                                                  />
+                                                )}
+                                              </div>
+                                            )
+                                          }
+                                          if (field.type === 'radio' && Array.isArray(field.options)) {
+                                            return (
+                                              <div key={field.id} className="flex flex-col gap-1.5">
+                                                <label className="text-xs text-slate-500">{field.label || field.id}</label>
+                                                <div className="grid gap-1.5">
+                                                  {field.options.map((opt: any) => {
+                                                    const optValue = String(opt?.value ?? '')
+                                                    const checked = String(value ?? '') === optValue
+                                                    return (
+                                                      <label
+                                                        key={optValue}
+                                                        className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition ${
+                                                          checked
+                                                            ? 'border-slate-500 bg-slate-50 text-slate-900'
+                                                            : 'border-slate-300 text-slate-700'
+                                                        }`}
+                                                      >
+                                                        <input
+                                                          type="radio"
+                                                          name={field.id}
+                                                          value={optValue}
+                                                          checked={checked}
+                                                          disabled={isSubmittingHitlForm}
+                                                          onChange={(e) => handleHitlFieldChange(field.id, e.target.value)}
+                                                        />
+                                                        <span>{opt?.label ?? optValue}</span>
+                                                      </label>
+                                                    )
+                                                  })}
+                                                </div>
                                               </div>
                                             )
                                           }
@@ -900,7 +1140,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                           onClick={handleHitlCancel}
                                           disabled={isSubmittingHitlForm}
                                         >
-                                          {t('agent_chat.cancel')}
+                                          {hitlFormUi?.cancel?.label || t('agent_chat.cancel')}
                                         </button>
                                         <button
                                           type="submit"
@@ -914,8 +1154,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                               : hitlFormUi?.submit?.label || t('agent_chat.confirm')}
                                         </button>
                                       </div>
-                                    </form>
-                                  </div>
+                                      </form>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}

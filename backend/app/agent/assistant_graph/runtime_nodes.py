@@ -13,6 +13,12 @@ from .llm_tools import execute_tool_call, tool_result_to_trace as _tool_result_t
 from .router_runtime import evolve_runtime_snapshot as _evolve_runtime_snapshot
 from .state import _derive_default_exec_state, _derive_default_task_model
 from .world_model import record_tool_result as _record_tool_result, record_user_input as _record_user_input
+from .evidence_register import (
+    build_evidence_frame as _build_evidence_frame,
+    build_tool_receipt_message as _build_tool_receipt_message,
+    merge_evidence_register as _merge_evidence_register,
+    select_carryforward_evidence_messages as _select_carryforward_evidence_messages,
+)
 from .runtime_common import (
     GraphState,
     _META_TOOL_QUERY_ENV,
@@ -24,15 +30,21 @@ from .runtime_common import (
     _invoke_model_action,
     _new_client,
     _normalize_messages,
-    _sanitize_tool_content_for_history,
 )
 
 def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__"]]:
     context = state.get("context") or {}
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     persisted_messages = _normalize_messages(state.get("messages") or [])
+    transient_tool_messages = _normalize_messages(state.get("transient_tool_messages") or [])
+    carryforward_messages, updated_evidence_register = _select_carryforward_evidence_messages(
+        state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else [],
+        transient_tool_messages=transient_tool_messages,
+        step_count=next_step_count,
+    )
     model_messages = _normalize_messages(state.get("model_messages") or [])
-    llm_messages = [*persisted_messages, *model_messages]
+    llm_messages = [*persisted_messages, *carryforward_messages, *transient_tool_messages, *model_messages]
     client = _new_client()
     try:
         stream_writer = get_stream_writer()
@@ -50,6 +62,8 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
         change = {"change_type": "agent_decision_failed", "reason": str(exc)}
         return Command(
             update={
+                "evidence_register": updated_evidence_register,
+                "step_count": next_step_count,
                 "task_phase": "failed",
                 "halt_reason": "failed",
                 "last_error": f"agent_decision_error: {exc}",
@@ -58,7 +72,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="failed",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     recent_changes=[change],
                 ),
             },
@@ -111,6 +125,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
         return Command(
             update={
                 "exec_state": next_exec_state,
+                "step_count": next_step_count,
                 "task_phase": "failed",
                 "halt_reason": "failed",
                 "last_error": "agent_decision_empty: no tool calls and no response",
@@ -119,7 +134,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="failed",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     recent_changes=[change],
                 ),
             },
@@ -134,6 +149,8 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
     return Command(
         update={
             "exec_state": next_exec_state,
+            "evidence_register": updated_evidence_register,
+            "step_count": next_step_count,
             "task_phase": "acting" if decision_intent in {"tool_call", "respond"} else "observing",
             "model_native_traces": [
                 {
@@ -149,7 +166,7 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
                 previous=state.get("runtime_snapshot"),
                 context=context,
                 task_phase="acting" if decision_intent in {"tool_call", "respond"} else "observing",
-                step_count=step_count,
+                step_count=next_step_count,
                 recent_changes=[change],
             ),
         },
@@ -200,21 +217,30 @@ def _execute_tool_action(
     if not model_observation:
         model_observation = output.get("model_input") if isinstance(output.get("model_input"), dict) else output
     tool_payload = json.dumps(model_observation, ensure_ascii=False) if isinstance(model_observation, dict) else model_observation
+    receipt_message = _build_tool_receipt_message(
+        tool_name=tool_name,
+        tool_call_id=call_id,
+        trace=trace,
+        output=output,
+    )
+    evidence_frame = _build_evidence_frame(
+        tool_name=tool_name,
+        tool_call_id=call_id,
+        trace=trace,
+        output=output,
+        step_count=int(state_snapshot.get("step_count") or 0),
+    )
     return {
         "tool_name": tool_name,
         "trace": trace,
-        "history_msg": {
-            "role": "tool",
-            "name": tool_name,
-            "tool_call_id": call_id,
-            "content": _sanitize_tool_content_for_history(tool_payload),
-        },
+        "history_msg": receipt_message,
         "transient_msg": {
             "role": "tool",
             "name": tool_name,
             "tool_call_id": call_id,
             "content": tool_payload,
         },
+        "evidence_frame": evidence_frame,
         "feedback": output.get("feedback") if isinstance(output.get("feedback"), dict) else {},
         "interrupt_request": output.get("interrupt_request") if isinstance(output.get("interrupt_request"), dict) else None,
     }
@@ -224,6 +250,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     context = state.get("context") or {}
     persisted_messages = _normalize_messages(state.get("messages") or [])
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
     exec_state = _derive_default_exec_state(state.get("exec_state") if isinstance(state.get("exec_state"), dict) else None)
     reason = "模型决策执行"
     changes: list[dict[str, Any]] = []
@@ -274,6 +301,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
         return Command(
             update={
                 "messages": _append_messages(persisted_messages, [assistant_turn]),
+                "step_count": next_step_count,
                 "exec_state": {
                     **exec_state,
                     "wait_status": "idle",
@@ -289,7 +317,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="completed",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     recent_changes=[change],
                 ),
             },
@@ -304,11 +332,14 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
         remaining = normalized_pending_calls[max_parallel:]
 
         world_state = state.get("world_state") if isinstance(state.get("world_state"), dict) else {}
+        evidence_register = state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else []
         state_snapshot = {
             "observation_packet": state.get("observation_packet") if isinstance(state.get("observation_packet"), dict) else {},
             "world_state": world_state,
             "recent_changes": list(state.get("recent_changes") or []),
             "action_journal": list(state.get("action_journal") or []),
+            "step_count": next_step_count,
+            "evidence_register": evidence_register,
         }
         history_prefix: list[dict[str, Any]] = []
         if isinstance(pending_assistant_tool_message, dict):
@@ -335,6 +366,9 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 traces.append(trace)
                 tool_messages_history.append(realized["history_msg"])
                 tool_messages_transient.append(realized["transient_msg"])
+                evidence_frame = realized.get("evidence_frame") if isinstance(realized.get("evidence_frame"), dict) else None
+                if evidence_frame:
+                    evidence_register = _merge_evidence_register(evidence_register, [evidence_frame])
                 intr_req = realized.get("interrupt_request")
                 if isinstance(intr_req, dict) and requested_interrupt_payload is None:
                     requested_interrupt_payload = intr_req
@@ -357,11 +391,11 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                         "feedback": realized.get("feedback") if isinstance(realized.get("feedback"), dict) else {},
                     }
                 )
-                world_state, world_diff = _record_tool_result(world_state, trace=trace, step_count=step_count)
+                world_state, world_diff = _record_tool_result(world_state, trace=trace, step_count=next_step_count)
                 changes.append({"change_type": "world_state_changed", "diff": world_diff})
                 action_journal_updates.append(
                     {
-                        "step": step_count,
+                        "step": next_step_count,
                         "phase": "execute_decision_tool",
                         "tool_name": realized["tool_name"],
                         "status": trace.get("status"),
@@ -376,6 +410,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                     "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
                     "transient_tool_messages": tool_messages_transient,
                     "tool_results": traces,
+                    "step_count": next_step_count,
                     "recent_changes": [*changes, change],
                     "action_journal": action_journal_updates,
                     "exec_state": {
@@ -387,6 +422,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                         "pending_assistant_tool_message": None,
                     },
                     "world_state": world_state,
+                    "evidence_register": evidence_register,
                     "task_phase": "awaiting_user",
                     "halt_reason": "interrupt",
                     "interrupt_payload": requested_interrupt_payload,
@@ -394,7 +430,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                         previous=state.get("runtime_snapshot"),
                         context=context,
                         task_phase="awaiting_user",
-                        step_count=step_count,
+                        step_count=next_step_count,
                         tool_results=traces,
                         recent_changes=[*changes, change],
                     ),
@@ -407,6 +443,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
                 "transient_tool_messages": tool_messages_transient,
                 "tool_results": traces,
+                "step_count": next_step_count,
                 "recent_changes": changes,
                 "action_journal": action_journal_updates,
                 "exec_state": {
@@ -418,12 +455,13 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                     "pending_assistant_tool_message": pending_assistant_tool_message if remaining else None,
                 },
                 "world_state": world_state,
+                "evidence_register": evidence_register,
                 "task_phase": "observing",
                 "runtime_snapshot": _evolve_runtime_snapshot(
                     previous=state.get("runtime_snapshot"),
                     context=context,
                     task_phase="observing",
-                    step_count=step_count,
+                    step_count=next_step_count,
                     tool_results=traces,
                     recent_changes=changes,
                 ),
@@ -435,6 +473,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     return Command(
         update={
             "recent_changes": [change],
+            "step_count": next_step_count,
             "task_phase": "failed",
             "halt_reason": "failed",
             "last_error": "execute_empty: no pending response or tool calls",
@@ -443,7 +482,7 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
                 previous=state.get("runtime_snapshot"),
                 context=context,
                 task_phase="failed",
-                step_count=step_count,
+                step_count=next_step_count,
                 recent_changes=[change],
             ),
         },
@@ -486,23 +525,25 @@ def _node_interrupt_user(state: GraphState) -> Command[Literal["memory_sync"]]:
     resume_value = interrupt({"interrupt_payload": intr, "messages": _normalize_messages(state.get("messages") or [])})
     clarification = _extract_clarification(resume_value)
     step_count = int(state.get("step_count") or 0)
+    next_step_count = step_count + 1
 
     updates: dict[str, Any] = {
         "interrupt_payload": None,
         "halt_reason": None,
+        "step_count": next_step_count,
         "task_phase": "observing",
         "runtime_snapshot": _evolve_runtime_snapshot(
             previous=state.get("runtime_snapshot"),
             context=context,
             task_phase="observing",
-            step_count=step_count,
+            step_count=next_step_count,
         ),
     }
     if clarification:
         world_state, world_diff = _record_user_input(
             state.get("world_state") if isinstance(state.get("world_state"), dict) else {},
             text=clarification,
-            step_count=step_count,
+            step_count=next_step_count,
         )
         task_state = _derive_default_task_model(
             goal_anchor=clarification,

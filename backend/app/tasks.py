@@ -10,6 +10,7 @@ from .celery_app import celery_app
 from .db import SessionLocal
 from .models import ExtractionSession, File
 from .routers.files import _render_pdf_previews, _render_word_previews
+from .services.bailian_file_service import BailianFileService
 from .services.kb.ingest_service import KBIngestService
 
 
@@ -132,5 +133,33 @@ def generate_previews_for_session(session_id: int) -> None:
                 db.commit()
         except Exception:
             logger.exception("[celery] failed to mark session failed session=%s", session_id)
+    finally:
+        db.close()
+
+
+@celery_app.task(name="cleanup_bailian_file_registry")
+def cleanup_bailian_file_registry(
+    older_than_days: int | None = None,
+    limit: int | None = None,
+) -> int:
+    db: Session = SessionLocal()
+    try:
+        logger.info(
+            "[celery] start bailian cleanup older_than_days=%s limit=%s",
+            older_than_days,
+            limit,
+        )
+        cleaned = BailianFileService(db).cleanup_stale_mappings(
+            older_than_days=older_than_days,
+            limit=limit,
+            remote_delete=True,
+        )
+        db.commit()
+        logger.info("[celery] bailian cleanup done cleaned=%s", cleaned)
+        return cleaned
+    except Exception:
+        db.rollback()
+        logger.exception("[celery] bailian cleanup failed")
+        raise
     finally:
         db.close()

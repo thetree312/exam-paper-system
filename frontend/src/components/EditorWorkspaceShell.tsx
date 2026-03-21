@@ -63,11 +63,16 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
 }) => {
   const { t } = useTranslation('common')
 
+  const contentShellClassName =
+    studioView === 'mindmap'
+      ? 'flex-1 overflow-hidden pb-20 pt-24 sm:pb-6 sm:pt-20 lg:pt-6'
+      : 'scrollbar-hidden flex-1 overflow-y-auto p-0 pb-8 lg:p-6'
+
   return (
-    <section className="relative flex flex-1 flex-col bg-background-light">
-      <div className="absolute left-1/2 top-4 z-20 flex -translate-x-1/2 gap-1 rounded-full border border-slate-200 bg-white p-1.5 shadow-lg">
+    <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background-light">
+      <div className="absolute left-1/2 top-3 z-20 flex w-[min(calc(100%-1rem),42rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-full border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur scrollbar-hidden sm:top-4 sm:w-auto sm:max-w-[calc(100%-2rem)]">
         <button
-          className="rounded-full p-2 text-slate-600"
+          className="shrink-0 rounded-full p-2 text-slate-600"
           type="button"
           title={t('editor_workspace.text_button')}
           onClick={() => {
@@ -77,7 +82,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           <span className="material-symbols-outlined text-[20px]">title</span>
         </button>
         <button
-          className={`rounded-full p-2 text-slate-600 ${studioView === 'flashcard' ? 'bg-slate-200' : ''}`}
+          className={`shrink-0 rounded-full p-2 text-slate-600 ${studioView === 'flashcard' ? 'bg-slate-200' : ''}`}
           type="button"
           title={t('editor_workspace.flashcard_button')}
           onClick={() => onStudioViewChange(studioView === 'flashcard' ? 'editor' : 'flashcard')}
@@ -85,7 +90,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           <span className="material-symbols-outlined text-[20px]">image</span>
         </button>
         <button
-          className={`rounded-full p-2 text-slate-600 ${studioView === 'mindmap' ? 'bg-slate-200' : ''}`}
+          className={`shrink-0 rounded-full p-2 text-slate-600 ${studioView === 'mindmap' ? 'bg-slate-200' : ''}`}
           type="button"
           title={t('editor_workspace.mindmap_button')}
           onClick={() => onStudioViewChange(studioView === 'mindmap' ? 'editor' : 'mindmap')}
@@ -93,7 +98,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           <span className="material-symbols-outlined text-[20px]">account_tree</span>
         </button>
         <button
-          className={`flex items-center gap-1.5 rounded-full p-2 text-sm ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-full p-2 text-sm ${
             isAnswerMode ? 'bg-slate-900 text-white shadow-inner' : 'text-slate-600'
           }`}
           type="button"
@@ -102,9 +107,9 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
         >
           <span className="material-symbols-outlined text-[18px]">edit_note</span>
         </button>
-        <div className="mx-1 w-px bg-slate-200" />
+        <div className="mx-1 hidden w-px bg-slate-200 sm:block" />
         <button
-          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-purple-600"
+          className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-purple-600"
           type="button"
           onClick={onOpenAgentDrawer}
           title={t('editor_workspace.copilot_button')}
@@ -114,14 +119,15 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
         </button>
       </div>
 
-      <div className="scrollbar-hidden flex-1 overflow-y-auto p-0 pb-8 lg:p-6">
+      <div className={contentShellClassName}>
         {studioView === 'mindmap' ? (
-          <div className="h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner">
+          <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
             <MindMapPanel
               backendBaseUrl={backendBaseUrl}
               documentId={agentDocumentId}
               fileId={currentFile?.fileId ?? null}
               user={user}
+              workroomId={workroomId}
               onBack={() => onStudioViewChange('editor')}
               onNavigateToQuestion={(target) => {
                 if (!target) return
