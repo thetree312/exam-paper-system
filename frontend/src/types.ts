@@ -672,6 +672,7 @@ export type MindMapSourceType = 'exam_document' | 'uploaded_file'
 export interface MindMapSourceRef {
   sourceType: MindMapSourceType
   sourceId: number
+  sourceIds?: number[]
   kind?: string | null
 }
 

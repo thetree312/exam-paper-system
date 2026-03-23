@@ -85,7 +85,14 @@ class QwenClient:
         model_name = (self.model or "").strip().lower()
         if not model_name:
             return False
-        return model_name == "qwen3.5-plus"
+        return model_name in {
+            "qwen-flash",
+            "qwen3.5-flash",
+            "qwen-plus",
+            "qwen3.5-plus",
+            "qwen-max",
+            "qwen3-max",
+        }
 
     def _inject_explicit_cache_markers(self, messages: List[dict]) -> List[dict]:
         if not self._explicit_cache_enabled or not self._is_explicit_cache_supported_model():
@@ -195,6 +202,7 @@ class QwenClient:
         *,
         temperature: float = 0.2,
         top_p: float = 0.8,
+        response_format: dict | None = None,
     ) -> Tuple[str, int | None]:
         url = _build_dashscope_url(self.base_url, self._chat_path)
         headers = {
@@ -207,6 +215,8 @@ class QwenClient:
             "temperature": temperature,
             "top_p": top_p,
         }
+        if response_format:
+            payload["response_format"] = response_format
         self._apply_thinking_options(payload)
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens

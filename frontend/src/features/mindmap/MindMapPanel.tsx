@@ -3,20 +3,22 @@ import { useTranslation } from 'react-i18next'
 
 import type { MindMapNavigateTarget, MindMapSourceRef, UserInfo } from '../../types'
 import { fetchWorkroomArtifact, upsertWorkroomArtifact } from '../../services/workroomApi'
-import { generateMindMap, saveMindMap } from './api/mindmapApi'
+import { useAppStore } from '../../store/appStore'
+import { generateMindMap, getCurrentMindMap, saveMindMap } from './api/mindmapApi'
 import MindMapNodeEditor from './components/MindMapNodeEditor'
 import MindMapContextActions from './components/MindMapContextActions'
 import { MindMapLoadingAnimation } from './components/MindMapLoadingAnimation'
 import MindMapRadialMenu from './components/MindMapRadialMenu'
 import MindMapToolbar from './components/MindMapToolbar'
 import { findNodeById, firstQuestionRef, updateNodeById } from './domain/tree'
-import type { MindMapDocumentPayload, MindMapNodeTree, MindMapViewState } from './domain/types'
+import type { MindMapDocumentPayload, MindMapMode, MindMapNodeTree, MindMapViewState } from './domain/types'
 import {
   MindElixirCanvas,
   type MindMapEditorController,
   type MindMapActionResult,
   type MindMapNodeContextMenuRequest,
   type MindMapEditorSelectionState,
+  type MindMapNodeHoverRequest,
 } from './editor/MindElixirCanvas'
 
 interface MindMapPanelProps {
@@ -39,19 +41,23 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
 }) => {
   const { t, i18n } = useTranslation('common')
   const [mode, setMode] = React.useState<'document' | 'file'>(() => (documentId ? 'document' : 'file'))
+  const [mindmapMode, setMindmapMode] = React.useState<MindMapMode>('knowledge_structure')
   const [document, setDocument] = React.useState<MindMapDocumentPayload | null>(null)
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null)
   const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null)
   const [isLoading, setIsLoading] = React.useState(false)
+  const [loadingLabel, setLoadingLabel] = React.useState<string | null>(null)
+  const [loadingDetail, setLoadingDetail] = React.useState<string | null>(null)
   const [isSaving, setIsSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [editorReady, setEditorReady] = React.useState(false)
   const [viewState, setViewState] = React.useState<MindMapViewState | null>(null)
-  const [layoutMode, setLayoutMode] = React.useState<'side' | 'left' | 'right'>('side')
+  const [layoutMode, setLayoutMode] = React.useState<'side' | 'left' | 'right'>('right')
   const [isCoarsePointer, setIsCoarsePointer] = React.useState(false)
   const [radialMenu, setRadialMenu] = React.useState<MindMapNodeContextMenuRequest | null>(null)
   const [actionHint, setActionHint] = React.useState<string | null>(null)
   const [isFocusMode, setIsFocusMode] = React.useState(false)
+  const [hoveredNode, setHoveredNode] = React.useState<MindMapNodeHoverRequest | null>(null)
   const [selectionState, setSelectionState] = React.useState<MindMapEditorSelectionState>({
     selectedNodeCount: 0,
     hasSelectedArrow: false,
@@ -59,15 +65,20 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   })
   const editorControllerRef = React.useRef<MindMapEditorController | null>(null)
   const actionHintTimerRef = React.useRef<number | null>(null)
+  const loadingTimerRefs = React.useRef<number[]>([])
+  const restoredPanelStateKeyRef = React.useRef<string | null>(null)
   const handleControllerReady = React.useCallback((controller: MindMapEditorController | null) => {
     editorControllerRef.current = controller
     setEditorReady(Boolean(controller))
-  }, [])
+    if (controller) {
+      controller.setLayout(layoutMode)
+    }
+  }, [layoutMode])
 
   const source: MindMapSourceRef | null = React.useMemo(() => {
     if (!user) return null
     if (mode === 'document' && documentId) return { sourceType: 'exam_document', sourceId: documentId, kind: 'knowledge' }
-    if (mode === 'file' && fileId) return { sourceType: 'uploaded_file', sourceId: fileId, kind: 'knowledge' }
+    if (mode === 'file' && fileId) return { sourceType: 'uploaded_file', sourceId: fileId, sourceIds: [], kind: 'knowledge' }
     return null
   }, [user, mode, documentId, fileId])
 
@@ -75,23 +86,117 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     () => (document && editingNodeId ? findNodeById(document.root, editingNodeId) : null),
     [document, editingNodeId],
   )
+  const selectedNode = React.useMemo(
+    () => (document && selectedNodeId ? findNodeById(document.root, selectedNodeId) : null),
+    [document, selectedNodeId],
+  )
+  const hoveredNodeData = React.useMemo(
+    () => (document && hoveredNode?.nodeId ? findNodeById(document.root, hoveredNode.nodeId) : null),
+    [document, hoveredNode],
+  )
 
   const canUseDocument = Boolean(documentId)
   const canUseFile = Boolean(fileId)
   const canGenerateCurrent = Boolean(source && user && workroomId)
+  const sourceCount = React.useMemo(() => {
+    if (!source) return 0
+    return source.sourceIds && source.sourceIds.length > 0 ? source.sourceIds.length : 1
+  }, [source])
+  const sourceSignature = React.useMemo(() => {
+    if (!source) return null
+    const ids = source.sourceIds && source.sourceIds.length > 0 ? [...source.sourceIds].sort((a, b) => a - b) : []
+    return ids.length > 1 ? `${source.sourceType}:${ids.join(',')}` : null
+  }, [source])
+  const panelStateKey = React.useMemo(() => {
+    if (!source || !workroomId || !user) return null
+    return `${workroomId}:${source.sourceType}:${source.sourceId}:${sourceSignature ?? ''}:${user.id}`
+  }, [source, sourceSignature, user, workroomId])
 
-  const loadDocument = React.useCallback(
-    async (force = false) => {
+  const setLoadingState = React.useCallback(
+    (phase: 'load' | 'outline' | 'merge' | 'expand') => {
+      if (phase === 'load') {
+        setLoadingLabel(t('mindmap_panel.loading_existing'))
+        setLoadingDetail(t('mindmap_panel.loading_existing_detail'))
+        return
+      }
+      if (phase === 'outline') {
+        setLoadingLabel(
+          sourceCount > 1 ? t('mindmap_panel.stage_outline_multi') : t('mindmap_panel.stage_outline_single'),
+        )
+        setLoadingDetail(
+          sourceCount > 1
+            ? t('mindmap_panel.stage_outline_multi_detail', { count: sourceCount })
+            : t('mindmap_panel.stage_outline_single_detail'),
+        )
+        return
+      }
+      if (phase === 'merge') {
+        setLoadingLabel(t('mindmap_panel.stage_merge'))
+        setLoadingDetail(t('mindmap_panel.stage_merge_detail', { count: sourceCount }))
+        return
+      }
+      setLoadingLabel(t('mindmap_panel.stage_expand'))
+      setLoadingDetail(
+        mindmapMode === 'knowledge_structure'
+          ? t('mindmap_panel.stage_expand_structure')
+          : t('mindmap_panel.stage_expand_review'),
+      )
+    },
+    [mindmapMode, sourceCount, t],
+  )
+
+  const loadCurrentDocument = React.useCallback(async () => {
+    if (!source || !user || !workroomId) return
+    loadingTimerRefs.current.forEach((timer) => window.clearTimeout(timer))
+    loadingTimerRefs.current = []
+    setIsLoading(true)
+    setLoadingState('load')
+    setError(null)
+    setDocument(null)
+    try {
+      const current = await getCurrentMindMap(
+        backendBaseUrl,
+        source,
+        user.tenant_id,
+        workroomId,
+        user.id,
+        mindmapMode,
+      )
+      setDocument(current)
+    } catch (err) {
+      console.error('[mindmap] load current failed', err)
+      setError(err instanceof Error ? err.message : 'Unknown error')
+      setDocument(null)
+    } finally {
+      setIsLoading(false)
+      setLoadingLabel(null)
+      setLoadingDetail(null)
+    }
+  }, [backendBaseUrl, mindmapMode, setLoadingState, source, user, workroomId])
+
+  const generateDocument = React.useCallback(
+    async (force = true) => {
       if (!source || !user || !workroomId) return
+      loadingTimerRefs.current.forEach((timer) => window.clearTimeout(timer))
+      loadingTimerRefs.current = []
       setIsLoading(true)
+      setLoadingState('outline')
       setError(null)
+      setDocument(null)
       try {
+        if ((source.sourceIds?.length ?? 0) > 1) {
+          loadingTimerRefs.current.push(window.setTimeout(() => setLoadingState('merge'), 800))
+          loadingTimerRefs.current.push(window.setTimeout(() => setLoadingState('expand'), 1600))
+        } else {
+          loadingTimerRefs.current.push(window.setTimeout(() => setLoadingState('expand'), 900))
+        }
         const generated = await generateMindMap(
           backendBaseUrl,
           source,
           user.tenant_id,
           workroomId,
           user.id,
+          mindmapMode,
           force,
         )
         setDocument(generated)
@@ -100,10 +205,14 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         setError(err instanceof Error ? err.message : 'Unknown error')
         setDocument(null)
       } finally {
+        loadingTimerRefs.current.forEach((timer) => window.clearTimeout(timer))
+        loadingTimerRefs.current = []
         setIsLoading(false)
+        setLoadingLabel(null)
+        setLoadingDetail(null)
       }
     },
-    [backendBaseUrl, source, user, workroomId],
+    [backendBaseUrl, mindmapMode, setLoadingState, source, user, workroomId],
   )
 
   React.useEffect(() => {
@@ -118,8 +227,8 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   React.useEffect(() => {
     setSelectedNodeId(null)
     setEditingNodeId(null)
-    setLayoutMode('side')
     setRadialMenu(null)
+    setHoveredNode(null)
     setActionHint(null)
     setIsFocusMode(false)
     setSelectionState({
@@ -127,8 +236,14 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       hasSelectedArrow: false,
       hasSelectedSummary: false,
     })
-    void loadDocument(false)
-  }, [loadDocument])
+    void loadCurrentDocument()
+  }, [loadCurrentDocument])
+
+  React.useEffect(() => {
+    if (restoredPanelStateKeyRef.current !== panelStateKey) {
+      restoredPanelStateKeyRef.current = null
+    }
+  }, [panelStateKey])
 
   React.useEffect(() => {
     if (!document || !source || !user || !workroomId) return
@@ -151,14 +266,33 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         const artifactSelectedNodeId = payload.selectedNodeId
         const artifactViewState = payload.viewState
         const artifactLayoutMode = payload.layoutMode
+        const artifactMindmapMode = payload.mindmapMode
+        const artifactSourceIds = Array.isArray(payload.sourceIds)
+          ? payload.sourceIds.map((value: unknown) => Number(value)).filter((value: number) => Number.isFinite(value) && value > 0)
+          : []
+        const artifactSourceSignature =
+          typeof payload.sourceSignature === 'string' && payload.sourceSignature.trim()
+            ? payload.sourceSignature.trim()
+            : artifactSourceIds.length > 1
+              ? `${artifactSourceType}:${[...artifactSourceIds].sort((a, b) => a - b).join(',')}`
+              : null
         if (artifactSourceType !== source.sourceType || artifactSourceId !== source.sourceId) return
+        if ((artifactSourceSignature ?? null) !== (sourceSignature ?? null)) return
         if (typeof artifactSelectedNodeId === 'string') {
           setSelectedNodeId(artifactSelectedNodeId)
+        }
+        const shouldRestorePanelPreferences =
+          restoredPanelStateKeyRef.current == null && restoredPanelStateKeyRef.current !== panelStateKey
+        if (shouldRestorePanelPreferences) {
+          if (artifactMindmapMode === 'knowledge_structure' || artifactMindmapMode === 'exam_review') {
+            setMindmapMode(artifactMindmapMode)
+          }
+          restoredPanelStateKeyRef.current = panelStateKey
         }
         if (artifactLayoutMode === 'side' || artifactLayoutMode === 'left' || artifactLayoutMode === 'right') {
           setLayoutMode(artifactLayoutMode)
         } else {
-          setLayoutMode('side')
+          setLayoutMode('right')
         }
         if (
           artifactMindmapId === document.id &&
@@ -179,7 +313,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     return () => {
       cancelled = true
     }
-  }, [backendBaseUrl, document?.id, source, user, workroomId])
+  }, [backendBaseUrl, document?.id, panelStateKey, source, sourceSignature, user, workroomId])
 
   React.useEffect(() => {
     if (!radialMenu) return
@@ -187,6 +321,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       const target = event.target as HTMLElement | null
       if (target?.closest('.mindmap-radial-menu')) return
       setRadialMenu(null)
+      if (isCoarsePointer) setHoveredNode(null)
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setRadialMenu(null)
@@ -197,14 +332,23 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       window.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [radialMenu])
+  }, [isCoarsePointer, radialMenu])
 
   React.useEffect(() => {
     if (!radialMenu) return
-    if (selectedNodeId !== radialMenu.nodeId || isCoarsePointer) {
+    if (isCoarsePointer) {
+      setRadialMenu(null)
+      return
+    }
+    if (radialMenu.targetType === 'node' && selectedNodeId !== radialMenu.nodeId) {
       setRadialMenu(null)
     }
   }, [radialMenu, selectedNodeId, isCoarsePointer])
+
+  React.useEffect(() => {
+    if (!editorReady) return
+    editorControllerRef.current?.setLayout(layoutMode)
+  }, [editorReady, layoutMode])
 
   React.useEffect(() => {
     if (!document || !user || !workroomId) return
@@ -223,9 +367,12 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             mindmapId: document.id,
             sourceType: document.source.type,
             sourceId: document.source.id,
+            sourceIds: document.source.ids,
+            sourceSignature: document.source.signature,
             selectedNodeId,
             viewState,
             layoutMode,
+            mindmapMode,
           },
         },
       ).catch((err) => {
@@ -244,9 +391,11 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     selectedNodeId,
     viewState,
     layoutMode,
+    mindmapMode,
     mode,
     fileId,
     documentId,
+    sourceSignature,
   ])
 
   const handleSave = React.useCallback(async () => {
@@ -298,6 +447,8 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
       if (actionHintTimerRef.current !== null) {
         window.clearTimeout(actionHintTimerRef.current)
       }
+      loadingTimerRefs.current.forEach((timer) => window.clearTimeout(timer))
+      loadingTimerRefs.current = []
     }
   }, [])
 
@@ -316,6 +467,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     const selectedCount = selectionState.selectedNodeCount
     const hasSelectedArrow = selectionState.hasSelectedArrow
     const hasSelectedSummary = selectionState.hasSelectedSummary
+    const isSummaryMenu = radialMenu?.targetType === 'summary'
 
     const run = (action: () => void) => () => {
       action()
@@ -332,7 +484,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         showActionHint(ok ? okMessage : failMessage)
       })
 
-    return [
+    const nodeActions = [
       {
         icon: 'edit_note',
         label: menuLabel('编辑节点', 'Edit Node'),
@@ -530,16 +682,52 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         ),
       },
     ]
+
+    if (isSummaryMenu) {
+      return [
+        {
+          icon: 'edit',
+          label: menuLabel('编辑总结', 'Edit Summary'),
+          onClick: runBoolean(
+            () => controller?.editSummary(),
+            menuLabel('已进入总结编辑', 'Summary edit opened'),
+            menuLabel('请先选中一个总结', 'Select a summary first'),
+          ),
+        },
+        {
+          icon: 'delete',
+          label: menuLabel('删除总结', 'Remove Summary'),
+          tone: 'danger' as const,
+          onClick: runBoolean(
+            () => controller?.removeSummary(),
+            menuLabel('已删除总结', 'Summary removed'),
+            menuLabel('请先选中一个总结', 'Select a summary first'),
+          ),
+        },
+      ]
+    }
+
+    return nodeActions
   }, [
     closeRadialMenu,
     isFocusMode,
     menuLabel,
+    radialMenu?.targetType,
     selectedNodeId,
     selectionState.hasSelectedArrow,
     selectionState.hasSelectedSummary,
     selectionState.selectedNodeCount,
     showActionHint,
   ])
+
+  const showTouchContextActions =
+    isCoarsePointer &&
+    editorReady &&
+    (selectionState.selectedNodeCount === 1 ||
+      selectionState.selectedNodeCount === 2 ||
+      selectionState.selectedNodeCount >= 2 ||
+      selectionState.hasSelectedArrow ||
+      selectionState.hasSelectedSummary)
 
   if (!user || !workroomId || (!documentId && !fileId)) {
     return (
@@ -558,7 +746,14 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             <h2 className="truncate text-base font-semibold leading-none text-slate-900 sm:text-lg">{t('mindmap_panel.title')}</h2>
             {document && (
               <span className="shrink-0 pb-0.5 text-[11px] font-semibold text-emerald-600 sm:text-xs">
-                {'v' + document.version + ' | ' + document.meta.generatedBy}
+                {'v' +
+                  document.version +
+                  ' | ' +
+                  document.meta.generatedBy +
+                  ' | ' +
+                  (mindmapMode === 'knowledge_structure'
+                    ? t('mindmap_toolbar.mode_knowledge_short')
+                    : t('mindmap_toolbar.mode_exam_short'))}
               </span>
             )}
           </div>
@@ -568,15 +763,17 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         <MindMapToolbar
           mode={mode}
           onModeChange={setMode}
+          mindmapMode={mindmapMode}
+          onMindmapModeChange={setMindmapMode}
           layoutMode={layoutMode}
           onCycleLayout={() => {
-            const nextLayout = layoutMode === 'side' ? 'left' : layoutMode === 'left' ? 'right' : 'side'
+            const nextLayout = layoutMode === 'right' ? 'side' : layoutMode === 'side' ? 'left' : 'right'
             setLayoutMode(nextLayout)
             editorControllerRef.current?.setLayout(nextLayout)
           }}
           canUseDocument={canUseDocument}
           canUseFile={canUseFile}
-          onRefresh={() => void loadDocument(true)}
+          onRefresh={() => void generateDocument(true)}
           refreshDisabled={!canGenerateCurrent || isLoading}
           refreshLabel={isLoading ? t('mindmap.generating') : document ? t('mindmap.regenerate') : t('mindmap.generate')}
           showSave={Boolean(document)}
@@ -603,7 +800,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         )}
         {isLoading && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-            <MindMapLoadingAnimation />
+            <MindMapLoadingAnimation label={loadingLabel ?? undefined} detail={loadingDetail} />
           </div>
         )}
         {error && !isLoading && (
@@ -612,7 +809,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             <button
               type="button"
               className="rounded-full border border-rose-200 px-3 py-1.5 text-rose-600 hover:bg-rose-50"
-              onClick={() => void loadDocument(true)}
+              onClick={() => void loadCurrentDocument()}
             >
               {t('mindmap_panel.retry')}
             </button>
@@ -632,14 +829,14 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             <button
               type="button"
               className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg hover:bg-slate-800"
-              onClick={() => void loadDocument(true)}
+              onClick={() => void generateDocument(true)}
               disabled={!canGenerateCurrent}
             >
               {t('mindmap_panel.generate_now')}
             </button>
           </div>
         )}
-        {document && (
+        {document && !isLoading && (
           <MindElixirCanvas
             document={document}
             onDocumentChange={setDocument}
@@ -651,6 +848,9 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
               setRadialMenu(null)
               setEditingNodeId(nodeId)
             }}
+            onNodeHoverChange={(request) => {
+              setHoveredNode(request)
+            }}
             onNodeContextMenu={(request) => {
               if (isCoarsePointer) return
               setRadialMenu(request)
@@ -660,6 +860,46 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             onSelectionStateChange={setSelectionState}
             onControllerReady={handleControllerReady}
           />
+        )}
+        {document && !isLoading && !isCoarsePointer && hoveredNode && hoveredNodeData?.summary && (
+          <div
+            className="pointer-events-none absolute z-20 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full rounded-2xl border border-slate-200 bg-white/97 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.14)] backdrop-blur"
+            style={{
+              left: hoveredNode.x,
+              top: hoveredNode.y - 14,
+            }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              {t('mindmap_node_editor.description_label', { remaining: Math.max(0, 240 - hoveredNodeData.summary.length) })}
+            </p>
+            <h3 className="mt-1 text-sm font-semibold text-slate-900">{hoveredNodeData.topic}</h3>
+            <p className="mt-2 text-xs leading-6 text-slate-600">{hoveredNodeData.summary}</p>
+          </div>
+        )}
+        {document && !isLoading && isCoarsePointer && selectedNode && (selectedNode.summary || selectedNode.questionRefs.length > 0) && (
+          <div
+            className="pointer-events-none absolute left-4 z-20 max-w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-slate-200 bg-white/96 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur sm:left-5 lg:left-6"
+            style={{
+              bottom: showTouchContextActions ? '8.75rem' : '1rem',
+            }}
+          >
+            <div className="space-y-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {t('mindmap_node_editor.title')}
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-slate-900 sm:text-base">{selectedNode.topic}</h3>
+              </div>
+              {selectedNode.summary && (
+                <p className="text-xs leading-6 text-slate-600 sm:text-[13px]">{selectedNode.summary}</p>
+              )}
+              {selectedNode.questionRefs.length > 0 && (
+                <p className="text-[11px] font-medium text-emerald-600 sm:text-xs">
+                  {t('mindmap_node_editor.view_question')}
+                </p>
+              )}
+            </div>
+          </div>
         )}
         <MindMapRadialMenu
           anchor={radialMenu ? { x: radialMenu.x, y: radialMenu.y } : null}

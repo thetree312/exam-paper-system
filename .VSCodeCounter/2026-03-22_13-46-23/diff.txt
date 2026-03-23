@@ -1,0 +1,548 @@
+Date : 2026-03-22 13:46:23
+Directory : d:\Exam-paper\frontend
+Total : 359 files,  -8933 codes, -2512 comments, -3385 blanks, all -14830 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| TypeScript JSX     |         49 |     12,883 |        210 |      1,846 |     14,939 |
+| TypeScript         |         42 |      6,009 |        283 |        783 |      7,075 |
+| JSON               |          6 |      5,453 |          0 |          5 |      5,458 |
+| PostCSS            |          1 |        498 |          4 |         74 |        576 |
+| JSON with Comments |          1 |         24 |          2 |          3 |         29 |
+| XML                |          2 |          2 |          0 |          0 |          2 |
+| MS SQL             |         26 |       -662 |        -71 |       -115 |       -848 |
+| Markdown           |         54 |     -3,351 |        -75 |     -1,058 |     -4,484 |
+| Python             |        178 |    -29,789 |     -2,865 |     -4,923 |    -37,577 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                                              | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                                                 |        359 |     -8,933 |     -2,512 |     -3,385 |    -14,830 |
+| . (Files)                                                                                                                         |          3 |      4,541 |          2 |          5 |      4,548 |
+| ..                                                                                                                                |        258 |    -33,802 |     -3,011 |     -6,096 |    -42,909 |
+| ..\backend                                                                                                                        |        258 |    -33,802 |     -3,011 |     -6,096 |    -42,909 |
+| ..\backend (Files)                                                                                                                |          5 |       -501 |        -75 |       -151 |       -727 |
+| ..\backend\.venv                                                                                                                  |         48 |     -2,621 |        -52 |       -772 |     -3,445 |
+| ..\backend\.venv\Lib                                                                                                              |         48 |     -2,621 |        -52 |       -772 |     -3,445 |
+| ..\backend\.venv\Lib\site-packages                                                                                                |         48 |     -2,621 |        -52 |       -772 |     -3,445 |
+| ..\backend\.venv\Lib\site-packages\PyMuPDF-1.24.1.dist-info                                                                       |          1 |        -28 |          0 |        -31 |        -59 |
+| ..\backend\.venv\Lib\site-packages\PyMuPDFb-1.24.1.dist-info                                                                      |          1 |         -5 |          0 |         -3 |         -8 |
+| ..\backend\.venv\Lib\site-packages\anthropic                                                                                      |          1 |        -94 |          0 |        -33 |       -127 |
+| ..\backend\.venv\Lib\site-packages\anthropic\lib                                                                                  |          1 |        -94 |          0 |        -33 |       -127 |
+| ..\backend\.venv\Lib\site-packages\bracex-2.6.dist-info                                                                           |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\bracex-2.6.dist-info\licenses                                                                  |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\deepagents                                                                                     |          1 |        -33 |          0 |        -18 |        -51 |
+| ..\backend\.venv\Lib\site-packages\docling_parse                                                                                  |          4 |       -650 |          0 |       -116 |       -766 |
+| ..\backend\.venv\Lib\site-packages\docling_parse\pdf_resources                                                                    |          2 |       -325 |          0 |        -58 |       -383 |
+| ..\backend\.venv\Lib\site-packages\docling_parse\pdf_resources\cmap-resources                                                     |          2 |       -325 |          0 |        -58 |       -383 |
+| ..\backend\.venv\Lib\site-packages\docling_parse\pdf_resources_v2                                                                 |          2 |       -325 |          0 |        -58 |       -383 |
+| ..\backend\.venv\Lib\site-packages\docling_parse\pdf_resources_v2\cmap-resources                                                  |          2 |       -325 |          0 |        -58 |       -383 |
+| ..\backend\.venv\Lib\site-packages\docstring_parser-0.17.0.dist-info                                                              |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\docstring_parser-0.17.0.dist-info\licenses                                                     |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\fire                                                                                           |          1 |         -3 |          0 |         -1 |         -4 |
+| ..\backend\.venv\Lib\site-packages\fire\console                                                                                   |          1 |         -3 |          0 |         -1 |         -4 |
+| ..\backend\.venv\Lib\site-packages\flask                                                                                          |          1 |         -5 |          0 |         -2 |         -7 |
+| ..\backend\.venv\Lib\site-packages\flask\sansio                                                                                   |          1 |         -5 |          0 |         -2 |         -7 |
+| ..\backend\.venv\Lib\site-packages\httpcore-1.0.9.dist-info                                                                       |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\httpcore-1.0.9.dist-info\licenses                                                              |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\httpx-0.28.1.dist-info                                                                         |          1 |         -7 |          0 |         -6 |        -13 |
+| ..\backend\.venv\Lib\site-packages\httpx-0.28.1.dist-info\licenses                                                                |          1 |         -7 |          0 |         -6 |        -13 |
+| ..\backend\.venv\Lib\site-packages\huggingface_hub                                                                                |          2 |       -146 |        -39 |       -160 |       -345 |
+| ..\backend\.venv\Lib\site-packages\huggingface_hub\templates                                                                      |          2 |       -146 |        -39 |       -160 |       -345 |
+| ..\backend\.venv\Lib\site-packages\idna-3.11.dist-info                                                                            |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\idna-3.11.dist-info\licenses                                                                   |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\imgaug                                                                                         |          1 |         -6 |          0 |         -1 |         -7 |
+| ..\backend\.venv\Lib\site-packages\imgaug\external                                                                                |          1 |         -6 |          0 |         -1 |         -7 |
+| ..\backend\.venv\Lib\site-packages\langsmith                                                                                      |          1 |         -2 |          0 |         -2 |         -4 |
+| ..\backend\.venv\Lib\site-packages\langsmith\cli                                                                                  |          1 |         -2 |          0 |         -2 |         -4 |
+| ..\backend\.venv\Lib\site-packages\lazy_loader-0.4.dist-info                                                                      |          1 |        -23 |          0 |         -7 |        -30 |
+| ..\backend\.venv\Lib\site-packages\onnxruntime                                                                                    |          4 |       -156 |         -9 |        -11 |       -176 |
+| ..\backend\.venv\Lib\site-packages\onnxruntime (Files)                                                                            |          1 |        -14 |          0 |         -8 |        -22 |
+| ..\backend\.venv\Lib\site-packages\onnxruntime\tools                                                                              |          3 |       -142 |         -9 |         -3 |       -154 |
+| ..\backend\.venv\Lib\site-packages\onnxruntime\tools\mobile_helpers                                                               |          3 |       -142 |         -9 |         -3 |       -154 |
+| ..\backend\.venv\Lib\site-packages\openai                                                                                         |          4 |       -353 |          0 |        -39 |       -392 |
+| ..\backend\.venv\Lib\site-packages\openai\resources                                                                               |          4 |       -353 |          0 |        -39 |       -392 |
+| ..\backend\.venv\Lib\site-packages\openai\resources\conversations                                                                 |          1 |        -33 |          0 |        -10 |        -43 |
+| ..\backend\.venv\Lib\site-packages\openai\resources\realtime                                                                      |          1 |       -127 |          0 |        -11 |       -138 |
+| ..\backend\.venv\Lib\site-packages\openai\resources\responses                                                                     |          1 |       -171 |          0 |        -15 |       -186 |
+| ..\backend\.venv\Lib\site-packages\openai\resources\webhooks                                                                      |          1 |        -22 |          0 |         -3 |        -25 |
+| ..\backend\.venv\Lib\site-packages\paddle                                                                                         |          1 |         -3 |          0 |         -3 |         -6 |
+| ..\backend\.venv\Lib\site-packages\paddle\_typing                                                                                 |          1 |         -3 |          0 |         -3 |         -6 |
+| ..\backend\.venv\Lib\site-packages\paddle\_typing\libs                                                                            |          1 |         -3 |          0 |         -3 |         -6 |
+| ..\backend\.venv\Lib\site-packages\paddleclas                                                                                     |          2 |       -415 |          0 |       -145 |       -560 |
+| ..\backend\.venv\Lib\site-packages\paddleclas (Files)                                                                             |          1 |       -162 |          0 |        -61 |       -223 |
+| ..\backend\.venv\Lib\site-packages\paddleclas\docs                                                                                |          1 |       -253 |          0 |        -84 |       -337 |
+| ..\backend\.venv\Lib\site-packages\paddleclas\docs\en                                                                             |          1 |       -253 |          0 |        -84 |       -337 |
+| ..\backend\.venv\Lib\site-packages\paddleclas\docs\en\inference_deployment                                                        |          1 |       -253 |          0 |        -84 |       -337 |
+| ..\backend\.venv\Lib\site-packages\paddleocr                                                                                      |          1 |       -203 |          0 |        -57 |       -260 |
+| ..\backend\.venv\Lib\site-packages\pip                                                                                            |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info                                                                             |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses                                                                    |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses\src                                                                |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses\src\pip                                                            |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses\src\pip\_vendor                                                    |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses\src\pip\_vendor\idna                                               |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip\_vendor                                                                                    |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pip\_vendor\idna                                                                               |          1 |        -25 |          0 |         -7 |        -32 |
+| ..\backend\.venv\Lib\site-packages\pyparsing                                                                                      |          1 |        -67 |         -4 |         -5 |        -76 |
+| ..\backend\.venv\Lib\site-packages\pyparsing\ai                                                                                   |          1 |        -67 |         -4 |         -5 |        -76 |
+| ..\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info                                                                      |          1 |       -101 |          0 |        -35 |       -136 |
+| ..\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info\licenses                                                             |          1 |       -101 |          0 |        -35 |       -136 |
+| ..\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info\licenses\data                                                        |          1 |       -101 |          0 |        -35 |       -136 |
+| ..\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info\licenses\data\windows_x64                                            |          1 |       -101 |          0 |        -35 |       -136 |
+| ..\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info\licenses\data\windows_x64\BUILD_LICENSES                             |          1 |       -101 |          0 |        -35 |       -136 |
+| ..\backend\.venv\Lib\site-packages\pyreadline3-3.5.4.dist-info                                                                    |          1 |        -37 |          0 |        -17 |        -54 |
+| ..\backend\.venv\Lib\site-packages\scipy                                                                                          |          1 |        -22 |          0 |         -4 |        -26 |
+| ..\backend\.venv\Lib\site-packages\scipy\fft                                                                                      |          1 |        -22 |          0 |         -4 |        -26 |
+| ..\backend\.venv\Lib\site-packages\scipy\fft\_pocketfft                                                                           |          1 |        -22 |          0 |         -4 |        -26 |
+| ..\backend\.venv\Lib\site-packages\sklearn                                                                                        |          2 |         -2 |          0 |         -2 |         -4 |
+| ..\backend\.venv\Lib\site-packages\sklearn\externals                                                                              |          2 |         -2 |          0 |         -2 |         -4 |
+| ..\backend\.venv\Lib\site-packages\sklearn\externals\array_api_compat                                                             |          1 |         -1 |          0 |         -1 |         -2 |
+| ..\backend\.venv\Lib\site-packages\sklearn\externals\array_api_extra                                                              |          1 |         -1 |          0 |         -1 |         -2 |
+| ..\backend\.venv\Lib\site-packages\soupsieve-2.8.3.dist-info                                                                      |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\soupsieve-2.8.3.dist-info\licenses                                                             |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\starlette-0.37.2.dist-info                                                                     |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\starlette-0.37.2.dist-info\licenses                                                            |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\torchgen                                                                                       |          1 |         -3 |          0 |         -1 |         -4 |
+| ..\backend\.venv\Lib\site-packages\torchgen\packaged                                                                              |          1 |         -3 |          0 |         -1 |         -4 |
+| ..\backend\.venv\Lib\site-packages\torchgen\packaged\autograd                                                                     |          1 |         -3 |          0 |         -1 |         -4 |
+| ..\backend\.venv\Lib\site-packages\uuid_utils-0.12.0.dist-info                                                                    |          1 |        -22 |          0 |         -5 |        -27 |
+| ..\backend\.venv\Lib\site-packages\uuid_utils-0.12.0.dist-info\licenses                                                           |          1 |        -22 |          0 |         -5 |        -27 |
+| ..\backend\.venv\Lib\site-packages\uvicorn-0.30.1.dist-info                                                                       |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\uvicorn-0.30.1.dist-info\licenses                                                              |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\wcmatch-10.1.dist-info                                                                         |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\wcmatch-10.1.dist-info\licenses                                                                |          1 |        -17 |          0 |         -5 |        -22 |
+| ..\backend\.venv\Lib\site-packages\werkzeug                                                                                       |          1 |         -4 |          0 |         -3 |         -7 |
+| ..\backend\.venv\Lib\site-packages\werkzeug\debug                                                                                 |          1 |         -4 |          0 |         -3 |         -7 |
+| ..\backend\.venv\Lib\site-packages\werkzeug\debug\shared                                                                          |          1 |         -4 |          0 |         -3 |         -7 |
+| ..\backend\.venv\Lib\site-packages\~vicorn-0.40.0.dist-info                                                                       |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\.venv\Lib\site-packages\~vicorn-0.40.0.dist-info\licenses                                                              |          1 |        -22 |          0 |         -6 |        -28 |
+| ..\backend\app                                                                                                                    |        109 |    -24,173 |     -2,590 |     -3,606 |    -30,369 |
+| ..\backend\app (Files)                                                                                                            |          9 |     -1,381 |        -36 |       -296 |     -1,713 |
+| ..\backend\app\agent                                                                                                              |         30 |    -10,280 |       -255 |     -1,098 |    -11,633 |
+| ..\backend\app\agent (Files)                                                                                                      |          2 |     -1,747 |        -71 |       -190 |     -2,008 |
+| ..\backend\app\agent\assistant_graph                                                                                              |         16 |     -5,592 |        -62 |       -575 |     -6,229 |
+| ..\backend\app\agent\assistant_graph (Files)                                                                                      |         14 |     -5,398 |        -62 |       -544 |     -6,004 |
+| ..\backend\app\agent\assistant_graph\adapters                                                                                     |          2 |       -194 |          0 |        -31 |       -225 |
+| ..\backend\app\agent\services                                                                                                     |          4 |     -1,361 |        -96 |       -158 |     -1,615 |
+| ..\backend\app\agent\tools                                                                                                        |          8 |     -1,580 |        -26 |       -175 |     -1,781 |
+| ..\backend\app\glm_ocr                                                                                                            |          3 |       -833 |        -64 |       -130 |     -1,027 |
+| ..\backend\app\middleware                                                                                                         |          1 |        -23 |         -1 |         -6 |        -30 |
+| ..\backend\app\routers                                                                                                            |         17 |     -3,478 |       -344 |       -699 |     -4,521 |
+| ..\backend\app\services                                                                                                           |         48 |     -8,148 |     -1,883 |     -1,364 |    -11,395 |
+| ..\backend\app\services (Files)                                                                                                   |         24 |     -5,329 |       -763 |     -1,032 |     -7,124 |
+| ..\backend\app\services\kb                                                                                                        |         12 |       -855 |       -525 |       -107 |     -1,487 |
+| ..\backend\app\services\kb (Files)                                                                                                |          8 |       -775 |       -525 |        -86 |     -1,386 |
+| ..\backend\app\services\kb\extractors                                                                                             |          4 |        -80 |          0 |        -21 |       -101 |
+| ..\backend\app\services\mindmap                                                                                                   |          6 |     -1,261 |       -246 |       -166 |     -1,673 |
+| ..\backend\app\services\workroom                                                                                                  |          3 |       -337 |       -134 |        -34 |       -505 |
+| ..\backend\app\services\workspace                                                                                                 |          3 |       -366 |       -215 |        -25 |       -606 |
+| ..\backend\app\utils                                                                                                              |          1 |        -30 |         -7 |        -13 |        -50 |
+| ..\backend\db                                                                                                                     |         28 |       -748 |        -71 |       -140 |       -959 |
+| ..\backend\db (Files)                                                                                                             |          3 |       -283 |        -13 |        -40 |       -336 |
+| ..\backend\db\migrations                                                                                                          |         25 |       -465 |        -58 |       -100 |       -623 |
+| ..\backend\docs                                                                                                                   |          5 |       -650 |        -23 |       -259 |       -932 |
+| ..\backend\scripts                                                                                                                |         22 |     -1,477 |       -178 |       -401 |     -2,056 |
+| ..\backend\tests                                                                                                                  |         41 |     -3,632 |        -22 |       -767 |     -4,421 |
+| ..\backend\tests (Files)                                                                                                          |          1 |        -44 |          0 |         -6 |        -50 |
+| ..\backend\tests\agentic                                                                                                          |          5 |       -183 |          0 |        -43 |       -226 |
+| ..\backend\tests\assistant_graph                                                                                                  |         27 |     -2,384 |          0 |       -498 |     -2,882 |
+| ..\backend\tests\services                                                                                                         |          8 |     -1,021 |        -22 |       -220 |     -1,263 |
+| public                                                                                                                            |          1 |          1 |          0 |          0 |          1 |
+| src                                                                                                                               |         97 |     20,327 |        497 |      2,706 |     23,530 |
+| src (Files)                                                                                                                       |         10 |      3,304 |         48 |        388 |      3,740 |
+| src\assets                                                                                                                        |          2 |          2 |          0 |          1 |          3 |
+| src\assets\animations                                                                                                             |          2 |          2 |          0 |          1 |          3 |
+| src\components                                                                                                                    |         41 |      8,590 |        222 |      1,596 |     10,408 |
+| src\components (Files)                                                                                                            |         32 |      7,253 |        180 |      1,419 |      8,852 |
+| src\components\questionRenderers                                                                                                  |          9 |      1,337 |         42 |        177 |      1,556 |
+| src\components\questionRenderers (Files)                                                                                          |          4 |      1,003 |         12 |        114 |      1,129 |
+| src\components\questionRenderers\fillBlank                                                                                        |          5 |        334 |         30 |         63 |        427 |
+| src\components\questionRenderers\fillBlank (Files)                                                                                |          4 |        288 |         28 |         55 |        371 |
+| src\components\questionRenderers\fillBlank\hooks                                                                                  |          1 |         46 |          2 |          8 |         56 |
+| src\extensions                                                                                                                    |          2 |        395 |          0 |         35 |        430 |
+| src\features                                                                                                                      |         12 |      2,733 |          3 |        163 |      2,899 |
+| src\features\mindmap                                                                                                              |         12 |      2,733 |          3 |        163 |      2,899 |
+| src\features\mindmap (Files)                                                                                                      |          2 |        818 |          0 |         34 |        852 |
+| src\features\mindmap\api                                                                                                          |          1 |        103 |          0 |         11 |        114 |
+| src\features\mindmap\components                                                                                                   |          6 |        908 |          0 |         55 |        963 |
+| src\features\mindmap\domain                                                                                                       |          2 |         89 |          0 |         14 |        103 |
+| src\features\mindmap\editor                                                                                                       |          1 |        815 |          3 |         49 |        867 |
+| src\hooks                                                                                                                         |         10 |      2,756 |         33 |        293 |      3,082 |
+| src\locales                                                                                                                       |          2 |        934 |          0 |          2 |        936 |
+| src\locales\en                                                                                                                    |          1 |        480 |          0 |          1 |        481 |
+| src\locales\zh                                                                                                                    |          1 |        454 |          0 |          1 |        455 |
+| src\services                                                                                                                      |         10 |      1,189 |         82 |        160 |      1,431 |
+| src\store                                                                                                                         |          1 |        128 |         12 |         14 |        154 |
+| src\utils                                                                                                                         |          7 |        296 |         97 |         54 |        447 |
++-----------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                                                                          | language           | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| d:\Exam-paper\backend\.venv\Lib\site-packages\PyMuPDF-1.24.1.dist-info\README.md                                                  | Markdown           |        -28 |          0 |        -31 |        -59 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\PyMuPDFb-1.24.1.dist-info\README.md                                                 | Markdown           |         -5 |          0 |         -3 |         -8 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\anthropic\lib\foundry.md                                                            | Markdown           |        -94 |          0 |        -33 |       -127 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\bracex-2.6.dist-info\licenses\LICENSE.md                                            | Markdown           |        -17 |          0 |         -5 |        -22 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\deepagents\base_prompt.md                                                           | Markdown           |        -33 |          0 |        -18 |        -51 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\docling_parse\pdf_resources\cmap-resources\LICENSE.md                               | Markdown           |        -23 |          0 |         -6 |        -29 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\docling_parse\pdf_resources\cmap-resources\README.md                                | Markdown           |       -302 |          0 |        -52 |       -354 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\docling_parse\pdf_resources_v2\cmap-resources\LICENSE.md                            | Markdown           |        -23 |          0 |         -6 |        -29 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\docling_parse\pdf_resources_v2\cmap-resources\README.md                             | Markdown           |       -302 |          0 |        -52 |       -354 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\docstring_parser-0.17.0.dist-info\licenses\LICENSE.md                               | Markdown           |        -17 |          0 |         -5 |        -22 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\fire\console\README.md                                                              | Markdown           |         -3 |          0 |         -1 |         -4 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\flask\sansio\README.md                                                              | Markdown           |         -5 |          0 |         -2 |         -7 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\httpcore-1.0.9.dist-info\licenses\LICENSE.md                                        | Markdown           |        -22 |          0 |         -6 |        -28 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\httpx-0.28.1.dist-info\licenses\LICENSE.md                                          | Markdown           |         -7 |          0 |         -6 |        -13 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\huggingface_hub\templates\datasetcard_template.md                                   | Markdown           |        -58 |        -19 |        -67 |       -144 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\huggingface_hub\templates\modelcard_template.md                                     | Markdown           |        -88 |        -20 |        -93 |       -201 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\idna-3.11.dist-info\licenses\LICENSE.md                                             | Markdown           |        -25 |          0 |         -7 |        -32 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\imgaug\external\README.md                                                           | Markdown           |         -6 |          0 |         -1 |         -7 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\langsmith\cli\README.md                                                             | Markdown           |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\lazy_loader-0.4.dist-info\LICENSE.md                                                | Markdown           |        -23 |          0 |         -7 |        -30 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\onnxruntime\Privacy.md                                                              | Markdown           |        -14 |          0 |         -8 |        -22 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\onnxruntime\tools\mobile_helpers\coreml_supported_mlprogram_ops.md                  | Markdown           |        -47 |         -3 |         -1 |        -51 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\onnxruntime\tools\mobile_helpers\coreml_supported_neuralnetwork_ops.md              | Markdown           |        -40 |         -3 |         -1 |        -44 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\onnxruntime\tools\mobile_helpers\nnapi_supported_ops.md                             | Markdown           |        -55 |         -3 |         -1 |        -59 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\openai\resources\conversations\api.md                                               | Markdown           |        -33 |          0 |        -10 |        -43 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\openai\resources\realtime\api.md                                                    | Markdown           |       -127 |          0 |        -11 |       -138 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\openai\resources\responses\api.md                                                   | Markdown           |       -171 |          0 |        -15 |       -186 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\openai\resources\webhooks\api.md                                                    | Markdown           |        -22 |          0 |         -3 |        -25 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\paddle\_typing\libs\README.md                                                       | Markdown           |         -3 |          0 |         -3 |         -6 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\paddleclas\README.md                                                                | Markdown           |       -162 |          0 |        -61 |       -223 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\paddleclas\docs\en\inference_deployment\whl_deploy_en.md                            | Markdown           |       -253 |          0 |        -84 |       -337 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\paddleocr\README.md                                                                 | Markdown           |       -203 |          0 |        -57 |       -260 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\pip-26.0.dist-info\licenses\src\pip\_vendor\idna\LICENSE.md                         | Markdown           |        -25 |          0 |         -7 |        -32 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\pip\_vendor\idna\LICENSE.md                                                         | Markdown           |        -25 |          0 |         -7 |        -32 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\pyparsing\ai\best_practices.md                                                      | Markdown           |        -67 |         -4 |         -5 |        -76 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\pypdfium2-5.3.0.dist-info\licenses\data\windows_x64\BUILD_LICENSES\libjpeg_turbo.md | Markdown           |       -101 |          0 |        -35 |       -136 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\pyreadline3-3.5.4.dist-info\LICENSE.md                                              | Markdown           |        -37 |          0 |        -17 |        -54 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\scipy\fft\_pocketfft\LICENSE.md                                                     | Markdown           |        -22 |          0 |         -4 |        -26 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\sklearn\externals\array_api_compat\README.md                                        | Markdown           |         -1 |          0 |         -1 |         -2 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\sklearn\externals\array_api_extra\README.md                                         | Markdown           |         -1 |          0 |         -1 |         -2 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\soupsieve-2.8.3.dist-info\licenses\LICENSE.md                                       | Markdown           |        -17 |          0 |         -5 |        -22 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\starlette-0.37.2.dist-info\licenses\LICENSE.md                                      | Markdown           |        -22 |          0 |         -6 |        -28 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\torchgen\packaged\autograd\README.md                                                | Markdown           |         -3 |          0 |         -1 |         -4 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\uuid_utils-0.12.0.dist-info\licenses\LICENSE.md                                     | Markdown           |        -22 |          0 |         -5 |        -27 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\uvicorn-0.30.1.dist-info\licenses\LICENSE.md                                        | Markdown           |        -22 |          0 |         -6 |        -28 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\wcmatch-10.1.dist-info\licenses\LICENSE.md                                          | Markdown           |        -17 |          0 |         -5 |        -22 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\werkzeug\debug\shared\ICON_LICENSE.md                                               | Markdown           |         -4 |          0 |         -3 |         -7 |
+| d:\Exam-paper\backend\.venv\Lib\site-packages\~vicorn-0.40.0.dist-info\licenses\LICENSE.md                                        | Markdown           |        -22 |          0 |         -6 |        -28 |
+| d:\Exam-paper\backend\DEV_NOTES.md                                                                                                | Markdown           |        -80 |          0 |        -27 |       -107 |
+| d:\Exam-paper\backend\app\__init__.py                                                                                             | Python             |          0 |         -1 |         -1 |         -2 |
+| d:\Exam-paper\backend\app\agent\__init__.py                                                                                       | Python             |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\__init__.py                                                                       | Python             |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\adapters\__init__.py                                                              | Python             |        -12 |          0 |         -2 |        -14 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\adapters\message_adapter.py                                                       | Python             |       -182 |          0 |        -29 |       -211 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\agent_runtime.py                                                                  | Python             |       -195 |          0 |        -31 |       -226 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\capability_realization.py                                                         | Python             |        -86 |          0 |        -12 |        -98 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\evidence_register.py                                                              | Python             |       -208 |          0 |        -24 |       -232 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\llm_tools.py                                                                      | Python             |       -115 |          0 |        -12 |       -127 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\loop_budget.py                                                                    | Python             |        -87 |          0 |        -14 |       -101 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\router_runtime.py                                                                 | Python             |       -588 |        -51 |        -74 |       -713 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\runtime_app.py                                                                    | Python             |       -195 |          0 |        -31 |       -226 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\runtime_bootstrap.py                                                              | Python             |     -1,721 |         -1 |       -130 |     -1,852 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\runtime_common.py                                                                 | Python             |       -633 |          0 |        -45 |       -678 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\runtime_nodes.py                                                                  | Python             |       -530 |         -1 |        -32 |       -563 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\session_runtime.py                                                                | Python             |       -170 |         -9 |        -25 |       -204 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\state.py                                                                          | Python             |       -475 |          0 |        -52 |       -527 |
+| d:\Exam-paper\backend\app\agent\assistant_graph\world_model.py                                                                    | Python             |       -393 |          0 |        -60 |       -453 |
+| d:\Exam-paper\backend\app\agent\router.py                                                                                         | Python             |     -1,745 |        -71 |       -188 |     -2,004 |
+| d:\Exam-paper\backend\app\agent\services\__init__.py                                                                              | Python             |        -10 |          0 |         -2 |        -12 |
+| d:\Exam-paper\backend\app\agent\services\agent_invocation_service.py                                                              | Python             |        -86 |          0 |        -10 |        -96 |
+| d:\Exam-paper\backend\app\agent\services\agent_service.py                                                                         | Python             |     -1,065 |        -78 |       -121 |     -1,264 |
+| d:\Exam-paper\backend\app\agent\services\agent_task_service.py                                                                    | Python             |       -200 |        -18 |        -25 |       -243 |
+| d:\Exam-paper\backend\app\agent\tools\__init__.py                                                                                 | Python             |         -7 |          0 |         -3 |        -10 |
+| d:\Exam-paper\backend\app\agent\tools\common.py                                                                                   | Python             |        -35 |          0 |         -8 |        -43 |
+| d:\Exam-paper\backend\app\agent\tools\knowledge_evidence.py                                                                       | Python             |       -979 |         -1 |       -102 |     -1,082 |
+| d:\Exam-paper\backend\app\agent\tools\parsing.py                                                                                  | Python             |        -26 |          0 |         -5 |        -31 |
+| d:\Exam-paper\backend\app\agent\tools\registry.py                                                                                 | Python             |       -112 |          0 |         -9 |       -121 |
+| d:\Exam-paper\backend\app\agent\tools\studio_environment.py                                                                       | Python             |       -359 |        -25 |        -35 |       -419 |
+| d:\Exam-paper\backend\app\agent\tools\studio_sources.py                                                                           | Python             |        -53 |          0 |         -8 |        -61 |
+| d:\Exam-paper\backend\app\agent\tools\types.py                                                                                    | Python             |         -9 |          0 |         -5 |        -14 |
+| d:\Exam-paper\backend\app\celery_app.py                                                                                           | Python             |        -19 |         -3 |         -9 |        -31 |
+| d:\Exam-paper\backend\app\config.py                                                                                               | Python             |       -127 |         -8 |        -18 |       -153 |
+| d:\Exam-paper\backend\app\db.py                                                                                                   | Python             |        -24 |         -5 |        -11 |        -40 |
+| d:\Exam-paper\backend\app\glm_ocr\__init__.py                                                                                     | Python             |         -1 |          0 |         -1 |         -2 |
+| d:\Exam-paper\backend\app\glm_ocr\router.py                                                                                       | Python             |       -107 |        -13 |        -24 |       -144 |
+| d:\Exam-paper\backend\app\glm_ocr\service.py                                                                                      | Python             |       -725 |        -51 |       -105 |       -881 |
+| d:\Exam-paper\backend\app\memory_protocol.py                                                                                      | Python             |        -40 |          0 |         -6 |        -46 |
+| d:\Exam-paper\backend\app\middleware\request_size.py                                                                              | Python             |        -23 |         -1 |         -6 |        -30 |
+| d:\Exam-paper\backend\app\models.py                                                                                               | Python             |       -699 |        -13 |       -118 |       -830 |
+| d:\Exam-paper\backend\app\routers\__init__.py                                                                                     | Python             |        -69 |          0 |        -15 |        -84 |
+| d:\Exam-paper\backend\app\routers\agent_v2.py                                                                                     | Python             |     -1,762 |       -106 |       -267 |     -2,135 |
+| d:\Exam-paper\backend\app\routers\auth.py                                                                                         | Python             |       -119 |         -3 |        -39 |       -161 |
+| d:\Exam-paper\backend\app\routers\export.py                                                                                       | Python             |       -153 |        -21 |        -34 |       -208 |
+| d:\Exam-paper\backend\app\routers\favorites.py                                                                                    | Python             |       -186 |        -30 |        -57 |       -273 |
+| d:\Exam-paper\backend\app\routers\files.py                                                                                        | Python             |       -294 |        -47 |        -57 |       -398 |
+| d:\Exam-paper\backend\app\routers\flashcards.py                                                                                   | Python             |       -243 |        -34 |        -63 |       -340 |
+| d:\Exam-paper\backend\app\routers\legend.py                                                                                       | Python             |        -23 |          0 |         -8 |        -31 |
+| d:\Exam-paper\backend\app\routers\mindmap.py                                                                                      | Python             |       -146 |          0 |        -12 |       -158 |
+| d:\Exam-paper\backend\app\routers\ocr.py                                                                                          | Python             |        -24 |          0 |         -8 |        -32 |
+| d:\Exam-paper\backend\app\routers\question_types.py                                                                               | Python             |        -49 |        -28 |        -23 |       -100 |
+| d:\Exam-paper\backend\app\routers\questions.py                                                                                    | Python             |        -58 |        -19 |        -19 |        -96 |
+| d:\Exam-paper\backend\app\routers\subjects.py                                                                                     | Python             |        -49 |        -28 |        -23 |       -100 |
+| d:\Exam-paper\backend\app\routers\tags.py                                                                                         | Python             |        -49 |        -28 |        -23 |       -100 |
+| d:\Exam-paper\backend\app\routers\translation.py                                                                                  | Python             |        -79 |          0 |        -15 |        -94 |
+| d:\Exam-paper\backend\app\routers\workroom.py                                                                                     | Python             |       -106 |          0 |        -22 |       -128 |
+| d:\Exam-paper\backend\app\routers\workspace.py                                                                                    | Python             |        -69 |          0 |        -14 |        -83 |
+| d:\Exam-paper\backend\app\schemas.py                                                                                              | Python             |       -257 |          0 |        -94 |       -351 |
+| d:\Exam-paper\backend\app\services\__init__.py                                                                                    | Python             |        -49 |         -1 |        -14 |        -64 |
+| d:\Exam-paper\backend\app\services\agent_service.py                                                                               | Python             |     -1,035 |        -85 |       -115 |     -1,235 |
+| d:\Exam-paper\backend\app\services\answer_completion_service.py                                                                   | Python             |       -100 |        -14 |        -24 |       -138 |
+| d:\Exam-paper\backend\app\services\bailian_file_service.py                                                                        | Python             |       -178 |         -1 |        -17 |       -196 |
+| d:\Exam-paper\backend\app\services\cache_manager.py                                                                               | Python             |        -96 |         -1 |        -14 |       -111 |
+| d:\Exam-paper\backend\app\services\conversation_memory_service.py                                                                 | Python             |       -141 |        -27 |        -24 |       -192 |
+| d:\Exam-paper\backend\app\services\document_read_tool.py                                                                          | Python             |        -95 |        -11 |        -19 |       -125 |
+| d:\Exam-paper\backend\app\services\favorite_service.py                                                                            | Python             |       -208 |        -74 |        -34 |       -316 |
+| d:\Exam-paper\backend\app\services\flashcard_pipeline_service.py                                                                  | Python             |       -409 |        -99 |        -82 |       -590 |
+| d:\Exam-paper\backend\app\services\flashcard_scheduling_service.py                                                                | Python             |       -251 |        -35 |        -48 |       -334 |
+| d:\Exam-paper\backend\app\services\flashcard_service.py                                                                           | Python             |       -143 |       -128 |        -27 |       -298 |
+| d:\Exam-paper\backend\app\services\fulltext_service.py                                                                            | Python             |       -117 |        -16 |        -29 |       -162 |
+| d:\Exam-paper\backend\app\services\kb\__init__.py                                                                                 | Python             |         -7 |          0 |         -2 |         -9 |
+| d:\Exam-paper\backend\app\services\kb\chunk_builders.py                                                                           | Python             |       -135 |          0 |        -19 |       -154 |
+| d:\Exam-paper\backend\app\services\kb\embedding_service.py                                                                        | Python             |        -16 |          0 |         -7 |        -23 |
+| d:\Exam-paper\backend\app\services\kb\extractors\__init__.py                                                                      | Python             |         -4 |          0 |         -2 |         -6 |
+| d:\Exam-paper\backend\app\services\kb\extractors\image_extractor.py                                                               | Python             |        -13 |          0 |         -6 |        -19 |
+| d:\Exam-paper\backend\app\services\kb\extractors\pdf_extractor.py                                                                 | Python             |        -42 |          0 |         -7 |        -49 |
+| d:\Exam-paper\backend\app\services\kb\extractors\word_extractor.py                                                                | Python             |        -21 |          0 |         -6 |        -27 |
+| d:\Exam-paper\backend\app\services\kb\ingest_service.py                                                                           | Python             |       -114 |          0 |         -8 |       -122 |
+| d:\Exam-paper\backend\app\services\kb\rag_service.py                                                                              | Python             |       -179 |       -431 |        -14 |       -624 |
+| d:\Exam-paper\backend\app\services\kb\rate_limiter.py                                                                             | Python             |        -30 |          0 |         -5 |        -35 |
+| d:\Exam-paper\backend\app\services\kb\repository.py                                                                               | Python             |       -259 |        -94 |        -23 |       -376 |
+| d:\Exam-paper\backend\app\services\kb\types.py                                                                                    | Python             |        -35 |          0 |         -8 |        -43 |
+| d:\Exam-paper\backend\app\services\legend_service.py                                                                              | Python             |       -110 |        -12 |        -25 |       -147 |
+| d:\Exam-paper\backend\app\services\mindmap\__init__.py                                                                            | Python             |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\app\services\mindmap\binding.py                                                                             | Python             |       -130 |          0 |        -28 |       -158 |
+| d:\Exam-paper\backend\app\services\mindmap\generation.py                                                                          | Python             |       -249 |       -246 |        -38 |       -533 |
+| d:\Exam-paper\backend\app\services\mindmap\repository.py                                                                          | Python             |       -130 |          0 |        -14 |       -144 |
+| d:\Exam-paper\backend\app\services\mindmap\schemas.py                                                                             | Python             |       -118 |          0 |        -46 |       -164 |
+| d:\Exam-paper\backend\app\services\mindmap\service.py                                                                             | Python             |       -632 |          0 |        -38 |       -670 |
+| d:\Exam-paper\backend\app\services\ocr_service.py                                                                                 | Python             |       -269 |        -13 |        -33 |       -315 |
+| d:\Exam-paper\backend\app\services\question_service.py                                                                            | Python             |        -83 |        -31 |        -15 |       -129 |
+| d:\Exam-paper\backend\app\services\question_type_service.py                                                                       | Python             |        -75 |        -44 |        -18 |       -137 |
+| d:\Exam-paper\backend\app\services\question_vector_service.py                                                                     | Python             |        -65 |        -10 |        -13 |        -88 |
+| d:\Exam-paper\backend\app\services\qwen_client.py                                                                                 | Python             |       -887 |        -16 |        -86 |       -989 |
+| d:\Exam-paper\backend\app\services\similar_question_tool.py                                                                       | Python             |       -274 |        -47 |       -282 |       -603 |
+| d:\Exam-paper\backend\app\services\subject_service.py                                                                             | Python             |        -75 |        -44 |        -18 |       -137 |
+| d:\Exam-paper\backend\app\services\tag_service.py                                                                                 | Python             |        -86 |        -53 |        -20 |       -159 |
+| d:\Exam-paper\backend\app\services\translation_quota.py                                                                           | Python             |        -45 |          0 |        -12 |        -57 |
+| d:\Exam-paper\backend\app\services\translation_service.py                                                                         | Python             |       -489 |          0 |        -49 |       -538 |
+| d:\Exam-paper\backend\app\services\workroom\__init__.py                                                                           | Python             |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\app\services\workroom\repository.py                                                                         | Python             |       -211 |       -134 |        -18 |       -363 |
+| d:\Exam-paper\backend\app\services\workroom\service.py                                                                            | Python             |       -124 |          0 |        -14 |       -138 |
+| d:\Exam-paper\backend\app\services\workroom_scope_service.py                                                                      | Python             |        -49 |         -1 |        -14 |        -64 |
+| d:\Exam-paper\backend\app\services\workspace\__init__.py                                                                          | Python             |         -2 |          0 |         -2 |         -4 |
+| d:\Exam-paper\backend\app\services\workspace\repository.py                                                                        | Python             |       -262 |       -215 |        -11 |       -488 |
+| d:\Exam-paper\backend\app\services\workspace\service.py                                                                           | Python             |       -102 |          0 |        -12 |       -114 |
+| d:\Exam-paper\backend\app\state_models.py                                                                                         | Python             |        -80 |          0 |        -14 |        -94 |
+| d:\Exam-paper\backend\app\tasks.py                                                                                                | Python             |       -135 |         -6 |        -25 |       -166 |
+| d:\Exam-paper\backend\app\utils\rate_limiter.py                                                                                   | Python             |        -30 |         -7 |        -13 |        -50 |
+| d:\Exam-paper\backend\db\add_preview_path.py                                                                                      | Python             |        -43 |          0 |        -11 |        -54 |
+| d:\Exam-paper\backend\db\init_db.py                                                                                               | Python             |        -43 |          0 |        -14 |        -57 |
+| d:\Exam-paper\backend\db\migrations\20240104_add_question_state.sql                                                               | MS SQL             |        -72 |         -7 |         -8 |        -87 |
+| d:\Exam-paper\backend\db\migrations\20250106_add_question_versions.sql                                                            | MS SQL             |        -16 |         -2 |         -6 |        -24 |
+| d:\Exam-paper\backend\db\migrations\20250107_add_question_group_id.sql                                                            | MS SQL             |        -17 |         -3 |         -7 |        -27 |
+| d:\Exam-paper\backend\db\migrations\20250108_add_document_mindmap_cache.sql                                                       | MS SQL             |         -3 |         -1 |         -1 |         -5 |
+| d:\Exam-paper\backend\db\migrations\20250108_add_fulltext_blocks.sql                                                              | MS SQL             |        -13 |          0 |         -2 |        -15 |
+| d:\Exam-paper\backend\db\migrations\20250112_create_mindmaps_table.sql                                                            | MS SQL             |        -22 |          0 |         -2 |        -24 |
+| d:\Exam-paper\backend\db\migrations\20250116_add_max_favorite_questions_to_plans.sql                                              | MS SQL             |         -1 |         -6 |         -3 |        -10 |
+| d:\Exam-paper\backend\db\migrations\20250116_create_question_favorites.sql                                                        | MS SQL             |        -19 |         -5 |         -5 |        -29 |
+| d:\Exam-paper\backend\db\migrations\20250118_add_favorite_metadata.sql                                                            | MS SQL             |        -40 |         -7 |        -10 |        -57 |
+| d:\Exam-paper\backend\db\migrations\20250118_add_favorite_metadata_fk.sql                                                         | MS SQL             |         -4 |         -3 |         -3 |        -10 |
+| d:\Exam-paper\backend\db\migrations\20250119_add_question_indexes.sql                                                             | MS SQL             |         -2 |         -6 |         -3 |        -11 |
+| d:\Exam-paper\backend\db\migrations\20250120_add_agent_session_meta.sql                                                           | MS SQL             |         -6 |         -6 |         -2 |        -14 |
+| d:\Exam-paper\backend\db\migrations\20250209_add_file_ocr_cache_versioning.sql                                                    | MS SQL             |        -11 |         -4 |         -4 |        -19 |
+| d:\Exam-paper\backend\db\migrations\20250209_add_flashcard_core_tables.sql                                                        | MS SQL             |        -51 |         -2 |         -8 |        -61 |
+| d:\Exam-paper\backend\db\migrations\20250209_add_question_answer_fields.sql                                                       | MS SQL             |         -4 |         -1 |         -1 |         -6 |
+| d:\Exam-paper\backend\db\migrations\20260214_add_question_catalogs.sql                                                            | MS SQL             |        -13 |          0 |         -1 |        -14 |
+| d:\Exam-paper\backend\db\migrations\20260318_agent_sessions_document_nullable.sql                                                 | MS SQL             |         -4 |         -3 |         -5 |        -12 |
+| d:\Exam-paper\backend\db\migrations\20260318_alter_kb_chunks_block_index_nullable.sql                                             | MS SQL             |         -2 |         -2 |         -3 |         -7 |
+| d:\Exam-paper\backend\db\migrations\20260318_create_workspaces_and_link_workrooms.sql                                             | MS SQL             |        -30 |          0 |         -5 |        -35 |
+| d:\Exam-paper\backend\db\migrations\20260318_rename_workspace_document_to_studio_document.sql                                     | MS SQL             |        -38 |          0 |         -2 |        -40 |
+| d:\Exam-paper\backend\db\migrations\20260319_add_kb_units_and_embeddings.sql                                                      | MS SQL             |        -50 |          0 |         -8 |        -58 |
+| d:\Exam-paper\backend\db\migrations\20260320_drop_document_mindmap_cache.sql                                                      | MS SQL             |         -3 |          0 |         -1 |         -4 |
+| d:\Exam-paper\backend\db\migrations\20260321_add_workroom_id_to_mindmaps.sql                                                      | MS SQL             |        -19 |          0 |         -4 |        -23 |
+| d:\Exam-paper\backend\db\migrations\20260321_create_bailian_file_registry.sql                                                     | MS SQL             |        -20 |          0 |         -3 |        -23 |
+| d:\Exam-paper\backend\db\migrations\20260322_add_source_signature_to_mindmaps.sql                                                 | MS SQL             |         -5 |          0 |         -3 |         -8 |
+| d:\Exam-paper\backend\db\schema.sql                                                                                               | MS SQL             |       -197 |        -13 |        -15 |       -225 |
+| d:\Exam-paper\backend\docs\2025年高考全国一卷数学真题_docling_dump.md                                                                        | Markdown           |       -144 |        -23 |       -106 |       -273 |
+| d:\Exam-paper\backend\docs\MEMORY_BUS_IMPLEMENTATION_STATUS.md                                                                    | Markdown           |          0 |          0 |         -1 |         -1 |
+| d:\Exam-paper\backend\docs\POSTGRES_MIGRATION_GUIDE.md                                                                            | Markdown           |       -234 |          0 |        -80 |       -314 |
+| d:\Exam-paper\backend\docs\SESSION_STATE_DELTA_PROTOCOL.md                                                                        | Markdown           |       -224 |          0 |        -70 |       -294 |
+| d:\Exam-paper\backend\docs\ocr_result.md                                                                                          | Markdown           |        -48 |          0 |         -2 |        -50 |
+| d:\Exam-paper\backend\inspect_db_schema.py                                                                                        | Python             |       -140 |        -42 |        -47 |       -229 |
+| d:\Exam-paper\backend\main.py                                                                                                     | Python             |       -112 |         -6 |        -24 |       -142 |
+| d:\Exam-paper\backend\reset_password.py                                                                                           | Python             |        -37 |         -9 |        -13 |        -59 |
+| d:\Exam-paper\backend\run_migrations.py                                                                                           | Python             |       -132 |        -18 |        -40 |       -190 |
+| d:\Exam-paper\backend\scripts\apply_file_ocr_cache_versioning.py                                                                  | Python             |        -37 |         -7 |        -16 |        -60 |
+| d:\Exam-paper\backend\scripts\apply_question_answer_fields.py                                                                     | Python             |        -41 |         -7 |        -16 |        -64 |
+| d:\Exam-paper\backend\scripts\apply_schema.py                                                                                     | Python             |        -74 |          0 |        -23 |        -97 |
+| d:\Exam-paper\backend\scripts\apply_sql_file.py                                                                                   | Python             |        -25 |          0 |        -13 |        -38 |
+| d:\Exam-paper\backend\scripts\check_glm_cache_schema.py                                                                           | Python             |        -35 |         -6 |        -15 |        -56 |
+| d:\Exam-paper\backend\scripts\clear_glm_ocr_cache.py                                                                              | Python             |        -51 |         -7 |        -18 |        -76 |
+| d:\Exam-paper\backend\scripts\count_tokens.py                                                                                     | Python             |        -57 |         -7 |        -14 |        -78 |
+| d:\Exam-paper\backend\scripts\create_pg_extra_tables.py                                                                           | Python             |        -66 |        -13 |        -14 |        -93 |
+| d:\Exam-paper\backend\scripts\dump_mysql_table_schema.py                                                                          | Python             |        -34 |         -6 |         -8 |        -48 |
+| d:\Exam-paper\backend\scripts\extract_layout.py                                                                                   | Python             |       -263 |         -3 |        -43 |       -309 |
+| d:\Exam-paper\backend\scripts\init_postgres_schema.py                                                                             | Python             |        -65 |        -23 |        -19 |       -107 |
+| d:\Exam-paper\backend\scripts\inspect_question_answers.py                                                                         | Python             |        -43 |         -1 |        -12 |        -56 |
+| d:\Exam-paper\backend\scripts\list_documents.py                                                                                   | Python             |        -41 |         -5 |        -14 |        -60 |
+| d:\Exam-paper\backend\scripts\list_mysql_tables.py                                                                                | Python             |        -26 |         -6 |         -9 |        -41 |
+| d:\Exam-paper\backend\scripts\migrate_mysql_to_postgres.py                                                                        | Python             |       -146 |        -13 |        -36 |       -195 |
+| d:\Exam-paper\backend\scripts\reset_document_ocr.py                                                                               | Python             |        -62 |         -8 |        -17 |        -87 |
+| d:\Exam-paper\backend\scripts\run_question_catalog_sql.py                                                                         | Python             |        -55 |        -12 |        -21 |        -88 |
+| d:\Exam-paper\backend\scripts\run_sql_migration.py                                                                                | Python             |        -71 |        -12 |        -22 |       -105 |
+| d:\Exam-paper\backend\scripts\setup_paddleocr.py                                                                                  | Python             |        -48 |         -4 |        -20 |        -72 |
+| d:\Exam-paper\backend\scripts\setup_postgres_db.py                                                                                | Python             |       -111 |        -29 |        -23 |       -163 |
+| d:\Exam-paper\backend\scripts\test_gemini_api.py                                                                                  | Python             |        -82 |         -9 |        -14 |       -105 |
+| d:\Exam-paper\backend\scripts\test_ocr.py                                                                                         | Python             |        -44 |          0 |        -14 |        -58 |
+| d:\Exam-paper\backend\tests\agentic\test_function_calling_runtime.py                                                              | Python             |        -51 |          0 |         -9 |        -60 |
+| d:\Exam-paper\backend\tests\agentic\test_interrupt_reasoning.py                                                                   | Python             |        -17 |          0 |         -8 |        -25 |
+| d:\Exam-paper\backend\tests\agentic\test_multimodal_evidence_tool_feedback.py                                                     | Python             |        -63 |          0 |        -11 |        -74 |
+| d:\Exam-paper\backend\tests\agentic\test_no_placeholder_runtime.py                                                                | Python             |        -40 |          0 |         -7 |        -47 |
+| d:\Exam-paper\backend\tests\agentic\test_short_term_memory_window.py                                                              | Python             |        -12 |          0 |         -8 |        -20 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_agent_observation_evidence_projection.py                                         | Python             |        -37 |          0 |         -6 |        -43 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_agent_session_runtime_contract.py                                                | Python             |        -95 |          0 |        -22 |       -117 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_agent_stream_trace_events.py                                                     | Python             |       -154 |          0 |        -32 |       -186 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_cognition_blackboard.py                                                          | Python             |        -86 |          0 |        -15 |       -101 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_cognitive_decision_runtime.py                                                    | Python             |       -162 |          0 |        -26 |       -188 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_evidence_register_runtime.py                                                     | Python             |       -222 |          0 |        -32 |       -254 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_generic_cognition_schema.py                                                      | Python             |        -15 |          0 |         -6 |        -21 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_interrupt_resume_payload_parsing.py                                              | Python             |        -14 |          0 |         -7 |        -21 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_kb_contract_refactor.py                                                          | Python             |       -186 |          0 |        -34 |       -220 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_kb_dual_lane_runtime.py                                                          | Python             |        -69 |          0 |        -11 |        -80 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_kb_evidence_environment_signals.py                                               | Python             |       -205 |          0 |        -41 |       -246 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_message_adapter_contract.py                                                      | Python             |        -22 |          0 |        -10 |        -32 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_persist_continuation_summary.py                                                  | Python             |        -22 |          0 |         -7 |        -29 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_question_tools_mapping.py                                                        | Python             |       -180 |          0 |        -34 |       -214 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_router_source_binding_and_human_io.py                                            | Python             |       -269 |          0 |        -67 |       -336 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_runtime_interrupt_mapping.py                                                     | Python             |        -59 |          0 |        -15 |        -74 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_runtime_interrupt_protocol.py                                                    | Python             |        -38 |          0 |        -11 |        -49 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_runtime_multimodal_tool_passthrough.py                                           | Python             |       -154 |          0 |        -28 |       -182 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_search_agent_streaming.py                                                        | Python             |        -39 |          0 |        -11 |        -50 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_step_count_runtime.py                                                            | Python             |       -147 |          0 |        -25 |       -172 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_thinking_continuity.py                                                           | Python             |        -24 |          0 |         -8 |        -32 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_tool_error_feedback.py                                                           | Python             |        -28 |          0 |         -9 |        -37 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_tool_registry_split.py                                                           | Python             |        -10 |          0 |         -4 |        -14 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_workspace_environment_tools.py                                                   | Python             |        -42 |          0 |        -11 |        -53 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_workspace_resource_tool_scope.py                                                 | Python             |        -36 |          0 |         -9 |        -45 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_workspace_source_tools.py                                                        | Python             |        -27 |          0 |         -7 |        -34 |
+| d:\Exam-paper\backend\tests\assistant_graph\test_world_model_fact_only.py                                                         | Python             |        -42 |          0 |        -10 |        -52 |
+| d:\Exam-paper\backend\tests\services\test_agent_service_sessions.py                                                               | Python             |        -44 |          0 |        -14 |        -58 |
+| d:\Exam-paper\backend\tests\services\test_kb_chunk_builders.py                                                                    | Python             |        -15 |          0 |         -7 |        -22 |
+| d:\Exam-paper\backend\tests\services\test_kb_extractors.py                                                                        | Python             |        -27 |          0 |        -12 |        -39 |
+| d:\Exam-paper\backend\tests\services\test_kb_ingest_service.py                                                                    | Python             |        -57 |          0 |        -22 |        -79 |
+| d:\Exam-paper\backend\tests\services\test_mindmap_service.py                                                                      | Python             |       -315 |        -22 |        -38 |       -375 |
+| d:\Exam-paper\backend\tests\services\test_qwen_client_stream_contract.py                                                          | Python             |       -163 |          0 |        -29 |       -192 |
+| d:\Exam-paper\backend\tests\services\test_qwen_embedding_client.py                                                                | Python             |       -163 |          0 |        -68 |       -231 |
+| d:\Exam-paper\backend\tests\services\test_rag_service.py                                                                          | Python             |       -237 |          0 |        -30 |       -267 |
+| d:\Exam-paper\backend\tests\test_loop_budget.py                                                                                   | Python             |        -44 |          0 |         -6 |        -50 |
+| d:\Exam-paper\frontend\package-lock.json                                                                                          | JSON               |      4,465 |          0 |          1 |      4,466 |
+| d:\Exam-paper\frontend\package.json                                                                                               | JSON               |         52 |          0 |          1 |         53 |
+| d:\Exam-paper\frontend\public\vite.svg                                                                                            | XML                |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\App.tsx                                                                                                | TypeScript JSX     |        938 |          1 |         80 |      1,019 |
+| d:\Exam-paper\frontend\src\QuestionEditor.tsx                                                                                     | TypeScript JSX     |      1,077 |         13 |        117 |      1,207 |
+| d:\Exam-paper\frontend\src\appRoutes.ts                                                                                           | TypeScript         |         24 |          0 |          7 |         31 |
+| d:\Exam-paper\frontend\src\assets\animations\noInternet.json                                                                      | JSON               |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\assets\animations\workingCat.json                                                                      | JSON               |          1 |          0 |          1 |          2 |
+| d:\Exam-paper\frontend\src\components\AgentChatPanel.tsx                                                                          | TypeScript JSX     |      1,136 |         40 |         72 |      1,248 |
+| d:\Exam-paper\frontend\src\components\AgentConnector.tsx                                                                          | TypeScript JSX     |         50 |          0 |          8 |         58 |
+| d:\Exam-paper\frontend\src\components\AgentConversationHistory.tsx                                                                | TypeScript JSX     |        128 |          4 |          6 |        138 |
+| d:\Exam-paper\frontend\src\components\AgentWorkspacePanel.tsx                                                                     | TypeScript JSX     |        775 |         27 |        887 |      1,689 |
+| d:\Exam-paper\frontend\src\components\AnimatedHeartButton.tsx                                                                     | TypeScript JSX     |        160 |         12 |         14 |        186 |
+| d:\Exam-paper\frontend\src\components\AppHeader.tsx                                                                               | TypeScript JSX     |        128 |          0 |          5 |        133 |
+| d:\Exam-paper\frontend\src\components\AuthScreen.tsx                                                                              | TypeScript JSX     |        160 |          2 |         18 |        180 |
+| d:\Exam-paper\frontend\src\components\BrandIcon.tsx                                                                               | TypeScript JSX     |         79 |          0 |         10 |         89 |
+| d:\Exam-paper\frontend\src\components\EditorConnector.tsx                                                                         | TypeScript JSX     |        129 |          0 |         13 |        142 |
+| d:\Exam-paper\frontend\src\components\EditorWorkspaceShell.tsx                                                                    | TypeScript JSX     |        192 |          0 |          8 |        200 |
+| d:\Exam-paper\frontend\src\components\ExportTemplateDialog.tsx                                                                    | TypeScript JSX     |        172 |          0 |         19 |        191 |
+| d:\Exam-paper\frontend\src\components\FavoriteButton.tsx                                                                          | TypeScript JSX     |        146 |          8 |         20 |        174 |
+| d:\Exam-paper\frontend\src\components\FavoriteConfigDialog.tsx                                                                    | TypeScript JSX     |        368 |         34 |         46 |        448 |
+| d:\Exam-paper\frontend\src\components\FavoritesPage.tsx                                                                           | TypeScript JSX     |        353 |         16 |         31 |        400 |
+| d:\Exam-paper\frontend\src\components\FileTabsBar.tsx                                                                             | TypeScript JSX     |        178 |          0 |         11 |        189 |
+| d:\Exam-paper\frontend\src\components\FlashcardPanel.tsx                                                                          | TypeScript JSX     |        387 |         25 |         37 |        449 |
+| d:\Exam-paper\frontend\src\components\MainLayout.tsx                                                                              | TypeScript JSX     |        171 |          8 |         17 |        196 |
+| d:\Exam-paper\frontend\src\components\MarkdownWithMath.tsx                                                                        | TypeScript JSX     |        194 |          4 |         25 |        223 |
+| d:\Exam-paper\frontend\src\components\MetalInputBox.tsx                                                                           | TypeScript JSX     |        256 |          0 |         10 |        266 |
+| d:\Exam-paper\frontend\src\components\OpenUiHitlRenderer.tsx                                                                      | TypeScript JSX     |        285 |          0 |         17 |        302 |
+| d:\Exam-paper\frontend\src\components\PreviewPaneShell.tsx                                                                        | TypeScript JSX     |        180 |          0 |          7 |        187 |
+| d:\Exam-paper\frontend\src\components\QuestionTypeSelectField.tsx                                                                 | TypeScript JSX     |         88 |          0 |          9 |         97 |
+| d:\Exam-paper\frontend\src\components\RobotGlowFace.tsx                                                                           | TypeScript JSX     |        233 |          0 |         44 |        277 |
+| d:\Exam-paper\frontend\src\components\SelectionPane.tsx                                                                           | TypeScript JSX     |        117 |          0 |          7 |        124 |
+| d:\Exam-paper\frontend\src\components\SelectionWorkspace.tsx                                                                      | TypeScript JSX     |        305 |          0 |         12 |        317 |
+| d:\Exam-paper\frontend\src\components\SourcePaneConnector.tsx                                                                     | TypeScript JSX     |        155 |          0 |         12 |        167 |
+| d:\Exam-paper\frontend\src\components\TranslationInlineIndicator.tsx                                                              | TypeScript JSX     |         48 |          0 |          7 |         55 |
+| d:\Exam-paper\frontend\src\components\TranslationToolbar.tsx                                                                      | TypeScript JSX     |         48 |          0 |          8 |         56 |
+| d:\Exam-paper\frontend\src\components\UserMenu.tsx                                                                                | TypeScript JSX     |         67 |          0 |          8 |         75 |
+| d:\Exam-paper\frontend\src\components\WorkroomHomeShell.tsx                                                                       | TypeScript JSX     |         78 |          0 |          4 |         82 |
+| d:\Exam-paper\frontend\src\components\WorkroomSourceTimeline.tsx                                                                  | TypeScript JSX     |        118 |          0 |          8 |        126 |
+| d:\Exam-paper\frontend\src\components\WorkspacePage.tsx                                                                           | TypeScript JSX     |        369 |          0 |         19 |        388 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\McqAnswerRenderer.tsx                                                     | TypeScript JSX     |        184 |          4 |         16 |        204 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\ParagraphMatchingRenderer.tsx                                             | TypeScript JSX     |        240 |          0 |         16 |        256 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\ReadingQuestionRenderer.tsx                                               | TypeScript JSX     |         99 |          0 |          5 |        104 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\FillBlankRenderer.tsx                                           | TypeScript JSX     |        174 |          9 |         22 |        205 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\answerState.ts                                                  | TypeScript         |         43 |          3 |         10 |         56 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\hooks\useFillBlankNavigation.ts                                 | TypeScript         |         46 |          2 |          8 |         56 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\parser.ts                                                       | TypeScript         |         55 |         13 |         18 |         86 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\types.ts                                                        | TypeScript         |         16 |          3 |          5 |         24 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\utils.ts                                                                  | TypeScript         |        480 |          8 |         77 |        565 |
+| d:\Exam-paper\frontend\src\counter.ts                                                                                             | TypeScript         |          9 |          0 |          1 |         10 |
+| d:\Exam-paper\frontend\src\extensions\TranslationBlock.tsx                                                                        | TypeScript JSX     |        134 |          0 |         12 |        146 |
+| d:\Exam-paper\frontend\src\extensions\TranslationFootnote.tsx                                                                     | TypeScript JSX     |        261 |          0 |         23 |        284 |
+| d:\Exam-paper\frontend\src\features\mindmap\MindMapPanel.tsx                                                                      | TypeScript JSX     |        790 |          0 |         30 |        820 |
+| d:\Exam-paper\frontend\src\features\mindmap\api\mindmapApi.ts                                                                     | TypeScript         |        103 |          0 |         11 |        114 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapContextActions.tsx                                                  | TypeScript JSX     |        116 |          0 |          7 |        123 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapLoadingAnimation.tsx                                                | TypeScript JSX     |        288 |          0 |         11 |        299 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeEditor.tsx                                                      | TypeScript JSX     |        102 |          0 |          8 |        110 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeQuickActions.tsx                                                | TypeScript JSX     |         59 |          0 |          6 |         65 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapRadialMenu.tsx                                                      | TypeScript JSX     |        112 |          0 |         12 |        124 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapToolbar.tsx                                                         | TypeScript JSX     |        231 |          0 |         11 |        242 |
+| d:\Exam-paper\frontend\src\features\mindmap\constants.ts                                                                          | TypeScript         |         28 |          0 |          4 |         32 |
+| d:\Exam-paper\frontend\src\features\mindmap\domain\tree.ts                                                                        | TypeScript         |         31 |          0 |          5 |         36 |
+| d:\Exam-paper\frontend\src\features\mindmap\domain\types.ts                                                                       | TypeScript         |         58 |          0 |          9 |         67 |
+| d:\Exam-paper\frontend\src\features\mindmap\editor\MindElixirCanvas.tsx                                                           | TypeScript JSX     |        815 |          3 |         49 |        867 |
+| d:\Exam-paper\frontend\src\hooks\index.ts                                                                                         | TypeScript         |          4 |          0 |          1 |          5 |
+| d:\Exam-paper\frontend\src\hooks\useAgentChat.ts                                                                                  | TypeScript         |        379 |         11 |         41 |        431 |
+| d:\Exam-paper\frontend\src\hooks\useAgentSync.ts                                                                                  | TypeScript         |        133 |          1 |         13 |        147 |
+| d:\Exam-paper\frontend\src\hooks\useAuth.ts                                                                                       | TypeScript         |        129 |          2 |         14 |        145 |
+| d:\Exam-paper\frontend\src\hooks\useConversation.ts                                                                               | TypeScript         |        410 |          3 |         38 |        451 |
+| d:\Exam-paper\frontend\src\hooks\useFileUpload.ts                                                                                 | TypeScript         |        373 |          6 |         40 |        419 |
+| d:\Exam-paper\frontend\src\hooks\useOcrManager.ts                                                                                 | TypeScript         |        564 |          6 |         54 |        624 |
+| d:\Exam-paper\frontend\src\hooks\usePreviewPane.ts                                                                                | TypeScript         |         98 |          0 |         14 |        112 |
+| d:\Exam-paper\frontend\src\hooks\useQuestionTypeOptions.ts                                                                        | TypeScript         |        109 |          0 |         15 |        124 |
+| d:\Exam-paper\frontend\src\hooks\useSelectionInteraction.ts                                                                       | TypeScript         |        557 |          4 |         63 |        624 |
+| d:\Exam-paper\frontend\src\i18n.ts                                                                                                | TypeScript         |         28 |          0 |          4 |         32 |
+| d:\Exam-paper\frontend\src\locales\en\common.json                                                                                 | JSON               |        480 |          0 |          1 |        481 |
+| d:\Exam-paper\frontend\src\locales\zh\common.json                                                                                 | JSON               |        454 |          0 |          1 |        455 |
+| d:\Exam-paper\frontend\src\main.ts                                                                                                | TypeScript         |         28 |          0 |          5 |         33 |
+| d:\Exam-paper\frontend\src\main.tsx                                                                                               | TypeScript JSX     |         10 |          0 |          2 |         12 |
+| d:\Exam-paper\frontend\src\services\agentApi.ts                                                                                   | TypeScript         |        361 |          2 |         33 |        396 |
+| d:\Exam-paper\frontend\src\services\favoritesApi.ts                                                                               | TypeScript         |        102 |         15 |         18 |        135 |
+| d:\Exam-paper\frontend\src\services\flashcardApi.ts                                                                               | TypeScript         |        208 |          2 |         18 |        228 |
+| d:\Exam-paper\frontend\src\services\questionApi.ts                                                                                | TypeScript         |        158 |         45 |         39 |        242 |
+| d:\Exam-paper\frontend\src\services\questionTypesApi.ts                                                                           | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\subjectsApi.ts                                                                                | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\tagsApi.ts                                                                                    | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\translationApi.ts                                                                             | TypeScript         |         50 |          0 |         10 |         60 |
+| d:\Exam-paper\frontend\src\services\workroomApi.ts                                                                                | TypeScript         |        118 |          0 |          9 |        127 |
+| d:\Exam-paper\frontend\src\services\workspaceApi.ts                                                                               | TypeScript         |         78 |          0 |          6 |         84 |
+| d:\Exam-paper\frontend\src\store\appStore.ts                                                                                      | TypeScript         |        128 |         12 |         14 |        154 |
+| d:\Exam-paper\frontend\src\style.css                                                                                              | PostCSS            |        498 |          4 |         74 |        576 |
+| d:\Exam-paper\frontend\src\types.ts                                                                                               | TypeScript         |        691 |         30 |         98 |        819 |
+| d:\Exam-paper\frontend\src\typescript.svg                                                                                         | XML                |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\utils\concurrency.ts                                                                                   | TypeScript         |         31 |         16 |          9 |         56 |
+| d:\Exam-paper\frontend\src\utils\debounce.ts                                                                                      | TypeScript         |         15 |          0 |          2 |         17 |
+| d:\Exam-paper\frontend\src\utils\lruCache.ts                                                                                      | TypeScript         |         53 |         29 |         14 |         96 |
+| d:\Exam-paper\frontend\src\utils\math.ts                                                                                          | TypeScript         |         11 |          0 |          4 |         15 |
+| d:\Exam-paper\frontend\src\utils\rateLimiter.ts                                                                                   | TypeScript         |         34 |         22 |         11 |         67 |
+| d:\Exam-paper\frontend\src\utils\secureStorage.ts                                                                                 | TypeScript         |         36 |         20 |          7 |         63 |
+| d:\Exam-paper\frontend\src\utils\validation.ts                                                                                    | TypeScript         |        116 |         10 |          7 |        133 |
+| d:\Exam-paper\frontend\tsconfig.json                                                                                              | JSON with Comments |         24 |          2 |          3 |         29 |
+| Total                                                                                                                             |                    |     -8,933 |     -2,512 |     -3,385 |    -14,830 |
++-----------------------------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

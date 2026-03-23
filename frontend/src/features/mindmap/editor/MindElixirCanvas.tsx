@@ -85,6 +85,14 @@ export interface MindMapNodeAnchor {
 }
 
 export interface MindMapNodeContextMenuRequest {
+  targetType: 'node' | 'summary'
+  nodeId?: string
+  summaryId?: string
+  x: number
+  y: number
+}
+
+export interface MindMapNodeHoverRequest {
   nodeId: string
   x: number
   y: number
@@ -95,6 +103,7 @@ interface MindElixirCanvasProps {
   onDocumentChange: (next: MindMapDocumentPayload) => void
   onNodeSelect?: (nodeId: string) => void
   onNodeDoubleClick?: (nodeId: string) => void
+  onNodeHoverChange?: (request: MindMapNodeHoverRequest | null) => void
   onNodeAnchorChange?: (anchor: MindMapNodeAnchor | null) => void
   onNodeContextMenu?: (request: MindMapNodeContextMenuRequest | null) => void
   onControllerReady?: (controller: MindMapEditorController | null) => void
@@ -163,6 +172,15 @@ function readSelectionState(instance: MindElixirInstance): MindMapEditorSelectio
     selectedNodeCount: Array.isArray(instance.currentNodes) ? instance.currentNodes.length : 0,
     hasSelectedArrow: Boolean(instance.currentArrow),
     hasSelectedSummary: Boolean(instance.currentSummary),
+  }
+}
+
+function clampContextMenuAnchor(x: number, y: number, hostRect: DOMRect): { x: number; y: number } {
+  const horizontalMargin = 124
+  const verticalMargin = 124
+  return {
+    x: Math.max(horizontalMargin, Math.min(hostRect.width - horizontalMargin, x)),
+    y: Math.max(verticalMargin, Math.min(hostRect.height - verticalMargin, y)),
   }
 }
 
@@ -271,6 +289,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   onDocumentChange,
   onNodeSelect,
   onNodeDoubleClick,
+  onNodeHoverChange,
   onNodeAnchorChange,
   onNodeContextMenu,
   onControllerReady,
@@ -293,6 +312,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   const onDocumentChangeRef = React.useRef(onDocumentChange)
   const onNodeSelectRef = React.useRef(onNodeSelect)
   const onNodeDoubleClickRef = React.useRef(onNodeDoubleClick)
+  const onNodeHoverChangeRef = React.useRef(onNodeHoverChange)
   const onNodeAnchorChangeRef = React.useRef(onNodeAnchorChange)
   const onNodeContextMenuRef = React.useRef(onNodeContextMenu)
   const onControllerReadyRef = React.useRef(onControllerReady)
@@ -303,6 +323,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   onDocumentChangeRef.current = onDocumentChange
   onNodeSelectRef.current = onNodeSelect
   onNodeDoubleClickRef.current = onNodeDoubleClick
+  onNodeHoverChangeRef.current = onNodeHoverChange
   onNodeAnchorChangeRef.current = onNodeAnchorChange
   onNodeContextMenuRef.current = onNodeContextMenu
   onControllerReadyRef.current = onControllerReady
@@ -739,9 +760,42 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
       onNodeDoubleClickRef.current?.(nodeId)
     }
     const handleContextMenu = (event: MouseEvent) => {
-      const target = event.target instanceof HTMLElement ? event.target.closest('me-tpc') : null
-      if (!target) return
       event.preventDefault()
+      const hostRect = hostRef.current?.getBoundingClientRect()
+      if (!hostRect) return
+      const anchor = clampContextMenuAnchor(event.clientX - hostRect.left, event.clientY - hostRect.top, hostRect)
+      const htmlTarget = event.target instanceof HTMLElement ? event.target : null
+      if (!htmlTarget) return
+
+      const summaryLabel = htmlTarget.closest('.svg-label[data-type="summary"]') as HTMLElement | null
+      const summaryGroup = htmlTarget.closest('.summary') as SVGGElement | null
+      if (summaryLabel || summaryGroup) {
+        const summarySvgId = summaryLabel?.dataset.svgId
+        const summaryEl = (summarySvgId ? window.document.getElementById(summarySvgId) : summaryGroup) as
+          | (SVGGElement & { summaryObj?: { id?: string } })
+          | null
+        const summaryId = String(summaryEl?.summaryObj?.id ?? '').trim()
+        if (!summaryEl || !summaryId) return
+        try {
+          ;(instance as MindElixirInstance & {
+            selectSummary: (element: typeof summaryEl) => void
+          }).selectSummary(summaryEl)
+        } catch {
+          return
+        }
+        emitSelectionState()
+        emitNodeAnchor()
+        onNodeContextMenuRef.current?.({
+          targetType: 'summary',
+          summaryId,
+          x: anchor.x,
+          y: anchor.y,
+        })
+        return
+      }
+
+      const target = htmlTarget.closest('me-tpc')
+      if (!target) return
       const nodeId = target.getAttribute('data-nodeid')?.replace(/^me/, '')
       if (!nodeId) return
       const topic = instance.findEle(nodeId)
@@ -764,19 +818,47 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
       emitSelectionState()
       emitNodeAnchor()
       onNodeSelectRef.current?.(nodeId)
-      const hostRect = hostRef.current?.getBoundingClientRect()
-      if (!hostRect) return
       onNodeContextMenuRef.current?.({
+        targetType: 'node',
         nodeId,
-        x: event.clientX - hostRect.left,
-        y: event.clientY - hostRect.top,
+        x: anchor.x,
+        y: anchor.y,
       })
+    }
+    const handlePointerOver = (event: PointerEvent) => {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      const target = event.target instanceof HTMLElement ? event.target.closest('me-tpc') : null
+      if (!target) return
+      const nodeId = target.getAttribute('data-nodeid')?.replace(/^me/, '')
+      const hostRect = hostRef.current?.getBoundingClientRect()
+      if (!nodeId || !hostRect) return
+      const targetRect = target.getBoundingClientRect()
+      onNodeHoverChangeRef.current?.({
+        nodeId,
+        x: targetRect.left - hostRect.left + targetRect.width / 2,
+        y: targetRect.top - hostRect.top,
+      })
+    }
+    const handlePointerOut = (event: PointerEvent) => {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      const target = event.target instanceof HTMLElement ? event.target.closest('me-tpc') : null
+      if (!target) return
+      const relatedTarget = event.relatedTarget instanceof HTMLElement ? event.relatedTarget.closest('me-tpc') : null
+      if (relatedTarget === target) return
+      onNodeHoverChangeRef.current?.(null)
+    }
+    const handlePointerLeaveCanvas = (event: PointerEvent) => {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      onNodeHoverChangeRef.current?.(null)
     }
     const handlePointerUp = () => {
       emitSelectionState()
       emitNodeAnchor()
     }
     hostRef.current.addEventListener('pointerup', handlePointerUp)
+    hostRef.current.addEventListener('pointerover', handlePointerOver)
+    hostRef.current.addEventListener('pointerout', handlePointerOut)
+    hostRef.current.addEventListener('pointerleave', handlePointerLeaveCanvas)
     hostRef.current.addEventListener('dblclick', handleDoubleClick)
     hostRef.current.addEventListener('contextmenu', handleContextMenu)
     window.setTimeout(() => emitSelectionState(), 0)
@@ -806,6 +888,9 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
       }
       onControllerReadyRef.current?.(null)
       hostRef.current?.removeEventListener('pointerup', handlePointerUp)
+      hostRef.current?.removeEventListener('pointerover', handlePointerOver)
+      hostRef.current?.removeEventListener('pointerout', handlePointerOut)
+      hostRef.current?.removeEventListener('pointerleave', handlePointerLeaveCanvas)
       hostRef.current?.removeEventListener('dblclick', handleDoubleClick)
       hostRef.current?.removeEventListener('contextmenu', handleContextMenu)
       instance.destroy()
@@ -862,5 +947,21 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
     emitNodeAnchor()
   }, [initialViewState, emitNodeAnchor])
 
-  return <div ref={hostRef} className="h-full min-h-0 min-w-0 w-full overflow-hidden bg-slate-50" />
+  return (
+    <>
+      <style>
+        {`
+          .mindmap-canvas-host .mind-elixir-toolbar.lt,
+          .mindmap-canvas-host .mind-elixir-toolbar.rb {
+            display: none !important;
+          }
+
+          .mindmap-canvas-host me-tpc {
+            max-width: min(26rem, 32vw);
+          }
+        `}
+      </style>
+      <div ref={hostRef} className="mindmap-canvas-host h-full min-h-0 min-w-0 w-full overflow-hidden bg-slate-50" />
+    </>
+  )
 }

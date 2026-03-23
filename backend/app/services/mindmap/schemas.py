@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 MindMapSourceType = Literal["exam_document", "uploaded_file"]
+MindMapMode = Literal["knowledge_structure", "exam_review"]
 
 
 class MindMapQuestionRef(BaseModel):
@@ -26,6 +27,43 @@ class MindMapDraftNode(BaseModel):
 class MindMapDraft(BaseModel):
     title: Optional[str] = None
     root: MindMapDraftNode
+
+
+class DocOutlineLeaf(BaseModel):
+    topic: str
+    summary: Optional[str] = None
+    evidenceHints: list[str] = Field(default_factory=list)
+
+
+class DocOutlineTopic(BaseModel):
+    topic: str
+    summary: Optional[str] = None
+    subtopics: list[DocOutlineLeaf] = Field(default_factory=list)
+
+
+class DocOutline(BaseModel):
+    title: Optional[str] = None
+    mode: MindMapMode = "knowledge_structure"
+    documentSummary: Optional[str] = None
+    topics: list[DocOutlineTopic] = Field(default_factory=list)
+
+
+class QualityIssue(BaseModel):
+    code: str
+    severity: Literal["low", "medium", "high"] = "medium"
+    message: str
+
+
+class QualityReport(BaseModel):
+    passed: bool = False
+    totalScore: float = 0.0
+    coverageScore: float = 0.0
+    duplicationScore: float = 0.0
+    depthScore: float = 0.0
+    granularityScore: float = 0.0
+    modeAlignmentScore: float = 0.0
+    issues: list[QualityIssue] = Field(default_factory=list)
+    retryPrompt: Optional[str] = None
 
 
 class MindMapNodeTree(BaseModel):
@@ -64,12 +102,15 @@ class MindMapSummary(BaseModel):
 class MindMapMeta(BaseModel):
     hasQuestionRefs: bool = False
     generatedBy: Literal["llm", "manual", "system"] = "system"
+    mode: MindMapMode = "knowledge_structure"
     updatedAt: datetime
 
 
 class MindMapSource(BaseModel):
     type: MindMapSourceType
     id: int
+    ids: list[int] = Field(default_factory=list)
+    signature: Optional[str] = None
 
 
 class MindMapDocument(BaseModel):
@@ -90,7 +131,9 @@ class MindMapGenerateRequest(BaseModel):
     workroom_id: int
     source_type: MindMapSourceType
     source_id: int
+    source_ids: list[int] = Field(default_factory=list)
     kind: str = "knowledge"
+    mode: MindMapMode = "knowledge_structure"
     force: bool = False
 
 
@@ -100,7 +143,9 @@ class MindMapCurrentQuery(BaseModel):
     workroom_id: int
     source_type: MindMapSourceType
     source_id: int
+    source_ids: list[int] = Field(default_factory=list)
     kind: str = "knowledge"
+    mode: MindMapMode = "knowledge_structure"
 
 
 class MindMapSaveRequest(BaseModel):

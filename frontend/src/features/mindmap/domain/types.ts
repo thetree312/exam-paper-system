@@ -1,5 +1,7 @@
 import type { MindMapSourceType } from '../../../types'
 
+export type MindMapMode = 'knowledge_structure' | 'exam_review'
+
 export interface MindMapQuestionRef {
   questionId?: number | null
   sequenceIndex?: number | null
@@ -49,6 +51,8 @@ export interface MindMapDocumentPayload {
   source: {
     type: MindMapSourceType
     id: number
+    ids?: number[]
+    signature?: string | null
   }
   kind: string
   title?: string | null
@@ -58,6 +62,7 @@ export interface MindMapDocumentPayload {
   meta: {
     hasQuestionRefs: boolean
     generatedBy: 'llm' | 'manual' | 'system'
+    mode?: MindMapMode
     updatedAt: string
   }
 }

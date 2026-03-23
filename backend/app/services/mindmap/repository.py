@@ -19,21 +19,24 @@ class MindMapRepository:
         workroom_id: int,
         source_type: str,
         source_id: int,
+        source_signature: str | None,
         kind: str,
     ) -> Optional[MindMap]:
-        return (
+        query = (
             self.db.query(MindMap)
             .filter(
                 MindMap.tenant_id == tenant_id,
                 MindMap.workroom_id == workroom_id,
                 MindMap.source_type == source_type,
-                MindMap.source_id == source_id,
                 MindMap.kind == kind,
                 MindMap.is_active == 1,
             )
-            .order_by(MindMap.version.desc())
-            .first()
         )
+        if source_signature:
+            query = query.filter(MindMap.source_signature == source_signature)
+        else:
+            query = query.filter(MindMap.source_id == source_id, MindMap.source_signature.is_(None))
+        return query.order_by(MindMap.version.desc()).first()
 
     def create_map_version(
         self,
@@ -43,6 +46,7 @@ class MindMapRepository:
         workroom_id: int,
         source_type: str,
         source_id: int,
+        source_signature: str | None,
         kind: str,
         title: str | None,
         graph_json: dict,
@@ -52,6 +56,7 @@ class MindMapRepository:
             workroom_id=workroom_id,
             source_type=source_type,
             source_id=source_id,
+            source_signature=source_signature,
             kind=kind,
         )
         next_version = 1
@@ -67,6 +72,7 @@ class MindMapRepository:
             workroom_id=workroom_id,
             source_type=source_type,
             source_id=source_id,
+            source_signature=source_signature,
             kind=kind,
             title=title,
             graph_json=graph_json,

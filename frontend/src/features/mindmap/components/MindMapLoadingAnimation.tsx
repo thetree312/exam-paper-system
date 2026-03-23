@@ -213,8 +213,13 @@ const STYLE_TEXT = `
 
 const codeWidths = [40, 90, 60, 20, 70, 90, 40, 60, 90, 40, 75, 30, 85, 50, 65, 95]
 
-export const MindMapLoadingAnimation: React.FC = () => (
-  <div className="mindmap-loading-root pointer-events-none select-none">
+interface MindMapLoadingAnimationProps {
+  label?: string
+  detail?: string | null
+}
+
+export const MindMapLoadingAnimation: React.FC<MindMapLoadingAnimationProps> = ({ label, detail }) => (
+  <div className="mindmap-loading-root pointer-events-none select-none flex-col gap-4">
     <style>{STYLE_TEXT}</style>
     <div className="stage">
       <div className="panel-container panel-1">
@@ -292,6 +297,12 @@ export const MindMapLoadingAnimation: React.FC = () => (
         </div>
       </div>
     </div>
+    {(label || detail) && (
+      <div className="max-w-[420px] rounded-2xl border border-slate-200/80 bg-white/88 px-4 py-3 text-center shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+        {label && <div className="text-sm font-semibold text-slate-900">{label}</div>}
+        {detail && <div className="mt-1 text-xs text-slate-500">{detail}</div>}
+      </div>
+    )}
   </div>
 )
 

@@ -37,13 +37,15 @@ def generate_mindmap(payload: MindMapGenerateRequest, db: Session = Depends(get_
             studio_document_id=payload.source_id,
         )
     logger.info(
-        "mindmap.route.generate tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s kind=%s force=%s",
+        "mindmap.route.generate tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s source_count=%s kind=%s mode=%s force=%s",
         payload.tenant_id,
         payload.user_id,
         payload.workroom_id,
         payload.source_type,
         payload.source_id,
+        len(payload.source_ids or []),
         payload.kind,
+        payload.mode,
         payload.force,
     )
     return MindMapService(db).generate(
@@ -52,7 +54,9 @@ def generate_mindmap(payload: MindMapGenerateRequest, db: Session = Depends(get_
         workroom_id=payload.workroom_id,
         source_type=payload.source_type,
         source_id=payload.source_id,
+        source_ids=payload.source_ids,
         kind=payload.kind,
+        mode=payload.mode,
         force=payload.force,
     )
 
@@ -64,7 +68,9 @@ def get_current_mindmap(
     workroom_id: int,
     source_type: str,
     source_id: int,
+    source_ids: list[int] | None = None,
     kind: str = "knowledge",
+    mode: str = "knowledge_structure",
     db: Session = Depends(get_db),
 ) -> MindMapDocument:
     assert_workroom_scope(
@@ -82,13 +88,15 @@ def get_current_mindmap(
             studio_document_id=source_id,
         )
     logger.info(
-        "mindmap.route.current tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s kind=%s",
+        "mindmap.route.current tenant_id=%s user_id=%s workroom_id=%s source_type=%s source_id=%s source_count=%s kind=%s mode=%s",
         tenant_id,
         user_id,
         workroom_id,
         source_type,
         source_id,
+        len(source_ids or []),
         kind,
+        mode,
     )
     query = MindMapCurrentQuery(
         tenant_id=tenant_id,
@@ -96,14 +104,18 @@ def get_current_mindmap(
         workroom_id=workroom_id,
         source_type=source_type,
         source_id=source_id,
+        source_ids=source_ids or [],
         kind=kind,
+        mode=mode,
     )
     return MindMapService(db).get_current(
         tenant_id=query.tenant_id,
         workroom_id=query.workroom_id,
         source_type=query.source_type,
         source_id=query.source_id,
+        source_ids=query.source_ids,
         kind=query.kind,
+        mode=query.mode,
     )
 
 

@@ -1,0 +1,103 @@
+"filename", "language", "JSON with Comments", "TypeScript", "XML", "PostCSS", "TypeScript JSX", "JSON", "comment", "blank", "total"
+"d:\Exam-paper\frontend\package-lock.json", "JSON", 0, 0, 0, 0, 0, 4465, 0, 1, 4466
+"d:\Exam-paper\frontend\package.json", "JSON", 0, 0, 0, 0, 0, 52, 0, 1, 53
+"d:\Exam-paper\frontend\public\vite.svg", "XML", 0, 0, 1, 0, 0, 0, 0, 0, 1
+"d:\Exam-paper\frontend\src\App.tsx", "TypeScript JSX", 0, 0, 0, 0, 938, 0, 1, 80, 1019
+"d:\Exam-paper\frontend\src\QuestionEditor.tsx", "TypeScript JSX", 0, 0, 0, 0, 1077, 0, 13, 117, 1207
+"d:\Exam-paper\frontend\src\appRoutes.ts", "TypeScript", 0, 24, 0, 0, 0, 0, 0, 7, 31
+"d:\Exam-paper\frontend\src\assets\animations\noInternet.json", "JSON", 0, 0, 0, 0, 0, 1, 0, 0, 1
+"d:\Exam-paper\frontend\src\assets\animations\workingCat.json", "JSON", 0, 0, 0, 0, 0, 1, 0, 1, 2
+"d:\Exam-paper\frontend\src\components\AgentChatPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 1136, 0, 40, 72, 1248
+"d:\Exam-paper\frontend\src\components\AgentConnector.tsx", "TypeScript JSX", 0, 0, 0, 0, 50, 0, 0, 8, 58
+"d:\Exam-paper\frontend\src\components\AgentConversationHistory.tsx", "TypeScript JSX", 0, 0, 0, 0, 128, 0, 4, 6, 138
+"d:\Exam-paper\frontend\src\components\AgentWorkspacePanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 775, 0, 27, 887, 1689
+"d:\Exam-paper\frontend\src\components\AnimatedHeartButton.tsx", "TypeScript JSX", 0, 0, 0, 0, 160, 0, 12, 14, 186
+"d:\Exam-paper\frontend\src\components\AppHeader.tsx", "TypeScript JSX", 0, 0, 0, 0, 128, 0, 0, 5, 133
+"d:\Exam-paper\frontend\src\components\AuthScreen.tsx", "TypeScript JSX", 0, 0, 0, 0, 160, 0, 2, 18, 180
+"d:\Exam-paper\frontend\src\components\BrandIcon.tsx", "TypeScript JSX", 0, 0, 0, 0, 79, 0, 0, 10, 89
+"d:\Exam-paper\frontend\src\components\EditorConnector.tsx", "TypeScript JSX", 0, 0, 0, 0, 129, 0, 0, 13, 142
+"d:\Exam-paper\frontend\src\components\EditorWorkspaceShell.tsx", "TypeScript JSX", 0, 0, 0, 0, 192, 0, 0, 8, 200
+"d:\Exam-paper\frontend\src\components\ExportTemplateDialog.tsx", "TypeScript JSX", 0, 0, 0, 0, 172, 0, 0, 19, 191
+"d:\Exam-paper\frontend\src\components\FavoriteButton.tsx", "TypeScript JSX", 0, 0, 0, 0, 146, 0, 8, 20, 174
+"d:\Exam-paper\frontend\src\components\FavoriteConfigDialog.tsx", "TypeScript JSX", 0, 0, 0, 0, 368, 0, 34, 46, 448
+"d:\Exam-paper\frontend\src\components\FavoritesPage.tsx", "TypeScript JSX", 0, 0, 0, 0, 353, 0, 16, 31, 400
+"d:\Exam-paper\frontend\src\components\FileTabsBar.tsx", "TypeScript JSX", 0, 0, 0, 0, 178, 0, 0, 11, 189
+"d:\Exam-paper\frontend\src\components\FlashcardPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 387, 0, 25, 37, 449
+"d:\Exam-paper\frontend\src\components\MainLayout.tsx", "TypeScript JSX", 0, 0, 0, 0, 171, 0, 8, 17, 196
+"d:\Exam-paper\frontend\src\components\MarkdownWithMath.tsx", "TypeScript JSX", 0, 0, 0, 0, 194, 0, 4, 25, 223
+"d:\Exam-paper\frontend\src\components\MetalInputBox.tsx", "TypeScript JSX", 0, 0, 0, 0, 256, 0, 0, 10, 266
+"d:\Exam-paper\frontend\src\components\OpenUiHitlRenderer.tsx", "TypeScript JSX", 0, 0, 0, 0, 285, 0, 0, 17, 302
+"d:\Exam-paper\frontend\src\components\PreviewPaneShell.tsx", "TypeScript JSX", 0, 0, 0, 0, 180, 0, 0, 7, 187
+"d:\Exam-paper\frontend\src\components\QuestionTypeSelectField.tsx", "TypeScript JSX", 0, 0, 0, 0, 88, 0, 0, 9, 97
+"d:\Exam-paper\frontend\src\components\RobotGlowFace.tsx", "TypeScript JSX", 0, 0, 0, 0, 233, 0, 0, 44, 277
+"d:\Exam-paper\frontend\src\components\SelectionPane.tsx", "TypeScript JSX", 0, 0, 0, 0, 117, 0, 0, 7, 124
+"d:\Exam-paper\frontend\src\components\SelectionWorkspace.tsx", "TypeScript JSX", 0, 0, 0, 0, 305, 0, 0, 12, 317
+"d:\Exam-paper\frontend\src\components\SourcePaneConnector.tsx", "TypeScript JSX", 0, 0, 0, 0, 155, 0, 0, 12, 167
+"d:\Exam-paper\frontend\src\components\TranslationInlineIndicator.tsx", "TypeScript JSX", 0, 0, 0, 0, 48, 0, 0, 7, 55
+"d:\Exam-paper\frontend\src\components\TranslationToolbar.tsx", "TypeScript JSX", 0, 0, 0, 0, 48, 0, 0, 8, 56
+"d:\Exam-paper\frontend\src\components\UserMenu.tsx", "TypeScript JSX", 0, 0, 0, 0, 67, 0, 0, 8, 75
+"d:\Exam-paper\frontend\src\components\WorkroomHomeShell.tsx", "TypeScript JSX", 0, 0, 0, 0, 78, 0, 0, 4, 82
+"d:\Exam-paper\frontend\src\components\WorkroomSourceTimeline.tsx", "TypeScript JSX", 0, 0, 0, 0, 118, 0, 0, 8, 126
+"d:\Exam-paper\frontend\src\components\WorkspacePage.tsx", "TypeScript JSX", 0, 0, 0, 0, 369, 0, 0, 19, 388
+"d:\Exam-paper\frontend\src\components\questionRenderers\McqAnswerRenderer.tsx", "TypeScript JSX", 0, 0, 0, 0, 184, 0, 4, 16, 204
+"d:\Exam-paper\frontend\src\components\questionRenderers\ParagraphMatchingRenderer.tsx", "TypeScript JSX", 0, 0, 0, 0, 240, 0, 0, 16, 256
+"d:\Exam-paper\frontend\src\components\questionRenderers\ReadingQuestionRenderer.tsx", "TypeScript JSX", 0, 0, 0, 0, 99, 0, 0, 5, 104
+"d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\FillBlankRenderer.tsx", "TypeScript JSX", 0, 0, 0, 0, 174, 0, 9, 22, 205
+"d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\answerState.ts", "TypeScript", 0, 43, 0, 0, 0, 0, 3, 10, 56
+"d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\hooks\useFillBlankNavigation.ts", "TypeScript", 0, 46, 0, 0, 0, 0, 2, 8, 56
+"d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\parser.ts", "TypeScript", 0, 55, 0, 0, 0, 0, 13, 18, 86
+"d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\types.ts", "TypeScript", 0, 16, 0, 0, 0, 0, 3, 5, 24
+"d:\Exam-paper\frontend\src\components\questionRenderers\utils.ts", "TypeScript", 0, 480, 0, 0, 0, 0, 8, 77, 565
+"d:\Exam-paper\frontend\src\counter.ts", "TypeScript", 0, 9, 0, 0, 0, 0, 0, 1, 10
+"d:\Exam-paper\frontend\src\extensions\TranslationBlock.tsx", "TypeScript JSX", 0, 0, 0, 0, 134, 0, 0, 12, 146
+"d:\Exam-paper\frontend\src\extensions\TranslationFootnote.tsx", "TypeScript JSX", 0, 0, 0, 0, 261, 0, 0, 23, 284
+"d:\Exam-paper\frontend\src\features\mindmap\MindMapPanel.tsx", "TypeScript JSX", 0, 0, 0, 0, 790, 0, 0, 30, 820
+"d:\Exam-paper\frontend\src\features\mindmap\api\mindmapApi.ts", "TypeScript", 0, 103, 0, 0, 0, 0, 0, 11, 114
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapContextActions.tsx", "TypeScript JSX", 0, 0, 0, 0, 116, 0, 0, 7, 123
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapLoadingAnimation.tsx", "TypeScript JSX", 0, 0, 0, 0, 288, 0, 0, 11, 299
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeEditor.tsx", "TypeScript JSX", 0, 0, 0, 0, 102, 0, 0, 8, 110
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeQuickActions.tsx", "TypeScript JSX", 0, 0, 0, 0, 59, 0, 0, 6, 65
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapRadialMenu.tsx", "TypeScript JSX", 0, 0, 0, 0, 112, 0, 0, 12, 124
+"d:\Exam-paper\frontend\src\features\mindmap\components\MindMapToolbar.tsx", "TypeScript JSX", 0, 0, 0, 0, 231, 0, 0, 11, 242
+"d:\Exam-paper\frontend\src\features\mindmap\constants.ts", "TypeScript", 0, 28, 0, 0, 0, 0, 0, 4, 32
+"d:\Exam-paper\frontend\src\features\mindmap\domain\tree.ts", "TypeScript", 0, 31, 0, 0, 0, 0, 0, 5, 36
+"d:\Exam-paper\frontend\src\features\mindmap\domain\types.ts", "TypeScript", 0, 58, 0, 0, 0, 0, 0, 9, 67
+"d:\Exam-paper\frontend\src\features\mindmap\editor\MindElixirCanvas.tsx", "TypeScript JSX", 0, 0, 0, 0, 815, 0, 3, 49, 867
+"d:\Exam-paper\frontend\src\hooks\index.ts", "TypeScript", 0, 4, 0, 0, 0, 0, 0, 1, 5
+"d:\Exam-paper\frontend\src\hooks\useAgentChat.ts", "TypeScript", 0, 379, 0, 0, 0, 0, 11, 41, 431
+"d:\Exam-paper\frontend\src\hooks\useAgentSync.ts", "TypeScript", 0, 133, 0, 0, 0, 0, 1, 13, 147
+"d:\Exam-paper\frontend\src\hooks\useAuth.ts", "TypeScript", 0, 129, 0, 0, 0, 0, 2, 14, 145
+"d:\Exam-paper\frontend\src\hooks\useConversation.ts", "TypeScript", 0, 410, 0, 0, 0, 0, 3, 38, 451
+"d:\Exam-paper\frontend\src\hooks\useFileUpload.ts", "TypeScript", 0, 373, 0, 0, 0, 0, 6, 40, 419
+"d:\Exam-paper\frontend\src\hooks\useOcrManager.ts", "TypeScript", 0, 564, 0, 0, 0, 0, 6, 54, 624
+"d:\Exam-paper\frontend\src\hooks\usePreviewPane.ts", "TypeScript", 0, 98, 0, 0, 0, 0, 0, 14, 112
+"d:\Exam-paper\frontend\src\hooks\useQuestionTypeOptions.ts", "TypeScript", 0, 109, 0, 0, 0, 0, 0, 15, 124
+"d:\Exam-paper\frontend\src\hooks\useSelectionInteraction.ts", "TypeScript", 0, 557, 0, 0, 0, 0, 4, 63, 624
+"d:\Exam-paper\frontend\src\i18n.ts", "TypeScript", 0, 28, 0, 0, 0, 0, 0, 4, 32
+"d:\Exam-paper\frontend\src\locales\en\common.json", "JSON", 0, 0, 0, 0, 0, 480, 0, 1, 481
+"d:\Exam-paper\frontend\src\locales\zh\common.json", "JSON", 0, 0, 0, 0, 0, 454, 0, 1, 455
+"d:\Exam-paper\frontend\src\main.ts", "TypeScript", 0, 28, 0, 0, 0, 0, 0, 5, 33
+"d:\Exam-paper\frontend\src\main.tsx", "TypeScript JSX", 0, 0, 0, 0, 10, 0, 0, 2, 12
+"d:\Exam-paper\frontend\src\services\agentApi.ts", "TypeScript", 0, 361, 0, 0, 0, 0, 2, 33, 396
+"d:\Exam-paper\frontend\src\services\favoritesApi.ts", "TypeScript", 0, 102, 0, 0, 0, 0, 15, 18, 135
+"d:\Exam-paper\frontend\src\services\flashcardApi.ts", "TypeScript", 0, 208, 0, 0, 0, 0, 2, 18, 228
+"d:\Exam-paper\frontend\src\services\questionApi.ts", "TypeScript", 0, 158, 0, 0, 0, 0, 45, 39, 242
+"d:\Exam-paper\frontend\src\services\questionTypesApi.ts", "TypeScript", 0, 38, 0, 0, 0, 0, 6, 9, 53
+"d:\Exam-paper\frontend\src\services\subjectsApi.ts", "TypeScript", 0, 38, 0, 0, 0, 0, 6, 9, 53
+"d:\Exam-paper\frontend\src\services\tagsApi.ts", "TypeScript", 0, 38, 0, 0, 0, 0, 6, 9, 53
+"d:\Exam-paper\frontend\src\services\translationApi.ts", "TypeScript", 0, 50, 0, 0, 0, 0, 0, 10, 60
+"d:\Exam-paper\frontend\src\services\workroomApi.ts", "TypeScript", 0, 118, 0, 0, 0, 0, 0, 9, 127
+"d:\Exam-paper\frontend\src\services\workspaceApi.ts", "TypeScript", 0, 78, 0, 0, 0, 0, 0, 6, 84
+"d:\Exam-paper\frontend\src\store\appStore.ts", "TypeScript", 0, 128, 0, 0, 0, 0, 12, 14, 154
+"d:\Exam-paper\frontend\src\style.css", "PostCSS", 0, 0, 0, 498, 0, 0, 4, 74, 576
+"d:\Exam-paper\frontend\src\types.ts", "TypeScript", 0, 691, 0, 0, 0, 0, 30, 98, 819
+"d:\Exam-paper\frontend\src\typescript.svg", "XML", 0, 0, 1, 0, 0, 0, 0, 0, 1
+"d:\Exam-paper\frontend\src\utils\concurrency.ts", "TypeScript", 0, 31, 0, 0, 0, 0, 16, 9, 56
+"d:\Exam-paper\frontend\src\utils\debounce.ts", "TypeScript", 0, 15, 0, 0, 0, 0, 0, 2, 17
+"d:\Exam-paper\frontend\src\utils\lruCache.ts", "TypeScript", 0, 53, 0, 0, 0, 0, 29, 14, 96
+"d:\Exam-paper\frontend\src\utils\math.ts", "TypeScript", 0, 11, 0, 0, 0, 0, 0, 4, 15
+"d:\Exam-paper\frontend\src\utils\rateLimiter.ts", "TypeScript", 0, 34, 0, 0, 0, 0, 22, 11, 67
+"d:\Exam-paper\frontend\src\utils\secureStorage.ts", "TypeScript", 0, 36, 0, 0, 0, 0, 20, 7, 63
+"d:\Exam-paper\frontend\src\utils\validation.ts", "TypeScript", 0, 116, 0, 0, 0, 0, 10, 7, 133
+"d:\Exam-paper\frontend\tsconfig.json", "JSON with Comments", 24, 0, 0, 0, 0, 0, 2, 3, 29
+"Total", "-", 24, 6009, 2, 498, 12883, 5453, 499, 2711, 28079

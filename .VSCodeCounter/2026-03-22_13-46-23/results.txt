@@ -1,0 +1,158 @@
+Date : 2026-03-22 13:46:23
+Directory : d:\Exam-paper\frontend
+Total : 101 files,  24869 codes, 499 comments, 2711 blanks, all 28079 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| TypeScript JSX     |         49 |     12,883 |        210 |      1,846 |     14,939 |
+| TypeScript         |         42 |      6,009 |        283 |        783 |      7,075 |
+| JSON               |          6 |      5,453 |          0 |          5 |      5,458 |
+| PostCSS            |          1 |        498 |          4 |         74 |        576 |
+| JSON with Comments |          1 |         24 |          2 |          3 |         29 |
+| XML                |          2 |          2 |          0 |          0 |          2 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                              | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                 |        101 |     24,869 |        499 |      2,711 |     28,079 |
+| . (Files)                                                                                         |          3 |      4,541 |          2 |          5 |      4,548 |
+| public                                                                                            |          1 |          1 |          0 |          0 |          1 |
+| src                                                                                               |         97 |     20,327 |        497 |      2,706 |     23,530 |
+| src (Files)                                                                                       |         10 |      3,304 |         48 |        388 |      3,740 |
+| src\assets                                                                                        |          2 |          2 |          0 |          1 |          3 |
+| src\assets\animations                                                                             |          2 |          2 |          0 |          1 |          3 |
+| src\components                                                                                    |         41 |      8,590 |        222 |      1,596 |     10,408 |
+| src\components (Files)                                                                            |         32 |      7,253 |        180 |      1,419 |      8,852 |
+| src\components\questionRenderers                                                                  |          9 |      1,337 |         42 |        177 |      1,556 |
+| src\components\questionRenderers (Files)                                                          |          4 |      1,003 |         12 |        114 |      1,129 |
+| src\components\questionRenderers\fillBlank                                                        |          5 |        334 |         30 |         63 |        427 |
+| src\components\questionRenderers\fillBlank (Files)                                                |          4 |        288 |         28 |         55 |        371 |
+| src\components\questionRenderers\fillBlank\hooks                                                  |          1 |         46 |          2 |          8 |         56 |
+| src\extensions                                                                                    |          2 |        395 |          0 |         35 |        430 |
+| src\features                                                                                      |         12 |      2,733 |          3 |        163 |      2,899 |
+| src\features\mindmap                                                                              |         12 |      2,733 |          3 |        163 |      2,899 |
+| src\features\mindmap (Files)                                                                      |          2 |        818 |          0 |         34 |        852 |
+| src\features\mindmap\api                                                                          |          1 |        103 |          0 |         11 |        114 |
+| src\features\mindmap\components                                                                   |          6 |        908 |          0 |         55 |        963 |
+| src\features\mindmap\domain                                                                       |          2 |         89 |          0 |         14 |        103 |
+| src\features\mindmap\editor                                                                       |          1 |        815 |          3 |         49 |        867 |
+| src\hooks                                                                                         |         10 |      2,756 |         33 |        293 |      3,082 |
+| src\locales                                                                                       |          2 |        934 |          0 |          2 |        936 |
+| src\locales\en                                                                                    |          1 |        480 |          0 |          1 |        481 |
+| src\locales\zh                                                                                    |          1 |        454 |          0 |          1 |        455 |
+| src\services                                                                                      |         10 |      1,189 |         82 |        160 |      1,431 |
+| src\store                                                                                         |          1 |        128 |         12 |         14 |        154 |
+| src\utils                                                                                         |          7 |        296 |         97 |         54 |        447 |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                                          | language           | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| d:\Exam-paper\frontend\package-lock.json                                                          | JSON               |      4,465 |          0 |          1 |      4,466 |
+| d:\Exam-paper\frontend\package.json                                                               | JSON               |         52 |          0 |          1 |         53 |
+| d:\Exam-paper\frontend\public\vite.svg                                                            | XML                |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\App.tsx                                                                | TypeScript JSX     |        938 |          1 |         80 |      1,019 |
+| d:\Exam-paper\frontend\src\QuestionEditor.tsx                                                     | TypeScript JSX     |      1,077 |         13 |        117 |      1,207 |
+| d:\Exam-paper\frontend\src\appRoutes.ts                                                           | TypeScript         |         24 |          0 |          7 |         31 |
+| d:\Exam-paper\frontend\src\assets\animations\noInternet.json                                      | JSON               |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\assets\animations\workingCat.json                                      | JSON               |          1 |          0 |          1 |          2 |
+| d:\Exam-paper\frontend\src\components\AgentChatPanel.tsx                                          | TypeScript JSX     |      1,136 |         40 |         72 |      1,248 |
+| d:\Exam-paper\frontend\src\components\AgentConnector.tsx                                          | TypeScript JSX     |         50 |          0 |          8 |         58 |
+| d:\Exam-paper\frontend\src\components\AgentConversationHistory.tsx                                | TypeScript JSX     |        128 |          4 |          6 |        138 |
+| d:\Exam-paper\frontend\src\components\AgentWorkspacePanel.tsx                                     | TypeScript JSX     |        775 |         27 |        887 |      1,689 |
+| d:\Exam-paper\frontend\src\components\AnimatedHeartButton.tsx                                     | TypeScript JSX     |        160 |         12 |         14 |        186 |
+| d:\Exam-paper\frontend\src\components\AppHeader.tsx                                               | TypeScript JSX     |        128 |          0 |          5 |        133 |
+| d:\Exam-paper\frontend\src\components\AuthScreen.tsx                                              | TypeScript JSX     |        160 |          2 |         18 |        180 |
+| d:\Exam-paper\frontend\src\components\BrandIcon.tsx                                               | TypeScript JSX     |         79 |          0 |         10 |         89 |
+| d:\Exam-paper\frontend\src\components\EditorConnector.tsx                                         | TypeScript JSX     |        129 |          0 |         13 |        142 |
+| d:\Exam-paper\frontend\src\components\EditorWorkspaceShell.tsx                                    | TypeScript JSX     |        192 |          0 |          8 |        200 |
+| d:\Exam-paper\frontend\src\components\ExportTemplateDialog.tsx                                    | TypeScript JSX     |        172 |          0 |         19 |        191 |
+| d:\Exam-paper\frontend\src\components\FavoriteButton.tsx                                          | TypeScript JSX     |        146 |          8 |         20 |        174 |
+| d:\Exam-paper\frontend\src\components\FavoriteConfigDialog.tsx                                    | TypeScript JSX     |        368 |         34 |         46 |        448 |
+| d:\Exam-paper\frontend\src\components\FavoritesPage.tsx                                           | TypeScript JSX     |        353 |         16 |         31 |        400 |
+| d:\Exam-paper\frontend\src\components\FileTabsBar.tsx                                             | TypeScript JSX     |        178 |          0 |         11 |        189 |
+| d:\Exam-paper\frontend\src\components\FlashcardPanel.tsx                                          | TypeScript JSX     |        387 |         25 |         37 |        449 |
+| d:\Exam-paper\frontend\src\components\MainLayout.tsx                                              | TypeScript JSX     |        171 |          8 |         17 |        196 |
+| d:\Exam-paper\frontend\src\components\MarkdownWithMath.tsx                                        | TypeScript JSX     |        194 |          4 |         25 |        223 |
+| d:\Exam-paper\frontend\src\components\MetalInputBox.tsx                                           | TypeScript JSX     |        256 |          0 |         10 |        266 |
+| d:\Exam-paper\frontend\src\components\OpenUiHitlRenderer.tsx                                      | TypeScript JSX     |        285 |          0 |         17 |        302 |
+| d:\Exam-paper\frontend\src\components\PreviewPaneShell.tsx                                        | TypeScript JSX     |        180 |          0 |          7 |        187 |
+| d:\Exam-paper\frontend\src\components\QuestionTypeSelectField.tsx                                 | TypeScript JSX     |         88 |          0 |          9 |         97 |
+| d:\Exam-paper\frontend\src\components\RobotGlowFace.tsx                                           | TypeScript JSX     |        233 |          0 |         44 |        277 |
+| d:\Exam-paper\frontend\src\components\SelectionPane.tsx                                           | TypeScript JSX     |        117 |          0 |          7 |        124 |
+| d:\Exam-paper\frontend\src\components\SelectionWorkspace.tsx                                      | TypeScript JSX     |        305 |          0 |         12 |        317 |
+| d:\Exam-paper\frontend\src\components\SourcePaneConnector.tsx                                     | TypeScript JSX     |        155 |          0 |         12 |        167 |
+| d:\Exam-paper\frontend\src\components\TranslationInlineIndicator.tsx                              | TypeScript JSX     |         48 |          0 |          7 |         55 |
+| d:\Exam-paper\frontend\src\components\TranslationToolbar.tsx                                      | TypeScript JSX     |         48 |          0 |          8 |         56 |
+| d:\Exam-paper\frontend\src\components\UserMenu.tsx                                                | TypeScript JSX     |         67 |          0 |          8 |         75 |
+| d:\Exam-paper\frontend\src\components\WorkroomHomeShell.tsx                                       | TypeScript JSX     |         78 |          0 |          4 |         82 |
+| d:\Exam-paper\frontend\src\components\WorkroomSourceTimeline.tsx                                  | TypeScript JSX     |        118 |          0 |          8 |        126 |
+| d:\Exam-paper\frontend\src\components\WorkspacePage.tsx                                           | TypeScript JSX     |        369 |          0 |         19 |        388 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\McqAnswerRenderer.tsx                     | TypeScript JSX     |        184 |          4 |         16 |        204 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\ParagraphMatchingRenderer.tsx             | TypeScript JSX     |        240 |          0 |         16 |        256 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\ReadingQuestionRenderer.tsx               | TypeScript JSX     |         99 |          0 |          5 |        104 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\FillBlankRenderer.tsx           | TypeScript JSX     |        174 |          9 |         22 |        205 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\answerState.ts                  | TypeScript         |         43 |          3 |         10 |         56 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\hooks\useFillBlankNavigation.ts | TypeScript         |         46 |          2 |          8 |         56 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\parser.ts                       | TypeScript         |         55 |         13 |         18 |         86 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\fillBlank\types.ts                        | TypeScript         |         16 |          3 |          5 |         24 |
+| d:\Exam-paper\frontend\src\components\questionRenderers\utils.ts                                  | TypeScript         |        480 |          8 |         77 |        565 |
+| d:\Exam-paper\frontend\src\counter.ts                                                             | TypeScript         |          9 |          0 |          1 |         10 |
+| d:\Exam-paper\frontend\src\extensions\TranslationBlock.tsx                                        | TypeScript JSX     |        134 |          0 |         12 |        146 |
+| d:\Exam-paper\frontend\src\extensions\TranslationFootnote.tsx                                     | TypeScript JSX     |        261 |          0 |         23 |        284 |
+| d:\Exam-paper\frontend\src\features\mindmap\MindMapPanel.tsx                                      | TypeScript JSX     |        790 |          0 |         30 |        820 |
+| d:\Exam-paper\frontend\src\features\mindmap\api\mindmapApi.ts                                     | TypeScript         |        103 |          0 |         11 |        114 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapContextActions.tsx                  | TypeScript JSX     |        116 |          0 |          7 |        123 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapLoadingAnimation.tsx                | TypeScript JSX     |        288 |          0 |         11 |        299 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeEditor.tsx                      | TypeScript JSX     |        102 |          0 |          8 |        110 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapNodeQuickActions.tsx                | TypeScript JSX     |         59 |          0 |          6 |         65 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapRadialMenu.tsx                      | TypeScript JSX     |        112 |          0 |         12 |        124 |
+| d:\Exam-paper\frontend\src\features\mindmap\components\MindMapToolbar.tsx                         | TypeScript JSX     |        231 |          0 |         11 |        242 |
+| d:\Exam-paper\frontend\src\features\mindmap\constants.ts                                          | TypeScript         |         28 |          0 |          4 |         32 |
+| d:\Exam-paper\frontend\src\features\mindmap\domain\tree.ts                                        | TypeScript         |         31 |          0 |          5 |         36 |
+| d:\Exam-paper\frontend\src\features\mindmap\domain\types.ts                                       | TypeScript         |         58 |          0 |          9 |         67 |
+| d:\Exam-paper\frontend\src\features\mindmap\editor\MindElixirCanvas.tsx                           | TypeScript JSX     |        815 |          3 |         49 |        867 |
+| d:\Exam-paper\frontend\src\hooks\index.ts                                                         | TypeScript         |          4 |          0 |          1 |          5 |
+| d:\Exam-paper\frontend\src\hooks\useAgentChat.ts                                                  | TypeScript         |        379 |         11 |         41 |        431 |
+| d:\Exam-paper\frontend\src\hooks\useAgentSync.ts                                                  | TypeScript         |        133 |          1 |         13 |        147 |
+| d:\Exam-paper\frontend\src\hooks\useAuth.ts                                                       | TypeScript         |        129 |          2 |         14 |        145 |
+| d:\Exam-paper\frontend\src\hooks\useConversation.ts                                               | TypeScript         |        410 |          3 |         38 |        451 |
+| d:\Exam-paper\frontend\src\hooks\useFileUpload.ts                                                 | TypeScript         |        373 |          6 |         40 |        419 |
+| d:\Exam-paper\frontend\src\hooks\useOcrManager.ts                                                 | TypeScript         |        564 |          6 |         54 |        624 |
+| d:\Exam-paper\frontend\src\hooks\usePreviewPane.ts                                                | TypeScript         |         98 |          0 |         14 |        112 |
+| d:\Exam-paper\frontend\src\hooks\useQuestionTypeOptions.ts                                        | TypeScript         |        109 |          0 |         15 |        124 |
+| d:\Exam-paper\frontend\src\hooks\useSelectionInteraction.ts                                       | TypeScript         |        557 |          4 |         63 |        624 |
+| d:\Exam-paper\frontend\src\i18n.ts                                                                | TypeScript         |         28 |          0 |          4 |         32 |
+| d:\Exam-paper\frontend\src\locales\en\common.json                                                 | JSON               |        480 |          0 |          1 |        481 |
+| d:\Exam-paper\frontend\src\locales\zh\common.json                                                 | JSON               |        454 |          0 |          1 |        455 |
+| d:\Exam-paper\frontend\src\main.ts                                                                | TypeScript         |         28 |          0 |          5 |         33 |
+| d:\Exam-paper\frontend\src\main.tsx                                                               | TypeScript JSX     |         10 |          0 |          2 |         12 |
+| d:\Exam-paper\frontend\src\services\agentApi.ts                                                   | TypeScript         |        361 |          2 |         33 |        396 |
+| d:\Exam-paper\frontend\src\services\favoritesApi.ts                                               | TypeScript         |        102 |         15 |         18 |        135 |
+| d:\Exam-paper\frontend\src\services\flashcardApi.ts                                               | TypeScript         |        208 |          2 |         18 |        228 |
+| d:\Exam-paper\frontend\src\services\questionApi.ts                                                | TypeScript         |        158 |         45 |         39 |        242 |
+| d:\Exam-paper\frontend\src\services\questionTypesApi.ts                                           | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\subjectsApi.ts                                                | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\tagsApi.ts                                                    | TypeScript         |         38 |          6 |          9 |         53 |
+| d:\Exam-paper\frontend\src\services\translationApi.ts                                             | TypeScript         |         50 |          0 |         10 |         60 |
+| d:\Exam-paper\frontend\src\services\workroomApi.ts                                                | TypeScript         |        118 |          0 |          9 |        127 |
+| d:\Exam-paper\frontend\src\services\workspaceApi.ts                                               | TypeScript         |         78 |          0 |          6 |         84 |
+| d:\Exam-paper\frontend\src\store\appStore.ts                                                      | TypeScript         |        128 |         12 |         14 |        154 |
+| d:\Exam-paper\frontend\src\style.css                                                              | PostCSS            |        498 |          4 |         74 |        576 |
+| d:\Exam-paper\frontend\src\types.ts                                                               | TypeScript         |        691 |         30 |         98 |        819 |
+| d:\Exam-paper\frontend\src\typescript.svg                                                         | XML                |          1 |          0 |          0 |          1 |
+| d:\Exam-paper\frontend\src\utils\concurrency.ts                                                   | TypeScript         |         31 |         16 |          9 |         56 |
+| d:\Exam-paper\frontend\src\utils\debounce.ts                                                      | TypeScript         |         15 |          0 |          2 |         17 |
+| d:\Exam-paper\frontend\src\utils\lruCache.ts                                                      | TypeScript         |         53 |         29 |         14 |         96 |
+| d:\Exam-paper\frontend\src\utils\math.ts                                                          | TypeScript         |         11 |          0 |          4 |         15 |
+| d:\Exam-paper\frontend\src\utils\rateLimiter.ts                                                   | TypeScript         |         34 |         22 |         11 |         67 |
+| d:\Exam-paper\frontend\src\utils\secureStorage.ts                                                 | TypeScript         |         36 |         20 |          7 |         63 |
+| d:\Exam-paper\frontend\src\utils\validation.ts                                                    | TypeScript         |        116 |         10 |          7 |        133 |
+| d:\Exam-paper\frontend\tsconfig.json                                                              | JSON with Comments |         24 |          2 |          3 |         29 |
+| Total                                                                                             |                    |     24,869 |        499 |      2,711 |     28,079 |
++---------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

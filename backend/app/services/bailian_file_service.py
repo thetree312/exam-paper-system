@@ -44,6 +44,27 @@ class BailianFileService:
             .first()
         )
 
+    def get_mapping_by_scope_hash(
+        self,
+        *,
+        tenant_id: int,
+        local_file_id: int,
+        content_hash: str,
+        purpose: str = "file-extract",
+    ) -> BailianFileRegistry | None:
+        return (
+            self.db.query(BailianFileRegistry)
+            .filter(
+                BailianFileRegistry.tenant_id == tenant_id,
+                BailianFileRegistry.local_file_id == local_file_id,
+                BailianFileRegistry.provider == "dashscope",
+                BailianFileRegistry.purpose == purpose,
+                BailianFileRegistry.content_hash == content_hash,
+            )
+            .order_by(BailianFileRegistry.id.desc())
+            .first()
+        )
+
     def ensure_uploaded(
         self,
         *,
@@ -51,11 +72,7 @@ class BailianFileService:
         local_file_id: int,
         purpose: str = "file-extract",
     ) -> BailianFileRegistry:
-        local_file = (
-            self.db.query(File)
-            .filter(File.id == local_file_id, File.tenant_id == tenant_id)
-            .first()
-        )
+        local_file = self._get_local_file(tenant_id=tenant_id, local_file_id=local_file_id)
         if local_file is None:
             raise ValueError(f"File {local_file_id} not found for tenant {tenant_id}")
 
@@ -70,6 +87,34 @@ class BailianFileService:
             self.db.add(existing)
             self.db.flush()
             return existing
+        reusable = self.get_mapping_by_scope_hash(
+            tenant_id=tenant_id,
+            local_file_id=local_file_id,
+            content_hash=content_hash,
+            purpose=purpose,
+        )
+        if reusable is not None:
+            if existing is not None and existing.id != reusable.id:
+                self.cleanup_file_mappings(
+                    tenant_id=tenant_id,
+                    local_file_id=local_file_id,
+                    purpose=purpose,
+                    remote_delete=True,
+                    only_active=True,
+                )
+            abs_path = self.resolve_absolute_path(local_file)
+            response = self.client.upload_file(abs_path, purpose=purpose)
+            now = datetime.utcnow()
+            reusable.bailian_file_id = str(response.get("id") or "")
+            reusable.status = "active"
+            reusable.uploaded_at = now
+            reusable.last_used_at = now
+            reusable.deleted_at = None
+            reusable.error_message = None
+            reusable.updated_at = now
+            self.db.add(reusable)
+            self.db.flush()
+            return reusable
         if existing is not None:
             self.cleanup_file_mappings(
                 tenant_id=tenant_id,
@@ -92,6 +137,28 @@ class BailianFileService:
             uploaded_at=datetime.utcnow(),
             last_used_at=datetime.utcnow(),
         )
+        self.db.add(record)
+        self.db.flush()
+        return record
+
+    def reupload_mapping(self, *, record: BailianFileRegistry) -> BailianFileRegistry:
+        local_file = self._get_local_file(tenant_id=int(record.tenant_id), local_file_id=int(record.local_file_id))
+        if local_file is None:
+            raise ValueError(f"File {record.local_file_id} not found for tenant {record.tenant_id}")
+
+        content_hash = self._resolve_content_hash(local_file)
+        abs_path = self.resolve_absolute_path(local_file)
+        response = self.client.upload_file(abs_path, purpose=str(record.purpose or "file-extract"))
+        now = datetime.utcnow()
+
+        record.content_hash = content_hash
+        record.bailian_file_id = str(response.get("id") or "")
+        record.status = "active"
+        record.uploaded_at = now
+        record.last_used_at = now
+        record.deleted_at = None
+        record.error_message = None
+        record.updated_at = now
         self.db.add(record)
         self.db.flush()
         return record
@@ -174,6 +241,16 @@ class BailianFileService:
         self.db.flush()
         return record
 
+    def release_mapping(
+        self,
+        *,
+        record: BailianFileRegistry | None,
+        remote_delete: bool = True,
+    ) -> None:
+        if record is None or record.deleted_at is not None or record.status == "deleted":
+            return
+        self.mark_deleted(record, remote_delete=remote_delete)
+
     def _resolve_content_hash(self, local_file: File) -> str:
         if local_file.content_hash:
             return str(local_file.content_hash)
@@ -183,3 +260,10 @@ class BailianFileService:
         self.db.add(local_file)
         self.db.flush()
         return digest
+
+    def _get_local_file(self, *, tenant_id: int, local_file_id: int) -> File | None:
+        return (
+            self.db.query(File)
+            .filter(File.id == local_file_id, File.tenant_id == tenant_id)
+            .first()
+        )

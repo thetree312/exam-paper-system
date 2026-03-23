@@ -55,13 +55,16 @@ class Settings:
         self.alibaba_base_url: str = raw_alibaba_base.rstrip("/")
         self.alibaba_api_key: Optional[str] = os.getenv("ALIBABA_API_KEY")
         self.alibaba_model_qwen_flash: str = os.getenv(
-            "ALIBABA_MODEL_QWEN_FLASH", "qwen3.5-plus"
+            "ALIBABA_MODEL_QWEN_FLASH", "qwen-flash"
         )
         self.alibaba_model_qwen_plus: str = os.getenv(
             "ALIBABA_MODEL_QWEN_PLUS", "qwen3.5-plus"
         )
         self.alibaba_model_qwen_long: str = os.getenv(
             "ALIBABA_MODEL_QWEN_LONG", "qwen-long"
+        )
+        self.alibaba_model_qwen_mindmap_expand: str = os.getenv(
+            "ALIBABA_MODEL_QWEN_MINDMAP_EXPAND", self.alibaba_model_qwen_flash
         )
         self.alibaba_explicit_cache_enabled: bool = (
             os.getenv("ALIBABA_EXPLICIT_CACHE_ENABLED", "true").strip().lower() == "true"
@@ -126,6 +129,15 @@ class Settings:
         )
         self.bailian_file_cleanup_batch_size: int = int(
             os.getenv("BAILIAN_FILE_CLEANUP_BATCH_SIZE", "200")
+        )
+        self.mindmap_outline_concurrency: int = int(
+            os.getenv("MINDMAP_OUTLINE_CONCURRENCY", "4")
+        )
+        self.mindmap_expand_retry_limit: int = int(
+            os.getenv("MINDMAP_EXPAND_RETRY_LIMIT", "2")
+        )
+        self.mindmap_quality_min_score: float = float(
+            os.getenv("MINDMAP_QUALITY_MIN_SCORE", "0.74")
         )
 
     def _parse_allowed_origins(self) -> list[str]:

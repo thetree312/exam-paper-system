@@ -336,6 +336,7 @@ class MindMap(Base):
     )
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_signature: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     kind: Mapped[str] = mapped_column(String(64), nullable=False, default="knowledge")
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     graph_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
