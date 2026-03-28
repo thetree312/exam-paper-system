@@ -69,6 +69,9 @@ class Settings:
         self.alibaba_explicit_cache_enabled: bool = (
             os.getenv("ALIBABA_EXPLICIT_CACHE_ENABLED", "true").strip().lower() == "true"
         )
+        self.alibaba_session_cache_enabled: bool = (
+            os.getenv("ALIBABA_SESSION_CACHE_ENABLED", "true").strip().lower() == "true"
+        )
         # 便宜/快速路由与总结模型（例如 qwen-turbo 或 qwen-flash）
         self.alibaba_model_qwen_turbo: str = os.getenv(
             "ALIBABA_MODEL_QWEN_TURBO", self.alibaba_model_qwen_flash

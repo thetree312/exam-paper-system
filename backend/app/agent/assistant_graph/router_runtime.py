@@ -6,9 +6,41 @@ import json
 import re
 from typing import Any, Iterable
 
-from sqlalchemy import text
-
 from ..services.agent_service import AgentService
+
+
+def _derive_transition_summary(
+    *,
+    tool_results: list[dict[str, Any]] | None = None,
+    recent_changes: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    latest_tool_name = ""
+    latest_tool_status = ""
+    added_refs: list[str] = []
+    error_tools: list[str] = []
+    for item in list(tool_results or []) + list(recent_changes or []):
+        if not isinstance(item, dict):
+            continue
+        tool_name = str(item.get("tool_name") or "").strip()
+        status = str(item.get("status") or "").strip()
+        if tool_name:
+            latest_tool_name = tool_name
+        if status:
+            latest_tool_status = status
+        for ref in item.get("source_refs") if isinstance(item.get("source_refs"), list) else []:
+            ref_text = str(ref or "").strip()
+            if ref_text and ref_text not in added_refs:
+                added_refs.append(ref_text)
+        if status.lower() == "error" and tool_name and tool_name not in error_tools:
+            error_tools.append(tool_name)
+        if str(item.get("change_type") or "").strip().lower() == "tool_error" and tool_name and tool_name not in error_tools:
+            error_tools.append(tool_name)
+    return {
+        "latest_tool_name": latest_tool_name or None,
+        "latest_tool_status": latest_tool_status or None,
+        "added_source_refs": added_refs[:8],
+        "errored_tools": error_tools[:4],
+    }
 
 
 def compact_short_term_messages(
@@ -57,33 +89,37 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
 
 
 def build_runtime_snapshot(context: dict[str, Any]) -> dict[str, Any]:
-    environment = context.get("environment") or {}
-    surfaces = environment.get("surfaces") if isinstance(environment.get("surfaces"), dict) else {}
-    studio_surface = surfaces.get("studio") if isinstance(surfaces.get("studio"), dict) else {}
-    kb_surface = surfaces.get("knowledge_base") if isinstance(surfaces.get("knowledge_base"), dict) else {}
-    favorites_surface = surfaces.get("favorites") if isinstance(surfaces.get("favorites"), dict) else {}
-    active_surface = environment.get("active_surface") or context.get("ui_context") or "studio"
-    studio_document_id = studio_surface.get("studio_document_id", context.get("studio_document_id"))
-    source_file_ids = list(kb_surface.get("source_file_ids") or context.get("source_file_ids") or [])
-    resource_summary = studio_surface.get("resource_summary") if isinstance(studio_surface.get("resource_summary"), dict) else {}
-    active_selection = studio_surface.get("active_selection") if isinstance(studio_surface.get("active_selection"), dict) else {}
-    studio_view = studio_surface.get("studio_view") or context.get("ui_context")
+    environment_state = context.get("environment_state") if isinstance(context.get("environment_state"), dict) else {}
+    layout = environment_state.get("layout") if isinstance(environment_state.get("layout"), dict) else {}
+    selection = environment_state.get("selection") if isinstance(environment_state.get("selection"), dict) else {}
+    bindings = environment_state.get("bindings") if isinstance(environment_state.get("bindings"), dict) else {}
+    source_file_ids = list(bindings.get("source_file_ids") or context.get("source_file_ids") or [])
     return {
         "environment_window": {
-            "active_surface": active_surface,
-            "surface_states": {
-                str(active_surface): {
-                    "studio_document_id": studio_document_id,
-                    "source_file_ids": source_file_ids,
-                    "studio_view": studio_view,
-                    "resource_summary": resource_summary,
-                    "active_selection": active_selection,
-                    "favorite_question_count": int(favorites_surface.get("favorite_question_count") or 0),
-                }
+            "workroom_id": context.get("workroom_id"),
+            "panels": {
+                "left": layout.get("left_panel") if isinstance(layout.get("left_panel"), dict) else {},
+                "center": layout.get("center_panel") if isinstance(layout.get("center_panel"), dict) else {},
+                "right": layout.get("right_panel") if isinstance(layout.get("right_panel"), dict) else {},
+            },
+            "selection": {
+                "active_file_id": selection.get("active_file_id"),
+                "active_session_id": selection.get("active_session_id"),
+                "active_tab_index": selection.get("active_tab_index"),
+                "active_agent_session_id": selection.get("active_agent_session_id"),
+                "active_extraction_session_id": selection.get("active_extraction_session_id"),
+                "active_center_document_id": selection.get("active_center_document_id", context.get("studio_document_id")),
+            },
+            "bindings": {
+                "source_file_ids": source_file_ids,
             },
         },
+        "transition_state": _derive_transition_summary(),
         "attention_state": {"focused_objects": [], "stalled_paths": []},
-        "active_window": {"objects": [], "studio_document_id": studio_document_id},
+        "active_window": {
+            "objects": [],
+            "active_center_document_id": selection.get("active_center_document_id", context.get("studio_document_id")),
+        },
         "task": {"phase": "created", "step_count": 0},
     }
 
@@ -97,30 +133,10 @@ def evolve_runtime_snapshot(
     tool_results: list[dict[str, Any]] | None = None,
     recent_changes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    snapshot = copy.deepcopy(previous) if isinstance(previous, dict) and previous else build_runtime_snapshot(context)
-
-    env = snapshot.setdefault("environment_window", {})
-    active_surface = (
-        ((context.get("environment") or {}).get("active_surface"))
-        or context.get("ui_context")
-        or env.get("active_surface")
-        or "studio"
-    )
-    env["active_surface"] = active_surface
-    surface_states = env.setdefault("surface_states", {})
-    if not isinstance(surface_states, dict):
-        surface_states = {}
-        env["surface_states"] = surface_states
-    active_state = surface_states.setdefault(
-        str(active_surface),
-        {
-            "studio_document_id": context.get("studio_document_id"),
-            "source_file_ids": list(context.get("source_file_ids") or []),
-        },
-    )
-    if isinstance(active_state, dict):
-        active_state["studio_document_id"] = context.get("studio_document_id")
-        active_state["source_file_ids"] = list(context.get("source_file_ids") or [])
+    snapshot = copy.deepcopy(previous) if isinstance(previous, dict) and previous else {}
+    base_snapshot = build_runtime_snapshot(context)
+    snapshot["environment_window"] = base_snapshot.get("environment_window") or {}
+    snapshot["transition_state"] = _derive_transition_summary(tool_results=tool_results, recent_changes=recent_changes)
 
     attention = snapshot.setdefault("attention_state", {})
     focused_objects = list(attention.get("focused_objects") or [])
@@ -152,6 +168,7 @@ def evolve_runtime_snapshot(
     attention["focused_objects"] = _dedupe_preserve_order(focused_objects)
     attention["stalled_paths"] = _dedupe_preserve_order(stalled_paths)
     active_window["objects"] = _dedupe_preserve_order(active_objects)
+    active_window["active_center_document_id"] = (base_snapshot.get("active_window") or {}).get("active_center_document_id")
     snapshot["task"] = {"phase": task_phase, "step_count": int(step_count)}
     return snapshot
 
@@ -166,9 +183,8 @@ def build_agent_router_context(
     ui_context: str,
     session_id: int | None,
     thread_id: str,
-    environment_model: dict[str, Any] | None = None,
+    environment_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    env = environment_model if isinstance(environment_model, dict) else {}
     return {
         "tenant_id": tenant_id,
         "user_id": user_id,
@@ -178,193 +194,76 @@ def build_agent_router_context(
         "ui_context": ui_context,
         "session_id": session_id,
         "thread_id": thread_id,
-        "environment": env or {
-            "active_surface": ui_context,
-            "studio_document_id": studio_document_id,
-            "source_file_ids": source_file_ids,
-        },
+        "environment_state": environment_state if isinstance(environment_state, dict) else {},
     }
 
 
-def build_agent_environment_model(
+def build_environment_state(
     *,
-    db: Any,
-    tenant_id: int,
-    user_id: int,
-    workroom_id: int,
-    studio_document_id: int | None,
-    source_file_ids: list[int],
+    workroom: dict[str, Any] | None,
+    runtime_state: dict[str, Any] | None,
+    sources: list[dict[str, Any]] | None,
+    artifacts: list[dict[str, Any]] | None,
     ui_context: str,
+    studio_document_id: int | None,
+    note_focus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    src_ids = [int(x) for x in (source_file_ids or []) if str(x).strip().isdigit()]
-    resolved_document_id = int(studio_document_id) if studio_document_id is not None else None
-    runtime_row = db.execute(
-        text(
-            """
-            SELECT active_studio_document_id, center_panel_state_json
-            FROM workroom_runtime_states
-            WHERE tenant_id = :tenant_id
-              AND user_id = :user_id
-              AND workroom_id = :workroom_id
-            LIMIT 1
-            """
-        ),
-        {"tenant_id": int(tenant_id), "user_id": int(user_id), "workroom_id": int(workroom_id)},
-    ).fetchone()
-    center_panel_state: dict[str, Any] = {}
-    if runtime_row:
-        active_doc = runtime_row[0]
-        raw_center = runtime_row[1]
-        if resolved_document_id is None and active_doc is not None:
-            resolved_document_id = int(active_doc)
-        if isinstance(raw_center, dict):
-            center_panel_state = raw_center
+    workroom_obj = workroom if isinstance(workroom, dict) else {}
+    runtime_obj = runtime_state if isinstance(runtime_state, dict) else {}
+    source_items = [item for item in list(sources or []) if isinstance(item, dict)]
+    artifact_items = [item for item in list(artifacts or []) if isinstance(item, dict)]
+    center_panel = runtime_obj.get("center_panel_state_json") if isinstance(runtime_obj.get("center_panel_state_json"), dict) else {}
+    right_panel = runtime_obj.get("right_panel_state_json") if isinstance(runtime_obj.get("right_panel_state_json"), dict) else {}
+    left_panel = runtime_obj.get("left_panel_state_json") if isinstance(runtime_obj.get("left_panel_state_json"), dict) else {}
 
-    studio_view = str(center_panel_state.get("studio_view") or "").strip() or None
-    studio_artifact_counts = {"ocr_item": 0, "mindmap_state": 0, "flashcard_state": 0}
-    if resolved_document_id is not None:
-        artifact_rows = db.execute(
-            text(
-                """
-                SELECT artifact_type, COUNT(1) AS cnt
-                FROM workroom_panel_artifacts
-                WHERE tenant_id = :tenant_id
-                  AND user_id = :user_id
-                  AND workroom_id = :workroom_id
-                  AND (studio_document_id = :document_id OR studio_document_id IS NULL)
-                GROUP BY artifact_type
-                """
-            ),
-            {
-                "tenant_id": int(tenant_id),
-                "user_id": int(user_id),
-                "workroom_id": int(workroom_id),
-                "document_id": int(resolved_document_id),
-            },
-        ).fetchall()
-        for row in artifact_rows:
-            key = str(row[0] or "").strip()
-            if key in studio_artifact_counts:
-                studio_artifact_counts[key] = int(row[1] or 0)
+    resolved_document_id = runtime_obj.get("active_studio_document_id")
+    if resolved_document_id is None:
+        resolved_document_id = studio_document_id
 
-    question_card_count = 0
-    flashcard_count = 0
-    mindmap_node_count = 0
-    mindmap_edge_count = 0
-    studio_title = ""
-    if resolved_document_id is not None:
-        doc_row = db.execute(
-            text(
-                """
-                SELECT d.title, m.graph_json
-                FROM documents AS d
-                LEFT JOIN mindmaps AS m
-                  ON m.tenant_id = d.tenant_id
-                 AND m.workroom_id = :workroom_id
-                 AND m.source_type = 'exam_document'
-                 AND m.source_id = d.id
-                 AND m.kind = 'knowledge'
-                 AND m.is_active = TRUE
-                WHERE d.id = :document_id
-                  AND d.tenant_id = :tenant_id
-                  AND d.owner_user_id = :user_id
-                LIMIT 1
-                """
-            ),
-            {
-                "document_id": int(resolved_document_id),
-                "tenant_id": int(tenant_id),
-                "user_id": int(user_id),
-                "workroom_id": int(workroom_id),
-            },
-        ).fetchone()
-        if doc_row:
-            studio_title = str(doc_row[0] or "")
-            graph_json = doc_row[1] if isinstance(doc_row[1], dict) else None
-            if graph_json:
-                try:
-                    root = graph_json.get("root") if isinstance(graph_json, dict) else None
-                    relations = graph_json.get("relations") if isinstance(graph_json, dict) else []
+    artifact_by_type: dict[str, list[dict[str, Any]]] = {}
+    for item in artifact_items:
+        artifact_type = str(item.get("artifact_type") or "").strip()
+        if not artifact_type:
+            continue
+        artifact_by_type.setdefault(artifact_type, []).append(item)
 
-                    def _count_tree_nodes(node: dict | None) -> int:
-                        if not isinstance(node, dict):
-                            return 0
-                        children = node.get("children")
-                        child_nodes = children if isinstance(children, list) else []
-                        return 1 + sum(_count_tree_nodes(child) for child in child_nodes)
-
-                    mindmap_node_count = _count_tree_nodes(root)
-                    mindmap_edge_count = len(relations) if isinstance(relations, list) else 0
-                except Exception:
-                    mindmap_node_count = 0
-                    mindmap_edge_count = 0
-
-        question_card_count = int(
-            db.execute(
-                text(
-                    """
-                    SELECT COUNT(1)
-                    FROM questions
-                    WHERE tenant_id = :tenant_id
-                      AND document_id = :document_id
-                    """
-                ),
-                {"tenant_id": int(tenant_id), "document_id": int(resolved_document_id)},
-            ).scalar()
-            or 0
-        )
-        flashcard_count = int(
-            db.execute(
-                text(
-                    """
-                    SELECT COUNT(1)
-                    FROM flashcard_concepts
-                    WHERE tenant_id = :tenant_id
-                      AND document_id = :document_id
-                    """
-                ),
-                {"tenant_id": int(tenant_id), "document_id": int(resolved_document_id)},
-            ).scalar()
-            or 0
-        )
-
-    favorite_question_count = int(
-        db.execute(
-            text(
-                """
-                SELECT COUNT(1)
-                FROM question_favorites
-                WHERE tenant_id = :tenant_id
-                  AND user_id = :user_id
-                """
-            ),
-            {"tenant_id": int(tenant_id), "user_id": int(user_id)},
-        ).scalar()
-        or 0
+    source_file_ids = _dedupe_preserve_order(
+        [
+            str(item.get("file_id"))
+            for item in source_items
+            if str(item.get("file_id") or "").strip().isdigit() and bool(item.get("is_active", True))
+        ]
     )
 
     return {
-        "active_surface": str(ui_context or "studio"),
-        "surfaces": {
-            "knowledge_base": {
-                "source_file_ids": src_ids,
-                "source_count": len(src_ids),
-            },
-            "studio": {
-                "studio_document_id": resolved_document_id,
-                "title": studio_title,
-                "studio_view": studio_view,
-                "resource_summary": {
-                    "question_card_count": int(question_card_count),
-                    "mindmap_node_count": int(mindmap_node_count),
-                    "mindmap_edge_count": int(mindmap_edge_count),
-                    "flashcard_count": int(flashcard_count),
-                    "ocr_item_count": int(studio_artifact_counts.get("ocr_item", 0)),
-                },
-            },
-            "favorites": {
-                "favorite_question_count": int(favorite_question_count),
-            },
+        "workroom": {
+            "id": workroom_obj.get("id"),
+            "name": workroom_obj.get("name"),
+            "status": workroom_obj.get("status"),
+        },
+        "layout": {
+            "left_panel": left_panel,
+            "center_panel": center_panel,
+            "right_panel": right_panel,
+        },
+        "selection": {
+            "active_file_id": runtime_obj.get("active_file_id"),
+            "active_session_id": runtime_obj.get("active_session_id"),
+            "active_tab_index": runtime_obj.get("active_tab_index"),
+            "active_agent_session_id": runtime_obj.get("active_agent_session_id"),
+            "active_extraction_session_id": runtime_obj.get("active_extraction_session_id"),
+            "active_center_document_id": resolved_document_id,
+        },
+        "bindings": {
+            "source_file_ids": [int(item) for item in source_file_ids],
+            "sources": source_items,
+        },
+        "artifacts": {
+            "items": artifact_items,
+            "by_type": artifact_by_type,
+        },
+        "focus": {
+            "note_focus": note_focus if isinstance(note_focus, dict) else None,
         },
     }
 
@@ -700,7 +599,7 @@ def persist_agent_messages(
 
 __all__ = [
     "StreamTraceReducer",
-    "build_agent_environment_model",
+    "build_environment_state",
     "build_agent_router_context",
     "build_runtime_snapshot",
     "compact_short_term_messages",

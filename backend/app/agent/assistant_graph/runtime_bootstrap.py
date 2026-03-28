@@ -18,12 +18,10 @@ from typing_extensions import Annotated
 from ...config import get_settings
 from ...services.qwen_client import QwenClient, QwenRequestError
 from .adapters.message_adapter import (
-    build_continuity_prompt as _build_continuity_prompt,
-    dedupe_preserve_order as _dedupe_preserve_order,
-    latest_tool_observation_summary as _latest_tool_observation_summary,
     latest_user_query as _latest_user_query,
     normalize_messages as _normalize_messages,
     strip_meta_system_messages as _strip_meta_system_messages,
+    visible_conversation_messages as _visible_conversation_messages,
 )
 from .llm_tools import (
     build_tool_schemas,
@@ -38,12 +36,13 @@ from .router_runtime import (
     normalize_stream_event as _normalize_stream_event,
 )
 from .evidence_register import (
+    build_compact_tool_observation_content as _build_compact_tool_observation_content,
     build_evidence_frame as _build_evidence_frame,
     build_tool_receipt_message as _build_tool_receipt_message,
     merge_evidence_register as _merge_evidence_register,
     select_carryforward_evidence_messages as _select_carryforward_evidence_messages,
-    summarize_evidence_register as _summarize_evidence_register,
 )
+from .dialogue_focus import derive_dialogue_focus as _derive_dialogue_focus
 from .world_model import (
     init_world_model as _init_world_model,
     observe_environment as _observe_environment,
@@ -64,31 +63,15 @@ _PSEUDO_INTERRUPT_TOOL_NAMES = {
     "request_clarification",
 }
 _AGENT_POLICY_TEXT = (
-    "你是嵌入网页工作区中的学习教练型智能体。"
-    "你的职责是围绕用户当前问题，在当前网页环境中观察、定位对象、读取证据并给出帮助。"
+    "你是运行在当前 web 应用中的学习教练型智能体。"
+    "你的职责是围绕用户当前问题，结合真实对话、工具返回和运行时状态来观察对象、读取证据并给出帮助。"
+    "不要假设信息只来自单一区域，也不要把某个面板或区域当成整个环境。"
     "可以调用提供的工具；禁止虚构事实、证据或工具。"
     "当缺失关键约束需要用户补充时，调用工具 request_user_clarification。"
     "不确定时直接说明不确定，必要时再向用户提问。"
     "输出语言必须与最新用户消息一致。"
 )
 _DATA_URL_RE = re.compile(r"(data:[^;]+;base64,)([A-Za-z0-9+/=\s]{24,})", re.IGNORECASE)
-
-
-def _build_world_priors() -> dict[str, Any]:
-    return {
-        "scene": "workroom",
-        "surfaces": ["knowledge_base", "studio", "agent_panel", "favorites"],
-        "relations": [
-            "studio对象可引用knowledge_base证据",
-            "agent_panel负责决策与工具调用，不直接创造证据",
-            "favorites是可复用对象池，可映射进入studio",
-        ],
-        "invariants": [
-            "回答必须可追溯到证据来源",
-            "目标未唯一解析时先澄清或继续查询",
-            "环境详情按需查询，不一次性注入",
-        ],
-    }
 
 
 def _append_list(existing: list | None, new_items: list | None) -> list:
@@ -224,20 +207,18 @@ def _summarize_messages_for_log(messages: list[dict[str, Any]] | None, *, limit:
 
 def _summarize_observation_packet_for_log(packet: dict[str, Any] | None) -> dict[str, Any]:
     packet = packet if isinstance(packet, dict) else {}
-    studio = packet.get("studio") if isinstance(packet.get("studio"), dict) else {}
-    kb = packet.get("knowledge_base") if isinstance(packet.get("knowledge_base"), dict) else {}
     latest_tool = packet.get("latest_tool_observation") if isinstance(packet.get("latest_tool_observation"), dict) else {}
-    resource_summary = studio.get("resource_summary") if isinstance(studio.get("resource_summary"), dict) else {}
+    runtime_snapshot = packet.get("runtime_snapshot") if isinstance(packet.get("runtime_snapshot"), dict) else {}
+    env_window = runtime_snapshot.get("environment_window") if isinstance(runtime_snapshot.get("environment_window"), dict) else {}
+    panels = env_window.get("panels") if isinstance(env_window.get("panels"), dict) else {}
+    center_panel = panels.get("center") if isinstance(panels.get("center"), dict) else {}
+    selection = env_window.get("selection") if isinstance(env_window.get("selection"), dict) else {}
+    bindings = env_window.get("bindings") if isinstance(env_window.get("bindings"), dict) else {}
     return {
-        "studio_document_id": studio.get("studio_document_id"),
-        "studio_view": studio.get("studio_view"),
-        "resource_summary": {
-            "question_card_count": int(resource_summary.get("question_card_count") or 0),
-            "flashcard_count": int(resource_summary.get("flashcard_count") or 0),
-            "mindmap_node_count": int(resource_summary.get("mindmap_node_count") or 0),
-            "ocr_item_count": int(resource_summary.get("ocr_item_count") or 0),
-        },
-        "kb_source_count": int(kb.get("source_count") or 0),
+        "workroom_id": env_window.get("workroom_id"),
+        "center_panel_mode": center_panel.get("studio_view"),
+        "active_center_document_id": selection.get("active_center_document_id"),
+        "bound_source_count": len(list(bindings.get("source_file_ids") or [])),
         "latest_tool": {
             "tool_name": latest_tool.get("tool_name"),
             "status": latest_tool.get("status"),
@@ -246,10 +227,110 @@ def _summarize_observation_packet_for_log(packet: dict[str, Any] | None) -> dict
     }
 
 
+def _build_runtime_context_block(state: GraphState) -> dict[str, Any]:
+    context = state.get("context") if isinstance(state.get("context"), dict) else {}
+    environment_state = context.get("environment_state") if isinstance(context.get("environment_state"), dict) else {}
+    layout = environment_state.get("layout") if isinstance(environment_state.get("layout"), dict) else {}
+    selection = environment_state.get("selection") if isinstance(environment_state.get("selection"), dict) else {}
+    bindings = environment_state.get("bindings") if isinstance(environment_state.get("bindings"), dict) else {}
+    artifacts = environment_state.get("artifacts") if isinstance(environment_state.get("artifacts"), dict) else {}
+    artifact_by_type = artifacts.get("by_type") if isinstance(artifacts.get("by_type"), dict) else {}
+    artifact_counts = {
+        str(key): len([item for item in list(value or []) if isinstance(item, dict)])
+        for key, value in artifact_by_type.items()
+        if str(key).strip()
+    }
+    right_panel = layout.get("right_panel") if isinstance(layout.get("right_panel"), dict) else {}
+
+    return {
+        "workroom": {
+            "id": ((environment_state.get("workroom") or {}).get("id") if isinstance(environment_state.get("workroom"), dict) else None),
+            "name": ((environment_state.get("workroom") or {}).get("name") if isinstance(environment_state.get("workroom"), dict) else None),
+            "status": ((environment_state.get("workroom") or {}).get("status") if isinstance(environment_state.get("workroom"), dict) else None),
+        },
+        "regions": {
+            "left_knowledge_base": {
+                "bound_source_count": len(list(bindings.get("source_file_ids") or [])),
+            },
+            "center_studio": {
+                "view": ((layout.get("center_panel") or {}).get("studio_view") if isinstance(layout.get("center_panel"), dict) else None),
+                "active_document_id": selection.get("active_center_document_id"),
+                "artifact_counts": artifact_counts,
+            },
+            "right_agent_drawer": {
+                "open": bool(right_panel.get("is_agent_drawer_open")),
+                "view_id": right_panel.get("agent_view_id"),
+            },
+        },
+    }
+
+
+def _build_runtime_context_message(state: GraphState) -> dict[str, Any]:
+    block = _build_runtime_context_block(state)
+    workroom = block.get("workroom") if isinstance(block.get("workroom"), dict) else {}
+    regions = block.get("regions") if isinstance(block.get("regions"), dict) else {}
+    kb = regions.get("left_knowledge_base") if isinstance(regions.get("left_knowledge_base"), dict) else {}
+    studio = regions.get("center_studio") if isinstance(regions.get("center_studio"), dict) else {}
+    drawer = regions.get("right_agent_drawer") if isinstance(regions.get("right_agent_drawer"), dict) else {}
+    artifact_counts = studio.get("artifact_counts") if isinstance(studio.get("artifact_counts"), dict) else {}
+    artifact_summary = ", ".join(f"{key}={value}" for key, value in artifact_counts.items() if str(key).strip())
+    artifact_summary = artifact_summary or "none"
+    active_document = studio.get("active_document_id")
+    content = "\n".join(
+        [
+            "Current runtime state for this user turn only. This is not conversation history.",
+            f"Workroom: id={workroom.get('id')}, name={workroom.get('name') or 'unknown'}, status={workroom.get('status') or 'unknown'}.",
+            f"Left knowledge base: {int(kb.get('bound_source_count') or 0)} bound source files.",
+            f"Center studio: view={studio.get('view') or 'unknown'}; active document id={active_document if active_document is not None else 'none'}; artifacts: {artifact_summary}.",
+            f"Right agent drawer: open={'yes' if drawer.get('open') else 'no'}; view id={drawer.get('view_id') or 'none'}.",
+        ]
+    )
+    return {"role": "system", "content": content}
+
+
+def _build_pre_model_hook_messages(
+    state: GraphState,
+    *,
+    next_step_count: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """LangGraph-style pre_model_hook for the custom graph.
+
+    Keep all model-input shaping in one place right before each model call:
+    runtime first, then policy/conversation, then transient tool receipts and
+    carryforward evidence.
+    """
+    persisted_messages = [
+        item
+        for item in _normalize_messages(state.get("message_window") or state.get("messages") or [])
+        if str(item.get("role") or "").strip().lower() != "tool"
+    ]
+    transient_tool_messages = _normalize_messages(state.get("transient_tool_messages") or [])
+    carryforward_messages, updated_evidence_register = _select_carryforward_evidence_messages(
+        state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else [],
+        transient_tool_messages=transient_tool_messages,
+        step_count=next_step_count,
+    )
+    merged_messages = _merge_messages_with_transient_tools(
+        persisted_messages=persisted_messages,
+        transient_tool_messages=transient_tool_messages,
+    )
+    runtime_context_message = _build_runtime_context_message(state)
+    llm_messages = [runtime_context_message, *merged_messages]
+    if carryforward_messages:
+        llm_messages.extend(carryforward_messages)
+    return llm_messages, {
+        "persisted_messages": persisted_messages,
+        "transient_tool_messages": transient_tool_messages,
+        "updated_evidence_register": updated_evidence_register,
+    }
+
+
 class GraphState(TypedDict, total=False):
     context: dict[str, Any]
+    conversation_messages: list[dict[str, Any]]
     messages: list[dict[str, Any]]
-    model_messages: list[dict[str, Any]]
+    ingress_messages: list[dict[str, Any]]
+    message_window: list[dict[str, Any]]
     transient_tool_messages: list[dict[str, Any]]
     tool_results: Annotated[list[dict[str, Any]], _append_list]
     recent_changes: Annotated[list[dict[str, Any]], _append_list]
@@ -261,6 +342,9 @@ class GraphState(TypedDict, total=False):
     world_model: dict[str, Any]
     policy_raw: str | None
     goal_anchor: str | None
+    subject_scope: str | None
+    turn_intent: str | None
+    feedback_signal: str | None
     action_journal: Annotated[list[dict[str, Any]], _append_list]
     halt_reason: str | None
     interrupt_payload: dict[str, Any] | None
@@ -282,6 +366,33 @@ def _extract_goal_anchor(messages: list[dict[str, Any]] | None) -> str:
     return str(latest or "").strip()
 
 
+def _merge_incremental_messages(
+    existing: list[dict[str, Any]] | None,
+    incoming: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    persisted = _normalize_messages(existing or [])
+    delta = _normalize_messages(incoming or [])
+    if not persisted:
+        return delta
+    if not delta:
+        return persisted
+    if len(delta) >= len(persisted) and delta[: len(persisted)] == persisted:
+        return delta
+    if len(persisted) >= len(delta) and persisted[-len(delta) :] == delta:
+        return persisted
+    max_overlap = min(len(persisted), len(delta))
+    overlap = 0
+    for size in range(max_overlap, 0, -1):
+        if persisted[-size:] == delta[:size]:
+            overlap = size
+            break
+    return [*persisted, *delta[overlap:]]
+
+
+def _normalize_visible_conversation(messages: list[Any] | None) -> list[dict[str, Any]]:
+    return _normalize_messages(_visible_conversation_messages(messages))
+
+
 def _build_observation_packet(state: GraphState, *, context: dict[str, Any]) -> dict[str, Any]:
     runtime_snapshot = state.get("runtime_snapshot") or _build_runtime_snapshot(context)
     recent_changes = list(state.get("recent_changes") or [])
@@ -300,30 +411,14 @@ def _build_observation_packet(state: GraphState, *, context: dict[str, Any]) -> 
             }
             break
     world_model = state.get("world_model") if isinstance(state.get("world_model"), dict) else {}
-    env = context.get("environment") if isinstance(context.get("environment"), dict) else {}
-    surfaces = env.get("surfaces") if isinstance(env.get("surfaces"), dict) else {}
-    kb_surface = surfaces.get("knowledge_base") if isinstance(surfaces.get("knowledge_base"), dict) else {}
-    studio_surface = surfaces.get("studio") if isinstance(surfaces.get("studio"), dict) else {}
-    favorites_surface = surfaces.get("favorites") if isinstance(surfaces.get("favorites"), dict) else {}
-    source_ids = list(kb_surface.get("source_file_ids") or context.get("source_file_ids") or [])
     packet = {
-        "studio": {
-            "studio_document_id": studio_surface.get("studio_document_id", context.get("studio_document_id")),
-            "ui_context": context.get("ui_context"),
-            "studio_view": studio_surface.get("studio_view"),
-            "resource_summary": studio_surface.get("resource_summary") if isinstance(studio_surface.get("resource_summary"), dict) else {},
-        },
-        "knowledge_base": {
-            "source_file_ids": source_ids,
-            "source_count": int(kb_surface.get("source_count") or len(source_ids)),
-        },
-        "favorites": {
-            "favorite_question_count": int(favorites_surface.get("favorite_question_count") or 0),
-        },
         "task": {
             "phase": state.get("task_phase") or "observing",
             "step_count": int(state.get("step_count") or 0),
             "goal_anchor": state.get("goal_anchor") or "",
+            "subject_scope": state.get("subject_scope") or state.get("goal_anchor") or "",
+            "turn_intent": state.get("turn_intent") or "",
+            "feedback_signal": state.get("feedback_signal") or "",
         },
         "latest_tool_observation": latest_tool,
         "world_model": world_model,
@@ -331,72 +426,6 @@ def _build_observation_packet(state: GraphState, *, context: dict[str, Any]) -> 
     }
     logger.info("agent.observe packet=%s", _summarize_observation_packet_for_log(packet))
     return packet
-
-
-def _build_model_snapshot(
-    *,
-    state: GraphState,
-    observation_packet: dict[str, Any],
-    memory_summary: str,
-) -> str:
-    studio = observation_packet.get("studio") if isinstance(observation_packet.get("studio"), dict) else {}
-    kb = observation_packet.get("knowledge_base") if isinstance(observation_packet.get("knowledge_base"), dict) else {}
-    world_model = observation_packet.get("world_model") if isinstance(observation_packet.get("world_model"), dict) else {}
-    world_facts = world_model.get("facts") if isinstance(world_model.get("facts"), dict) else {}
-    resource_summary = studio.get("resource_summary") if isinstance(studio.get("resource_summary"), dict) else {}
-    source_file_ids = list(kb.get("source_file_ids") or [])
-    lines = [
-        "[环境前景上下文]",
-        f"surface={str(studio.get('ui_context') or 'unknown')}",
-        f"studio_document_id={str(studio.get('studio_document_id') or 'none')}",
-        f"studio_view={str(studio.get('studio_view') or 'unknown')}",
-        (
-            "studio_resources="
-            f"question_cards:{int(resource_summary.get('question_card_count') or 0)},"
-            f"flashcards:{int(resource_summary.get('flashcard_count') or 0)},"
-            f"mindmap_nodes:{int(resource_summary.get('mindmap_node_count') or 0)},"
-            f"ocr_items:{int(resource_summary.get('ocr_item_count') or 0)}"
-        ),
-        f"knowledge_base_source_count={int(kb.get('source_count') or 0)}",
-    ]
-    if source_file_ids:
-        lines.append("knowledge_base_source_ids=" + ",".join(str(item) for item in source_file_ids[:8]))
-    strategy_feedback = world_facts.get("strategy_feedback") if isinstance(world_facts.get("strategy_feedback"), dict) else {}
-    strategy_message = str(strategy_feedback.get("message") or "").strip()
-    if strategy_message:
-        signals = strategy_feedback.get("signals") if isinstance(strategy_feedback.get("signals"), dict) else {}
-        lines.extend(
-            [
-                "[策略提醒]",
-                strategy_message,
-                (
-                    "loop_signals="
-                    f"same_tool_streak:{int(signals.get('same_tool_streak') or 0)},"
-                    f"no_progress_streak:{int(signals.get('no_progress_streak') or 0)},"
-                    f"threshold:{int(signals.get('threshold') or 0)},"
-                    f"last_tool:{str(signals.get('last_tool_name') or '')}"
-                ),
-            ]
-        )
-    memory_preview = memory_summary[:120].strip() if memory_summary else ""
-    if memory_preview:
-        lines.append("memory=" + memory_preview)
-    evidence_summary = _summarize_evidence_register(state.get("evidence_register") or [])
-    if evidence_summary:
-        lines.append("[可复用证据]")
-        for item in evidence_summary[-3:]:
-            refs = ",".join(item.get("source_refs") or [])
-            lines.append(
-                "evidence="
-                f"tool:{str(item.get('tool_name') or '')};"
-                f"query:{str(item.get('query') or '')};"
-                f"answerability:{str(item.get('answerability') or '')};"
-                f"target_resolution:{str(item.get('target_resolution') or '')};"
-                f"has_image:{'true' if bool(item.get('has_image')) else 'false'};"
-                f"source_refs:{refs};"
-                f"summary:{str(item.get('summary') or '')}"
-            )
-    return "\n".join(lines)
 
 
 def _build_interrupt_payload(
@@ -744,48 +773,80 @@ def _new_client() -> QwenClient:
 
 def _node_prepare(state: GraphState) -> dict[str, Any]:
     context = state.get("context") or {}
-    msgs = _strip_meta_system_messages(_normalize_messages(state.get("messages") or []))
+    persisted_conversation = _normalize_visible_conversation(
+        state.get("conversation_messages") or state.get("messages") or []
+    )
+    ingress_messages = _normalize_messages(state.get("ingress_messages") or [])
+    merged_conversation = _merge_incremental_messages(persisted_conversation, ingress_messages)
+    msgs = _strip_meta_system_messages(merged_conversation)
     if not msgs or str((msgs[0] or {}).get("role") or "").lower() != "system":
         msgs = [{"role": "system", "content": _AGENT_POLICY_TEXT}, *msgs]
     else:
         msgs[0] = {"role": "system", "content": _AGENT_POLICY_TEXT}
     goal_anchor = _extract_goal_anchor(msgs)
+    focus = _derive_dialogue_focus(
+        messages=merged_conversation,
+        previous_scope=str(state.get("subject_scope") or state.get("goal_anchor") or "").strip() or None,
+    )
     logger.info(
         "agent.prepare goal_anchor=%s messages=%s",
         _preview_text(goal_anchor, limit=120),
         _summarize_messages_for_log(msgs),
     )
-    return {
+    world_model = state.get("world_model") if isinstance(state.get("world_model"), dict) else None
+    runtime_snapshot = state.get("runtime_snapshot") if isinstance(state.get("runtime_snapshot"), dict) else None
+    updates: dict[str, Any] = {
+        "conversation_messages": merged_conversation,
         "messages": msgs,
-        "model_messages": [],
-        "transient_tool_messages": [],
-        "step_count": 0,
-        "task_phase": "created",
-        "observation_packet": None,
-        "world_model": _init_world_model({}),
+        "ingress_messages": [],
         "policy_raw": None,
         "goal_anchor": goal_anchor,
-        "action_journal": [],
+        "subject_scope": focus.get("subject_scope"),
+        "turn_intent": focus.get("turn_intent"),
+        "feedback_signal": focus.get("feedback_signal"),
         "halt_reason": None,
         "interrupt_payload": None,
         "last_error": None,
-        "short_term_rounds": _SHORT_TERM_ROUNDS,
-        "short_term_summary": None,
-        "model_native_traces": [],
-        "evidence_register": [],
-        "thinking_chain_id": f"think-{uuid.uuid4().hex}",
-        "thinking_accumulator": "",
-        "planning_packet": None,
-        "reflection_packet": None,
-        "last_model_decision": None,
         "model_turn": None,
-        "runtime_snapshot": _evolve_runtime_snapshot(
+    }
+    if not isinstance(state.get("message_window"), list):
+        updates["message_window"] = msgs
+    if not isinstance(state.get("transient_tool_messages"), list):
+        updates["transient_tool_messages"] = []
+    if not isinstance(state.get("action_journal"), list):
+        updates["action_journal"] = []
+    if not isinstance(state.get("model_native_traces"), list):
+        updates["model_native_traces"] = []
+    if not isinstance(state.get("short_term_rounds"), int) or int(state.get("short_term_rounds") or 0) <= 0:
+        updates["short_term_rounds"] = _SHORT_TERM_ROUNDS
+    if state.get("short_term_summary") is None and not runtime_snapshot:
+        updates["short_term_summary"] = None
+    if not isinstance(state.get("evidence_register"), list):
+        updates["evidence_register"] = []
+    if state.get("observation_packet") is None and not runtime_snapshot:
+        updates["observation_packet"] = None
+    if world_model is None:
+        updates["world_model"] = _init_world_model({})
+    if not isinstance(state.get("thinking_chain_id"), str) or not str(state.get("thinking_chain_id") or "").strip():
+        updates["thinking_chain_id"] = f"think-{uuid.uuid4().hex}"
+    if state.get("thinking_accumulator") is None:
+        updates["thinking_accumulator"] = ""
+    if state.get("planning_packet") is None:
+        updates["planning_packet"] = None
+    if state.get("reflection_packet") is None:
+        updates["reflection_packet"] = None
+    if state.get("last_model_decision") is None:
+        updates["last_model_decision"] = None
+    if runtime_snapshot is None:
+        updates["step_count"] = 0
+        updates["task_phase"] = "created"
+        updates["runtime_snapshot"] = _evolve_runtime_snapshot(
             previous=state.get("runtime_snapshot"),
             context=context,
             task_phase="created",
             step_count=0,
-        ),
-    }
+        )
+    return updates
 
 
 def _node_memory_sync(state: GraphState) -> dict[str, Any]:
@@ -799,6 +860,10 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
         base_messages[0] = {"role": "system", "content": _AGENT_POLICY_TEXT}
 
     model_window, compressed_summary = _compact_short_term_messages(base_messages, max_rounds=short_rounds)
+    if not model_window or str((model_window[0] or {}).get("role") or "").lower() != "system":
+        model_window = [{"role": "system", "content": _AGENT_POLICY_TEXT}, *model_window]
+    else:
+        model_window[0] = {"role": "system", "content": _AGENT_POLICY_TEXT}
     memory_summary = str((context.get("history_summary") or "")).strip()
     prior_short = str(state.get("short_term_summary") or "").strip()
     if prior_short:
@@ -822,22 +887,16 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
         step_count=next_step_count,
     )
     observation_packet["world_model"] = world_model_next
-    model_snapshot = _build_model_snapshot(
-        state=state,
-        observation_packet=observation_packet,
-        memory_summary=memory_summary,
-    )
-    model_messages = [{"role": "system", "content": model_snapshot}]
     logger.info(
-        "agent.memory_sync snapshot step=%s snapshot_preview=%s world_diff=%s",
+        "agent.memory_sync world_model step=%s observation_preview=%s world_diff=%s",
         step_count,
-        _preview_text(model_snapshot, limit=420),
+        _preview_text(_summarize_observation_packet_for_log(observation_packet), limit=420),
         _preview_text(world_diff, limit=320),
     )
 
     phase = "observing"
     return {
-        "model_messages": model_messages,
+        "message_window": model_window,
         "model_turn": None,
         "step_count": next_step_count,
         "observation_packet": observation_packet,
@@ -847,7 +906,13 @@ def _node_memory_sync(state: GraphState) -> dict[str, Any]:
         "recent_changes": [
             {
                 "change_type": "observation_built",
-                "source_count": ((observation_packet.get("knowledge_base") or {}).get("source_count") or 0),
+                "bound_source_count": len(
+                    list(
+                        (((observation_packet.get("runtime_snapshot") or {}).get("environment_window") or {}).get("bindings", {})).get(
+                            "source_file_ids", []
+                        )
+                    )
+                ),
             },
             {"change_type": "world_model_updated", "diff": world_diff},
         ],
@@ -890,25 +955,13 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
     context = state.get("context") or {}
     step_count = int(state.get("step_count") or 0)
     next_step_count = step_count + 1
-    persisted_messages = _normalize_messages(state.get("messages") or [])
-    transient_tool_messages = _normalize_messages(state.get("transient_tool_messages") or [])
-    carryforward_messages, updated_evidence_register = _select_carryforward_evidence_messages(
-        state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else [],
-        transient_tool_messages=transient_tool_messages,
-        step_count=next_step_count,
+    llm_messages, pre_model_updates = _build_pre_model_hook_messages(
+        state,
+        next_step_count=next_step_count,
     )
-    model_messages = _normalize_messages(state.get("model_messages") or [])
-    llm_messages = _merge_messages_with_transient_tools(
-        persisted_messages=persisted_messages,
-        transient_tool_messages=transient_tool_messages,
-    )
-    if carryforward_messages:
-        llm_messages = [*llm_messages, *carryforward_messages]
-    if model_messages:
-        if llm_messages and str((llm_messages[0] or {}).get("role") or "").strip().lower() == "system":
-            llm_messages = [llm_messages[0], *model_messages, *llm_messages[1:]]
-        else:
-            llm_messages = [*model_messages, *llm_messages]
+    persisted_messages = pre_model_updates["persisted_messages"]
+    transient_tool_messages = pre_model_updates["transient_tool_messages"]
+    updated_evidence_register = pre_model_updates["updated_evidence_register"]
     image_part_count = 0
     for msg in llm_messages:
         content = msg.get("content")
@@ -920,10 +973,9 @@ def _node_decide(state: GraphState) -> Command[Literal["execute_tools", "__end__
             if str(part.get("type") or "").strip().lower() == "image_url":
                 image_part_count += 1
     logger.info(
-        "agent.decide input step=%s llm_messages=%s model_messages=%s persisted_messages=%s transient_tool_messages=%s image_parts=%s",
+        "agent.decide input step=%s llm_messages=%s persisted_messages=%s transient_tool_messages=%s image_parts=%s",
         step_count,
         _summarize_messages_for_log(llm_messages),
-        _summarize_messages_for_log(model_messages),
         _summarize_messages_for_log(persisted_messages),
         _summarize_messages_for_log(transient_tool_messages),
         image_part_count,
@@ -1123,7 +1175,6 @@ def _execute_tool_action(
     model_observation = output.get("model_message_content")
     if not model_observation:
         model_observation = output.get("model_input") if isinstance(output.get("model_input"), dict) else output
-    tool_payload = json.dumps(model_observation, ensure_ascii=False) if isinstance(model_observation, dict) else model_observation
     receipt_message = _build_tool_receipt_message(
         tool_name=tool_name,
         tool_call_id=call_id,
@@ -1136,6 +1187,14 @@ def _execute_tool_action(
         trace=trace,
         output=output,
         step_count=int(state_snapshot.get("step_count") or 0),
+    )
+    transient_content = _build_compact_tool_observation_content(
+        tool_name=tool_name,
+        tool_call_id=call_id,
+        trace=trace,
+        output=output,
+        include_recent_observation=True,
+        include_image_parts=True,
     )
     logger.info(
         "agent.execute_tool done tool=%s ok=%s trace=%s output_preview=%s model_observation_preview=%s",
@@ -1153,7 +1212,7 @@ def _execute_tool_action(
             "role": "tool",
             "name": tool_name,
             "tool_call_id": call_id,
-            "content": tool_payload,
+            "content": transient_content,
         },
         "evidence_frame": evidence_frame,
         "feedback": output.get("feedback") if isinstance(output.get("feedback"), dict) else {},
@@ -1326,6 +1385,9 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
             return Command(
                 update={
                     "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
+                    "conversation_messages": _normalize_visible_conversation(
+                        state.get("conversation_messages") or state.get("messages") or []
+                    ),
                     "transient_tool_messages": tool_messages_transient,
                     "tool_results": traces,
                     "step_count": next_step_count,
@@ -1352,6 +1414,9 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
         return Command(
             update={
                 "messages": _append_messages(persisted_messages, [*history_prefix, *tool_messages_history]),
+                "conversation_messages": _normalize_visible_conversation(
+                    state.get("conversation_messages") or state.get("messages") or []
+                ),
                 "transient_tool_messages": tool_messages_transient,
                 "tool_results": traces,
                 "step_count": next_step_count,
@@ -1400,6 +1465,10 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
         return Command(
             update={
                 "messages": _append_messages(persisted_messages, [assistant_turn]),
+                "conversation_messages": _append_messages(
+                    _normalize_visible_conversation(state.get("conversation_messages") or state.get("messages") or []),
+                    [assistant_turn],
+                ),
                 "model_turn": None,
                 "step_count": next_step_count,
                 "task_phase": "completed",
@@ -1640,7 +1709,18 @@ def _node_interrupt_user(state: GraphState) -> Command[Literal["memory_sync", "_
             persisted_messages,
             [{"role": "user", "content": clarification}],
         )
-        updates["goal_anchor"] = clarification
+        updates["conversation_messages"] = _append_messages(
+            _normalize_visible_conversation(state.get("conversation_messages") or state.get("messages") or []),
+            [{"role": "user", "content": clarification}],
+        )
+        focus = _derive_dialogue_focus(
+            messages=updates["conversation_messages"],
+            previous_scope=str(state.get("subject_scope") or state.get("goal_anchor") or "").strip() or None,
+        )
+        updates["goal_anchor"] = str(focus.get("subject_scope") or state.get("goal_anchor") or clarification)
+        updates["subject_scope"] = focus.get("subject_scope")
+        updates["turn_intent"] = focus.get("turn_intent")
+        updates["feedback_signal"] = focus.get("feedback_signal")
         updates["world_model"] = world_model
         updates["recent_changes"] = [
             {"change_type": "interrupt_resumed", "resume_submission": submission},
@@ -1724,8 +1804,9 @@ class _CompiledAgentApp:
             raise RuntimeError("interrupt_mapping_error: missing_interrupt_payload")
 
         return {
+            "conversation_messages": _normalize_visible_conversation(messages),
             "messages": messages,
-            "model_messages": messages,
+            "ingress_messages": [],
             "tool_results": [],
             "recent_changes": [],
             "model_turn": None,
@@ -1756,11 +1837,11 @@ class _CompiledAgentApp:
             configurable["thread_id"] = str(payload.get("thread_id") or f"thread-{uuid.uuid4().hex}")
         cfg["configurable"] = configurable
         context = dict(payload)
-        incoming_messages = _normalize_messages(payload.get("messages") or [])
+        incoming_messages = _normalize_messages(payload.get("ingress_messages") or payload.get("messages") or [])
         resume_payload = payload.get("resume_payload")
 
         if resume_payload is None:
-            result = self._graph.invoke({"context": context, "messages": incoming_messages}, config=cfg)
+            result = self._graph.invoke({"context": context, "ingress_messages": incoming_messages}, config=cfg)
         else:
             result = self._graph.invoke(Command(resume=resume_payload), config=cfg)
 
@@ -1778,7 +1859,9 @@ class _CompiledAgentApp:
             raise RuntimeError("agent_runtime_error: invalid graph result")
 
         return {
-            "messages": _normalize_messages(result.get("messages") or incoming_messages),
+            "messages": _normalize_visible_conversation(
+                result.get("conversation_messages") or result.get("messages") or incoming_messages
+            ),
             "tool_results": list(result.get("tool_results") or []),
             "recent_changes": list(result.get("recent_changes") or []),
             "runtime_snapshot": result.get("runtime_snapshot") or _build_runtime_snapshot(context),
@@ -1796,14 +1879,14 @@ class _CompiledAgentApp:
             configurable["thread_id"] = str(payload.get("thread_id") or f"thread-{uuid.uuid4().hex}")
         cfg["configurable"] = configurable
         context = dict(payload)
-        incoming_messages = _normalize_messages(payload.get("messages") or [])
+        incoming_messages = _normalize_messages(payload.get("ingress_messages") or payload.get("messages") or [])
         resume_payload = payload.get("resume_payload")
         effective_modes = list(stream_mode or ["updates"])
         if not effective_modes:
             effective_modes = ["updates"]
 
         if resume_payload is None:
-            src = self._graph.stream({"context": context, "messages": incoming_messages}, config=cfg, stream_mode=effective_modes)
+            src = self._graph.stream({"context": context, "ingress_messages": incoming_messages}, config=cfg, stream_mode=effective_modes)
         else:
             src = self._graph.stream(Command(resume=resume_payload), config=cfg, stream_mode=effective_modes)
 

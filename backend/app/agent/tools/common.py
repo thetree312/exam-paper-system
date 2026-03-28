@@ -40,3 +40,28 @@ def normalize_int(value: Any, default: int, *, min_v: int, max_v: int) -> int:
 
 def ctx_source_file_ids(ctx: dict[str, Any]) -> list[int]:
     return [int(x) for x in (ctx.get("source_file_ids") or []) if str(x).strip().isdigit()]
+
+
+def ctx_environment_state(ctx: dict[str, Any]) -> dict[str, Any]:
+    value = ctx.get("environment_state")
+    return value if isinstance(value, dict) else {}
+
+
+def ctx_runtime_state(ctx: dict[str, Any]) -> dict[str, Any]:
+    value = ctx_environment_state(ctx).get("selection")
+    return value if isinstance(value, dict) else {}
+
+
+def ctx_environment_views(ctx: dict[str, Any]) -> dict[str, Any]:
+    value = ctx_environment_state(ctx).get("layout")
+    return value if isinstance(value, dict) else {}
+
+
+def ctx_environment_artifacts(ctx: dict[str, Any]) -> dict[str, Any]:
+    value = ctx_environment_state(ctx).get("artifacts")
+    return value if isinstance(value, dict) else {}
+
+
+def ctx_artifact_items(ctx: dict[str, Any]) -> list[dict[str, Any]]:
+    items = ctx_environment_artifacts(ctx).get("items")
+    return [item for item in list(items or []) if isinstance(item, dict)]

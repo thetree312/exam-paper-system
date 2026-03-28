@@ -12,6 +12,9 @@ class WorkroomService:
         self.db = db
         self.repo = WorkroomRepository(db)
 
+    def get_workroom(self, *, tenant_id: int, user_id: int, workroom_id: int) -> dict[str, Any] | None:
+        return self.repo.get_workroom(tenant_id=tenant_id, user_id=user_id, workroom_id=workroom_id)
+
     def get_or_create_current_workroom(self, *, tenant_id: int, user_id: int) -> dict[str, Any]:
         current = self.repo.get_current_workroom(tenant_id=tenant_id, user_id=user_id)
         if current:

@@ -61,7 +61,7 @@ def generate_mindmap(payload: MindMapGenerateRequest, db: Session = Depends(get_
     )
 
 
-@router.get("/current", response_model=MindMapDocument)
+@router.get("/current", response_model=MindMapDocument | None)
 def get_current_mindmap(
     tenant_id: int,
     user_id: int,
@@ -72,7 +72,7 @@ def get_current_mindmap(
     kind: str = "knowledge",
     mode: str = "knowledge_structure",
     db: Session = Depends(get_db),
-) -> MindMapDocument:
+) -> MindMapDocument | None:
     assert_workroom_scope(
         db=db,
         tenant_id=tenant_id,

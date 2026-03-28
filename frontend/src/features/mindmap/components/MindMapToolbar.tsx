@@ -71,7 +71,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
               mode === 'document' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
             } disabled:cursor-not-allowed disabled:opacity-30`}
           >
-            <span className="material-symbols-outlined text-[20px] leading-none">description</span>
+            <span className="material-symbols-outlined text-[18px] leading-none">description</span>
           </button>
           <button
             type="button"
@@ -82,7 +82,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
               mode === 'file' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
             } disabled:cursor-not-allowed disabled:opacity-30`}
           >
-            <span className="material-symbols-outlined text-[20px] leading-none">article</span>
+            <span className="material-symbols-outlined text-[18px] leading-none">article</span>
           </button>
         </div>
 
@@ -99,7 +99,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span className="material-symbols-outlined text-[16px] leading-none">book_ribbon</span>
+            <span className="material-symbols-outlined text-[14px] leading-none">book_ribbon</span>
             <span className="lg:hidden">{t('mindmap_toolbar.mode_knowledge_short')}</span>
           </button>
           <button
@@ -111,7 +111,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
               mindmapMode === 'exam_review' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span className="material-symbols-outlined text-[16px] leading-none">cognition_2</span>
+            <span className="material-symbols-outlined text-[14px] leading-none">cognition_2</span>
             <span className="lg:hidden">{t('mindmap_toolbar.mode_exam_short')}</span>
           </button>
         </div>
@@ -125,7 +125,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">{layoutIcon}</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">{layoutIcon}</span>
         </button>
         <button
           type="button"
@@ -134,7 +134,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={refreshDisabled}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">autorenew</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">autorenew</span>
         </button>
         <button
           type="button"
@@ -143,7 +143,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">undo</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">undo</span>
         </button>
         <button
           type="button"
@@ -152,7 +152,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">redo</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">redo</span>
         </button>
         <button
           type="button"
@@ -161,7 +161,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">fit_screen</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">fit_screen</span>
         </button>
         <button
           type="button"
@@ -170,7 +170,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">unfold_more</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">unfold_more</span>
         </button>
         <button
           type="button"
@@ -179,7 +179,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">unfold_less</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">unfold_less</span>
         </button>
         <button
           type="button"
@@ -188,7 +188,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           disabled={!canControlView}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">download</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">download</span>
         </button>
         {showSave && (
           <button
@@ -198,7 +198,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             disabled={saveDisabled}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <span className="material-symbols-outlined text-[18px] leading-none">save</span>
+            <span className="material-symbols-outlined text-[16px] leading-none">save</span>
           </button>
         )}
       </div>

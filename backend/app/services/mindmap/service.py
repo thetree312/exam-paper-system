@@ -49,7 +49,7 @@ class MindMapService:
         source_ids: list[int] | None = None,
         kind: str = "knowledge",
         mode: str = "knowledge_structure",
-    ) -> MindMapDocument:
+    ) -> MindMapDocument | None:
         normalized_source_id, _normalized_source_ids, source_signature = self._normalize_sources(
             source_type=source_type,
             source_id=source_id,
@@ -64,7 +64,7 @@ class MindMapService:
             kind=self._resolve_kind(kind, mode),
         )
         if record is None:
-            raise HTTPException(status_code=404, detail="Mindmap not found")
+            return None
         return self._hydrate(record.graph_json, fallback_id=record.id, fallback_version=record.version)
 
     def generate(

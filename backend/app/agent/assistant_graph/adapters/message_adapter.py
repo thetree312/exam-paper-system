@@ -195,6 +195,19 @@ def from_state_messages(messages: list[Any] | None) -> list[dict[str, str]]:
     return out
 
 
+def visible_conversation_messages(messages: list[Any] | None) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    for item in messages or []:
+        role = str(_read_field(item, "role") or "").strip().lower()
+        if role not in {"user", "assistant"}:
+            continue
+        content = str(_read_field(item, "content") or "")
+        if role == "assistant" and not content.strip():
+            continue
+        out.append({"role": role, "content": content})
+    return out
+
+
 __all__ = [
     "sanitize_conversation_messages",
     "normalize_messages",
@@ -207,4 +220,5 @@ __all__ = [
     "is_fresh_conversation",
     "to_state_messages",
     "from_state_messages",
+    "visible_conversation_messages",
 ]

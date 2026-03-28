@@ -7,7 +7,13 @@ from typing import Any
 from sqlalchemy import text
 
 from ...db import SessionLocal
-from .common import build_feedback, normalize_int
+from .common import (
+    build_feedback,
+    ctx_artifact_items,
+    ctx_environment_views,
+    ctx_runtime_state,
+    normalize_int,
+)
 
 _DEFAULT_TOP_K = 3
 _MAX_TOP_K = 10
@@ -15,15 +21,9 @@ _MAX_CANDIDATE_SCAN = 300
 _MAX_PREVIEW_CHARS = 160
 
 
-def _studio_surface(ctx: dict[str, Any]) -> dict[str, Any]:
-    env = ctx.get("environment") if isinstance(ctx.get("environment"), dict) else {}
-    surfaces = env.get("surfaces") if isinstance(env.get("surfaces"), dict) else {}
-    return surfaces.get("studio") if isinstance(surfaces.get("studio"), dict) else {}
-
-
 def _studio_document_id(ctx: dict[str, Any]) -> int | None:
-    studio_surface = _studio_surface(ctx)
-    candidate = studio_surface.get("studio_document_id")
+    runtime_state = ctx_runtime_state(ctx)
+    candidate = runtime_state.get("active_center_document_id")
     if candidate is None:
         candidate = ctx.get("studio_document_id")
     try:
@@ -31,6 +31,52 @@ def _studio_document_id(ctx: dict[str, Any]) -> int | None:
     except (TypeError, ValueError):
         return None
     return value if value > 0 else None
+
+
+def _studio_view(ctx: dict[str, Any]) -> str | None:
+    layout = ctx_environment_views(ctx)
+    center_panel = layout.get("center_panel") if isinstance(layout.get("center_panel"), dict) else {}
+    candidate = center_panel.get("studio_view")
+    text = str(candidate or "").strip()
+    return text or None
+
+
+def _studio_resource_summary(ctx: dict[str, Any]) -> dict[str, Any]:
+    studio_document_id = _studio_document_id(ctx)
+    artifact_items = ctx_artifact_items(ctx)
+    question_card_count = 0
+    flashcard_count = 0
+    mindmap_node_count = 0
+    mindmap_edge_count = 0
+    ocr_item_count = 0
+
+    for item in artifact_items:
+        payload = item.get("payload_json") if isinstance(item.get("payload_json"), dict) else {}
+        artifact_type = str(item.get("artifact_type") or "").strip().lower()
+        artifact_document_id = item.get("studio_document_id")
+        if studio_document_id is not None and artifact_document_id not in (None, studio_document_id):
+            continue
+        if artifact_type == "question_card":
+            question_card_count += 1
+        elif artifact_type == "flashcard":
+            flashcard_count += 1
+        elif artifact_type == "ocr_item":
+            ocr_item_count += 1
+        elif artifact_type == "mindmap":
+            nodes = payload.get("nodes") if isinstance(payload.get("nodes"), list) else []
+            edges = payload.get("edges") if isinstance(payload.get("edges"), list) else []
+            mindmap_node_count += len(nodes)
+            mindmap_edge_count += len(edges)
+
+    return {
+        "studio_document_id": studio_document_id,
+        "studio_view": _studio_view(ctx),
+        "question_card_count": question_card_count,
+        "flashcard_count": flashcard_count,
+        "mindmap_node_count": mindmap_node_count,
+        "mindmap_edge_count": mindmap_edge_count,
+        "ocr_item_count": ocr_item_count,
+    }
 
 
 def _extract_question_number(query: str) -> int | None:
@@ -54,17 +100,7 @@ def _extract_question_number(query: str) -> int | None:
 
 
 def tool_get_studio_resource_summary(_args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
-    studio_surface = _studio_surface(ctx)
-    summary = studio_surface.get("resource_summary") if isinstance(studio_surface.get("resource_summary"), dict) else {}
-    payload = {
-        "studio_document_id": _studio_document_id(ctx),
-        "studio_view": studio_surface.get("studio_view"),
-        "question_card_count": int(summary.get("question_card_count") or 0),
-        "flashcard_count": int(summary.get("flashcard_count") or 0),
-        "mindmap_node_count": int(summary.get("mindmap_node_count") or 0),
-        "mindmap_edge_count": int(summary.get("mindmap_edge_count") or 0),
-        "ocr_item_count": int(summary.get("ocr_item_count") or 0),
-    }
+    payload = _studio_resource_summary(ctx)
     has_summary = any(
         int(payload.get(k) or 0) > 0
         for k in ("question_card_count", "flashcard_count", "mindmap_node_count", "mindmap_edge_count", "ocr_item_count")

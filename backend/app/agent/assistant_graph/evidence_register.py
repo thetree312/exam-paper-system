@@ -5,6 +5,8 @@ from typing import Any
 
 _MAX_REGISTER_FRAMES = 4
 _MAX_CARRYFORWARD_FRAMES = 2
+_MAX_COMPACT_SNIPPETS = 2
+_MAX_SNIPPET_TEXT = 120
 
 
 def _as_source_refs(values: Any) -> list[str]:
@@ -33,6 +35,123 @@ def _frame_identity(frame: dict[str, Any]) -> tuple[str, str, tuple[str, ...]]:
         str(frame.get("query") or "").strip(),
         tuple(_as_source_refs(frame.get("source_refs"))),
     )
+
+
+def _parse_text_payload(content: Any) -> dict[str, Any]:
+    if not isinstance(content, list):
+        return {}
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "").strip().lower() != "text":
+            continue
+        raw = str(item.get("text") or "").strip()
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        return {}
+    return {}
+
+
+def _compact_snippets(values: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in values if isinstance(values, list) else []:
+        if not isinstance(item, dict):
+            continue
+        compact: dict[str, Any] = {}
+        for key in ("chunk_id", "file_id", "title", "page_start", "page_end", "page_no", "distance"):
+            if item.get(key) is not None:
+                compact[key] = item.get(key)
+        text = str(item.get("content") or "").strip()
+        if text and compact:
+            compact["content"] = text[:_MAX_SNIPPET_TEXT]
+        if compact:
+            out.append(compact)
+        if len(out) >= _MAX_COMPACT_SNIPPETS:
+            break
+    return out
+
+
+def _compact_payload(
+    *,
+    tool_name: str,
+    tool_call_id: str,
+    trace: dict[str, Any],
+    output: dict[str, Any],
+    include_recent_observation: bool = False,
+    include_working_set: bool = False,
+    include_carryforward: bool = False,
+    include_observation_memory: bool = False,
+) -> dict[str, Any]:
+    observation = trace.get("observation") if isinstance(trace.get("observation"), dict) else {}
+    source_refs = _as_source_refs(output.get("source_refs") or trace.get("source_refs"))
+    payload = _parse_text_payload(output.get("model_message_content"))
+    compact: dict[str, Any] = {
+        "tool_name": str(tool_name or "").strip(),
+        "artifact_ref": str(tool_call_id or "").strip(),
+        "query": str(observation.get("query") or payload.get("query") or "").strip(),
+        "source_refs": source_refs,
+        "answerability": str(output.get("answerability") or "").strip(),
+        "target_resolution": str(output.get("target_resolution") or "").strip(),
+        "summary": str(observation.get("summary") or "").strip(),
+    }
+    if include_recent_observation:
+        compact["recent_observation"] = True
+    if include_working_set:
+        compact["working_set"] = True
+    if include_carryforward:
+        compact["carryforward"] = True
+    if include_observation_memory:
+        compact["observation_memory"] = True
+    if isinstance(payload.get("candidate_refs"), list):
+        compact["candidate_refs"] = _as_source_refs(payload.get("candidate_refs"))
+    if isinstance(payload.get("doc_coverage"), list):
+        compact["doc_coverage"] = payload.get("doc_coverage")
+    snippets = _compact_snippets(payload.get("snippets"))
+    if snippets:
+        compact["snippets"] = snippets
+    return compact
+
+
+def build_compact_tool_observation_content(
+    *,
+    tool_name: str,
+    tool_call_id: str,
+    trace: dict[str, Any],
+    output: dict[str, Any],
+    include_recent_observation: bool = False,
+    include_working_set: bool = False,
+    include_carryforward: bool = False,
+    include_observation_memory: bool = False,
+    include_image_parts: bool = False,
+) -> list[dict[str, Any]]:
+    compact_payload = _compact_payload(
+        tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        trace=trace,
+        output=output,
+        include_recent_observation=include_recent_observation,
+        include_working_set=include_working_set,
+        include_carryforward=include_carryforward,
+        include_observation_memory=include_observation_memory,
+    )
+    content: list[dict[str, Any]] = [{"type": "text", "text": json.dumps(compact_payload, ensure_ascii=False)}]
+    answerability = str(output.get("answerability") or "").strip().lower()
+    original_content = output.get("model_message_content")
+    if include_image_parts and answerability != "candidate_only" and isinstance(original_content, list):
+        for item in original_content:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("type") or "").strip().lower() != "image_url":
+                continue
+            content.append(dict(item))
+            break
+    return content
 
 
 def build_tool_receipt_message(
@@ -69,8 +188,8 @@ def build_evidence_frame(
     output: dict[str, Any],
     step_count: int,
 ) -> dict[str, Any] | None:
-    content = output.get("model_message_content")
-    if not isinstance(content, list) or not content:
+    artifact_content = output.get("model_message_content")
+    if not isinstance(artifact_content, list) or not artifact_content:
         return None
     source_refs = _as_source_refs(output.get("source_refs") or trace.get("source_refs"))
     if not source_refs:
@@ -85,8 +204,17 @@ def build_evidence_frame(
         "answerability": str(output.get("answerability") or "").strip(),
         "target_resolution": str(output.get("target_resolution") or "").strip(),
         "summary": str(observation.get("summary") or "").strip(),
-        "content": content,
-        "has_image": _content_has_image_parts(content),
+        "artifact_content": artifact_content,
+        "summary_content": build_compact_tool_observation_content(
+            tool_name=tool_name,
+            tool_call_id=str(tool_call_id or "").strip(),
+            trace=trace,
+            output=output,
+            include_carryforward=True,
+            include_observation_memory=True,
+            include_image_parts=False,
+        ),
+        "has_image": _content_has_image_parts(artifact_content),
         "created_step": int(step_count or 0),
         "last_selected_step": None,
     }
@@ -160,7 +288,7 @@ def select_carryforward_evidence_messages(
         if len(selected_ids) >= max_frames:
             updated_register.append(frame)
             continue
-        content = frame.get("content")
+        content = frame.get("summary_content")
         if not isinstance(content, list) or not content:
             updated_register.append(frame)
             continue
@@ -208,6 +336,38 @@ def select_carryforward_evidence_messages(
             updated_register.append(frame)
 
     return selected_messages, updated_register[-_MAX_REGISTER_FRAMES:]
+
+
+def build_working_set_message(carryforward_messages: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    entries: list[dict[str, Any]] = []
+    for item in carryforward_messages or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("role") or "").strip().lower() != "tool":
+            continue
+        content = item.get("content")
+        payload = _parse_text_payload(content)
+        if not payload:
+            continue
+        payload["working_set"] = True
+        payload["observation_memory"] = True
+        payload.pop("carryforward", None)
+        entries.append(
+            {
+                "tool_name": str(item.get("name") or "").strip(),
+                "tool_call_id": str(item.get("tool_call_id") or "").strip(),
+                "payload": payload,
+            }
+        )
+    if not entries:
+        return None
+    content: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": json.dumps({"working_set": True, "entries": entries}, ensure_ascii=False),
+        }
+    ]
+    return {"role": "user", "content": content}
 
 
 def summarize_evidence_register(register: list[dict[str, Any]] | None) -> list[dict[str, Any]]:

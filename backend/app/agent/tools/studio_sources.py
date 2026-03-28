@@ -3,17 +3,17 @@
 from typing import Any
 
 from .common import build_feedback
+from .studio_environment import _studio_resource_summary
 
 
 def tool_list_studio_sources(_args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
-    env = ctx.get("environment") if isinstance(ctx.get("environment"), dict) else {}
-    surfaces = env.get("surfaces") if isinstance(env.get("surfaces"), dict) else {}
-    studio_surface = surfaces.get("studio") if isinstance(surfaces.get("studio"), dict) else {}
-    summary = studio_surface.get("resource_summary") if isinstance(studio_surface.get("resource_summary"), dict) else {}
-    studio_document_id = studio_surface.get("studio_document_id")
-    studio_view = studio_surface.get("studio_view")
+    payload = _studio_resource_summary(ctx)
+    studio_document_id = payload.get("studio_document_id")
 
-    if not summary:
+    if not any(
+        int(payload.get(key) or 0) > 0
+        for key in ("question_card_count", "flashcard_count", "mindmap_node_count", "mindmap_edge_count", "ocr_item_count")
+    ):
         return {
             "studio_summary": {},
             "sources": {},
@@ -29,16 +29,6 @@ def tool_list_studio_sources(_args: dict[str, Any], ctx: dict[str, Any]) -> dict
                 evidence_count=0,
             ),
         }
-
-    payload = {
-        "studio_document_id": studio_document_id,
-        "studio_view": studio_view,
-        "question_card_count": int(summary.get("question_card_count") or 0),
-        "flashcard_count": int(summary.get("flashcard_count") or 0),
-        "mindmap_node_count": int(summary.get("mindmap_node_count") or 0),
-        "mindmap_edge_count": int(summary.get("mindmap_edge_count") or 0),
-        "ocr_item_count": int(summary.get("ocr_item_count") or 0),
-    }
     return {
         "studio_summary": payload,
         "sources": payload,

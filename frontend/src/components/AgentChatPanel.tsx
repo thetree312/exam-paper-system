@@ -944,7 +944,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* 顶部工具栏：标题下拉 + 新建按钮 */}
-          <div className="relative h-14 flex items-center justify-between px-6 border-neutral-200 bg-white/80 backdrop-blur-sm">
+          <div className="relative h-[65.6px] flex items-center justify-between px-6 border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
             <button
               onClick={() => setIsHistoryOpen(!isHistoryOpen)}
               className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"

@@ -449,6 +449,24 @@ def test_generate_uses_mode_scoped_kind_and_source_signature() -> None:
     assert service.repo.create_map_version.call_args.kwargs["source_signature"] == "uploaded_file:15,16"
 
 
+def test_get_current_returns_none_when_no_active_map() -> None:
+    service = MindMapService(MagicMock())
+    service.repo = MagicMock()
+    service.repo.get_active_map.return_value = None
+
+    result = service.get_current(
+        tenant_id=2,
+        workroom_id=22,
+        source_type="uploaded_file",
+        source_id=15,
+        source_ids=[],
+        kind="knowledge",
+        mode="knowledge_structure",
+    )
+
+    assert result is None
+
+
 def test_single_document_two_stage_generation_uses_outline_expand_and_quality_gate() -> None:
     service = MindMapService(MagicMock())
     service._persist_debug_artifact = MagicMock()

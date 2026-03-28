@@ -20,6 +20,7 @@ from .assistant_graph.adapters.message_adapter import (
     is_fresh_conversation,
     sanitize_conversation_messages,
     to_state_messages,
+    visible_conversation_messages,
 )
 from .assistant_graph.runtime_bootstrap import get_compiled_agent_app
 from ..config import get_settings
@@ -31,14 +32,15 @@ from .assistant_graph.session_runtime import (
 )
 from .assistant_graph.router_runtime import (
     StreamTraceReducer,
-    build_agent_environment_model,
     build_agent_router_context,
+    build_environment_state,
     iter_stream_trace_events,
     normalize_stream_event,
     persist_agent_messages,
 )
 from .services.agent_service import AgentService
 from ..services.qwen_client import QwenClient
+from ..services.workroom.service import WorkroomService
 from ..services.workroom_scope_service import assert_workroom_scope, assert_studio_document_scope
 from ..models import AgentSession, AgentMessage
 from ..utils.rate_limiter import rate_limit
@@ -214,6 +216,91 @@ def _log_messages_preview(tag: str, messages: List[dict]) -> None:
         content = str(m.get("content", ""))
         preview.append({"role": role, "content": content[:200]})
     logger.info("%s messages_preview=%s", tag, preview)
+
+
+def _compute_incremental_visible_messages(
+    *,
+    db: Session,
+    tenant_id: int,
+    session_id: int | None,
+    sanitized_messages: List[dict[str, str]],
+) -> List[dict[str, str]]:
+    if session_id is None:
+        return list(sanitized_messages)
+
+    svc = AgentService(db)
+    existing_rows = svc.list_messages(tenant_id=tenant_id, session_id=session_id, limit=5000)
+    existing_rows = sorted(existing_rows, key=lambda m: m.id)
+    existing_visible: list[tuple[str, str]] = [
+        (str(row.role or "").lower().strip(), str(row.content or ""))
+        for row in existing_rows
+        if str(row.role or "").lower().strip() in ("user", "assistant")
+    ]
+    current_visible = [
+        (str(item.get("role") or "").lower().strip(), str(item.get("content") or ""))
+        for item in sanitized_messages
+        if str(item.get("role") or "").lower().strip() in ("user", "assistant")
+    ]
+    if not existing_visible:
+        return list(sanitized_messages)
+    if len(current_visible) >= len(existing_visible) and current_visible[: len(existing_visible)] == existing_visible:
+        append_batch = current_visible[len(existing_visible) :]
+    elif len(existing_visible) >= len(current_visible) and existing_visible[-len(current_visible) :] == current_visible:
+        append_batch = []
+    else:
+        max_overlap = min(len(existing_visible), len(current_visible))
+        overlap = 0
+        for size in range(max_overlap, 0, -1):
+            if existing_visible[-size:] == current_visible[:size]:
+                overlap = size
+                break
+        append_batch = current_visible[overlap:]
+    return [{"role": role, "content": content} for role, content in append_batch]
+
+
+def _build_note_focus_state(note_focus: NoteFocusPayload | None) -> dict[str, Any] | None:
+    if note_focus is None:
+        return None
+    payload = note_focus.model_dump(exclude_none=True)
+    return payload or None
+
+
+def _load_agent_environment_state(
+    *,
+    db: Session,
+    tenant_id: int,
+    user_id: int,
+    workroom_id: int,
+    ui_context: str,
+    studio_document_id: int | None,
+    note_focus: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    svc = WorkroomService(db)
+    workroom = svc.get_workroom(tenant_id=tenant_id, user_id=user_id, workroom_id=workroom_id) or {"id": workroom_id}
+    runtime_state = svc.repo.get_runtime_state(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+    ) or {}
+    sources = svc.list_sources(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+    )
+    artifacts = svc.repo.list_artifacts(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        workroom_id=workroom_id,
+    )
+    return build_environment_state(
+        workroom=workroom,
+        runtime_state=runtime_state,
+        sources=sources,
+        artifacts=artifacts,
+        ui_context=ui_context,
+        studio_document_id=studio_document_id,
+        note_focus=note_focus,
+    )
 
 
 _DATA_URL_LOG_RE = re.compile(r"^(data:[^;]+;base64,)([A-Za-z0-9+/=\s]+)$", re.IGNORECASE)
@@ -525,6 +612,22 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
         )
 
     messages = sanitize_conversation_messages(payload.messages)
+    incremental_messages = _compute_incremental_visible_messages(
+        db=db,
+        tenant_id=payload.tenant_id,
+        session_id=session_id,
+        sanitized_messages=messages,
+    )
+    note_focus_state = _build_note_focus_state(payload.note_focus)
+    environment_state = _load_agent_environment_state(
+        db=db,
+        tenant_id=payload.tenant_id,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
+        ui_context=payload.ui_context,
+        studio_document_id=resolved_document_id,
+        note_focus=note_focus_state,
+    )
     context = build_agent_router_context(
         tenant_id=payload.tenant_id,
         user_id=payload.user_id,
@@ -534,15 +637,7 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
         ui_context=payload.ui_context,
         session_id=session_id,
         thread_id=thread_id,
-        environment_model=build_agent_environment_model(
-            db=db,
-            tenant_id=payload.tenant_id,
-            user_id=payload.user_id,
-            workroom_id=payload.workroom_id,
-            studio_document_id=resolved_document_id,
-            source_file_ids=resolved_source_file_ids,
-            ui_context=payload.ui_context,
-        ),
+        environment_state=environment_state,
     )
     if payload.agent_max_steps is not None and int(payload.agent_max_steps) > 0:
         context["agent_max_steps"] = int(payload.agent_max_steps)
@@ -550,15 +645,15 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
         context["session_profile"] = session_profile
     if history_summary:
         context["history_summary"] = history_summary
-    model_messages = [
+    ingress_messages = [
         {"role": m["role"], "content": m["content"]}
-        for m in messages
-        if m["role"] in ("system", "user", "assistant")
+        for m in incremental_messages
+        if m["role"] in ("user", "assistant")
     ]
-    _log_messages_preview("agent_run.before_invoke", model_messages)
+    _log_messages_preview("agent_run.before_invoke", ingress_messages)
 
     config = {"configurable": {"thread_id": thread_id}}
-    result = _app.invoke({**context, "messages": model_messages}, config=config)
+    result = _app.invoke({**context, "ingress_messages": ingress_messages}, config=config)
     persist_agent_messages(
         db=db,
         tenant_id=payload.tenant_id,
@@ -1320,7 +1415,14 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
         role = m["role"] if m["role"] in ("system", "user", "assistant") else "user"
         conversation_messages.append({"role": role, "content": m["content"]})
 
-    _log_messages_preview("agent_run_stream.before_qwen", conversation_messages)
+    incremental_messages = _compute_incremental_visible_messages(
+        db=db,
+        tenant_id=payload.tenant_id,
+        session_id=session_id,
+        sanitized_messages=conversation_messages,
+    )
+
+    _log_messages_preview("agent_run_stream.before_qwen", incremental_messages)
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -1328,20 +1430,29 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
         start_ts = time.time()
         db_local = SessionLocal()
         try:
-            # 模型输入窗口：只使用规范化的 user/assistant 历史，不包含占位。
-            model_messages = [
+            ingress_messages = [
                 {"role": m["role"], "content": m["content"]}
-                for m in conversation_messages
-                if m["role"] in ("system", "user", "assistant")
+                for m in incremental_messages
+                if m["role"] in ("user", "assistant")
             ]
             logger.info(
-                "agent_run_stream.graph_thread_start tenant=%s user=%s session=%s thread=%s base_len=%s window_len=%s",
+                "agent_run_stream.graph_thread_start tenant=%s user=%s session=%s thread=%s base_len=%s ingress_len=%s",
                 payload.tenant_id,
                 payload.user_id,
                 session_id,
                 thread_id,
-                len(model_messages),
-                len(model_messages),
+                len(conversation_messages),
+                len(ingress_messages),
+            )
+            note_focus_state = _build_note_focus_state(payload.note_focus)
+            environment_state = _load_agent_environment_state(
+                db=db_local,
+                tenant_id=payload.tenant_id,
+                user_id=payload.user_id,
+                workroom_id=payload.workroom_id,
+                ui_context=payload.ui_context,
+                studio_document_id=resolved_document_id,
+                note_focus=note_focus_state,
             )
             context = build_agent_router_context(
                 tenant_id=payload.tenant_id,
@@ -1352,15 +1463,7 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 ui_context=payload.ui_context,
                 session_id=session_id,
                 thread_id=thread_id,
-                environment_model=build_agent_environment_model(
-                    db=db_local,
-                    tenant_id=payload.tenant_id,
-                    user_id=payload.user_id,
-                    workroom_id=payload.workroom_id,
-                    studio_document_id=resolved_document_id,
-                    source_file_ids=resolved_source_file_ids,
-                    ui_context=payload.ui_context,
-                ),
+                environment_state=environment_state,
             )
             if payload.agent_max_steps is not None and int(payload.agent_max_steps) > 0:
                 context["agent_max_steps"] = int(payload.agent_max_steps)
@@ -1374,18 +1477,19 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 payload.user_id,
                 thread_id,
                 {
-                    "active_surface": ((context.get("environment") or {}).get("active_surface")),
                     "studio_document_id": context.get("studio_document_id"),
                     "source_count": len(list(context.get("source_file_ids") or [])),
+                    "studio_view": (((context.get("environment_state") or {}).get("layout") or {}).get("center_panel") or {}).get("studio_view"),
                 },
             )
             streamed_messages: list[Any] = []
+            streamed_conversation_messages: list[Any] = []
             emitted_text: dict[str, str] = {}
             trace_reducer = StreamTraceReducer()
             emitted_final_text = False
             stream_stats = {"events_total": 0, "assistant_chunks": 0, "agent_traces": 0, "ag_ui": 0}
             stream = _app.stream(
-                {**context, "messages": model_messages},
+                {**context, "ingress_messages": ingress_messages},
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
             )
@@ -1475,15 +1579,21 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                         messages = node_update.get("messages")
                         if isinstance(messages, list):
                             streamed_messages = messages
-            result = {"messages": streamed_messages}
+                        conversation_messages_update = node_update.get("conversation_messages")
+                        if isinstance(conversation_messages_update, list):
+                            streamed_conversation_messages = conversation_messages_update
+            result = {
+                "messages": streamed_messages,
+                "conversation_messages": streamed_conversation_messages,
+            }
             persist_agent_messages(
                 db=db_local,
                 tenant_id=payload.tenant_id,
                 user_id=payload.user_id,
                 session_id=session_id,
-                result_messages=result["messages"],
+                result_messages=result.get("conversation_messages") or result["messages"],
             )
-            visible = from_state_messages(result["messages"])
+            visible = visible_conversation_messages(result.get("conversation_messages") or result["messages"])
             final_reply = ""
             for item in reversed(visible):
                 if str(item.get("role") or "").strip().lower() == "assistant":
@@ -1729,6 +1839,15 @@ def agent_run_resume(payload: AgentResumeRequest, db: Session = Depends(get_db))
         workroom_id=payload.workroom_id,
         explicit_source_ids=None,
     )
+    environment_state = _load_agent_environment_state(
+        db=db,
+        tenant_id=payload.tenant_id,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
+        ui_context=payload.ui_context,
+        studio_document_id=payload.studio_document_id,
+        note_focus=None,
+    )
 
     context = build_agent_router_context(
         tenant_id=payload.tenant_id,
@@ -1739,15 +1858,7 @@ def agent_run_resume(payload: AgentResumeRequest, db: Session = Depends(get_db))
         ui_context=payload.ui_context,
         session_id=session_id,
         thread_id=thread_id,
-        environment_model=build_agent_environment_model(
-            db=db,
-            tenant_id=payload.tenant_id,
-            user_id=payload.user_id,
-            workroom_id=payload.workroom_id,
-            studio_document_id=payload.studio_document_id,
-            source_file_ids=resolved_source_file_ids,
-            ui_context=payload.ui_context,
-        ),
+        environment_state=environment_state,
     )
     if payload.agent_max_steps is not None and int(payload.agent_max_steps) > 0:
         context["agent_max_steps"] = int(payload.agent_max_steps)
@@ -1819,6 +1930,15 @@ def agent_run_resume_stream(payload: AgentResumeRequest, db: Session = Depends(g
         workroom_id=payload.workroom_id,
         explicit_source_ids=None,
     )
+    environment_state = _load_agent_environment_state(
+        db=db,
+        tenant_id=payload.tenant_id,
+        user_id=payload.user_id,
+        workroom_id=payload.workroom_id,
+        ui_context=payload.ui_context,
+        studio_document_id=payload.studio_document_id,
+        note_focus=None,
+    )
     context = build_agent_router_context(
         tenant_id=payload.tenant_id,
         user_id=payload.user_id,
@@ -1828,15 +1948,7 @@ def agent_run_resume_stream(payload: AgentResumeRequest, db: Session = Depends(g
         ui_context=payload.ui_context,
         session_id=session_id,
         thread_id=thread_id,
-        environment_model=build_agent_environment_model(
-            db=db,
-            tenant_id=payload.tenant_id,
-            user_id=payload.user_id,
-            workroom_id=payload.workroom_id,
-            studio_document_id=payload.studio_document_id,
-            source_file_ids=resolved_source_file_ids,
-            ui_context=payload.ui_context,
-        ),
+        environment_state=environment_state,
     )
     if payload.agent_max_steps is not None and int(payload.agent_max_steps) > 0:
         context["agent_max_steps"] = int(payload.agent_max_steps)

@@ -13,10 +13,12 @@ import { useAuth } from './hooks/useAuth'
 import { useFileUpload } from './hooks/useFileUpload'
 import { useOcrManager } from './hooks/useOcrManager'
 import { usePreviewPane } from './hooks/usePreviewPane'
+import { fetchSnapshot } from './services/agentApi'
 import { getQuestion } from './services/questionApi'
 import { fetchWorkroomTabs, updateWorkroomState } from './services/workroomApi'
 import { createWorkspace, deleteWorkspace, fetchWorkspaces, launchWorkspace } from './services/workspaceApi'
 import { useAppStore } from './store/appStore'
+import { buildOcrItemsFromSnapshot } from './utils/workroomRestore'
 import type {
   AggregatedOcrItem,
   AgentSendPayload,
@@ -43,14 +45,21 @@ const App: React.FC = () => {
   const runtimeStateSyncTimerRef = useRef<number | null>(null)
   const lastRuntimeStateSyncKeyRef = useRef<string>('')
   const runtimeStateSyncInFlightRef = useRef(false)
+  const restoredSnapshotKeyRef = useRef<string | null>(null)
   const runtimeStatePendingTaskRef = useRef<{
     syncKey: string
     workroomId: number
     tenantId: number
     userId: number
     patch: {
+      active_file_id?: number
+      active_session_id?: number
+      active_tab_index?: number
       active_studio_document_id?: number
-      center_panel_state_json: { studio_view: 'editor' | 'mindmap' | 'flashcard' }
+      center_panel_state_json: {
+        studio_view: 'editor' | 'mindmap' | 'flashcard'
+        is_answer_mode: boolean
+      }
       right_panel_state_json: {
         agent_view_id?: string
         is_agent_drawer_open: boolean
@@ -106,8 +115,14 @@ const App: React.FC = () => {
       tenantId: number
       userId: number
       patch: {
+        active_file_id?: number
+        active_session_id?: number
+        active_tab_index?: number
         active_studio_document_id?: number
-        center_panel_state_json: { studio_view: 'editor' | 'mindmap' | 'flashcard' }
+        center_panel_state_json: {
+          studio_view: 'editor' | 'mindmap' | 'flashcard'
+          is_answer_mode: boolean
+        }
         right_panel_state_json: {
           agent_view_id?: string
           is_agent_drawer_open: boolean
@@ -287,7 +302,9 @@ const App: React.FC = () => {
     setWorkroomLoadError(null)
     setAgentDocumentId(null)
     setIsAgentDrawerOpen(false)
+    setIsAnswerMode(false)
     setStudioView('editor')
+    restoredSnapshotKeyRef.current = null
   }, [
     setActiveTabIndex,
     setFileTabs,
@@ -436,6 +453,9 @@ const App: React.FC = () => {
     if (nextView === 'editor' || nextView === 'mindmap' || nextView === 'flashcard') {
       setStudioView(nextView)
     }
+    if (typeof center.is_answer_mode === 'boolean') {
+      setIsAnswerMode(center.is_answer_mode)
+    }
     if (typeof workroomRuntimeState.active_studio_document_id === 'number') {
       setAgentDocumentId(workroomRuntimeState.active_studio_document_id)
     }
@@ -443,6 +463,51 @@ const App: React.FC = () => {
       setIsAgentDrawerOpen(right.is_agent_drawer_open)
     }
   }, [workroomRuntimeState])
+
+  useEffect(() => {
+    const restoreKey =
+      workroom?.id && agentDocumentId && user ? `${workroom.id}:${agentDocumentId}:${user.id}` : null
+    if (!restoreKey || restoredSnapshotKeyRef.current === restoreKey) return
+    if (ocrItems.length > 0) {
+      restoredSnapshotKeyRef.current = restoreKey
+      return
+    }
+    if (!user || !workroom || !agentDocumentId) return
+
+    let cancelled = false
+    void fetchSnapshot(backendBaseUrl, user.tenant_id, user.id, workroom.id, agentDocumentId)
+      .then((snapshot) => {
+        if (cancelled) return
+        const activeTab = activeTabIndex >= 0 ? fileTabs[activeTabIndex] ?? null : null
+        setOcrItems(
+          buildOcrItemsFromSnapshot(snapshot, {
+            sessionId: activeTab?.sessionId ?? workroomRuntimeState?.active_session_id ?? 0,
+            fileId: activeTab?.fileId ?? workroomRuntimeState?.active_file_id ?? 0,
+            fileName: activeTab?.name ?? snapshot.title,
+          }),
+        )
+        restoredSnapshotKeyRef.current = restoreKey
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('[workroom.restore] failed to restore OCR cards', err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeTabIndex,
+    agentDocumentId,
+    backendBaseUrl,
+    fileTabs,
+    ocrItems.length,
+    setOcrItems,
+    user,
+    workroom?.id,
+    workroomRuntimeState?.active_file_id,
+    workroomRuntimeState?.active_session_id,
+  ])
 
   useEffect(() => {
     if (!user || !workroom?.id) return
@@ -522,8 +587,14 @@ const App: React.FC = () => {
     if (!workroom?.id || !user || route?.kind !== 'workroom') return
 
     const patch = {
+      active_file_id: currentFile?.fileId ?? undefined,
+      active_session_id: sessionId ?? undefined,
+      active_tab_index: activeTabIndex >= 0 ? activeTabIndex : undefined,
       active_studio_document_id: agentDocumentId ?? undefined,
-      center_panel_state_json: { studio_view: studioView },
+      center_panel_state_json: {
+        studio_view: studioView,
+        is_answer_mode: isAnswerMode,
+      },
       right_panel_state_json: {
         agent_view_id: agentViewId ?? undefined,
         is_agent_drawer_open: isAgentDrawerOpen,
@@ -563,11 +634,15 @@ const App: React.FC = () => {
       }
     }
   }, [
+    activeTabIndex,
     agentDocumentId,
     agentViewId,
+    currentFile?.fileId,
+    isAnswerMode,
     isAgentDrawerOpen,
     route?.kind,
     sendRuntimeStateSync,
+    sessionId,
     studioView,
     user,
     workroom?.id,

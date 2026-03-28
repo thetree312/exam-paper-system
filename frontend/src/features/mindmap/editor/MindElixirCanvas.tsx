@@ -308,6 +308,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   const lastAppliedViewStateRef = React.useRef<string | null>(null)
   const fitFrameRef = React.useRef<number | null>(null)
   const fitTimeoutRef = React.useRef<number | null>(null)
+  const refreshFrameRef = React.useRef<number | null>(null)
   const pendingLinkRef = React.useRef<{ fromId: string; bidirectional: boolean } | null>(null)
   const onDocumentChangeRef = React.useRef(onDocumentChange)
   const onNodeSelectRef = React.useRef(onNodeSelect)
@@ -886,6 +887,10 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
         window.clearTimeout(fitTimeoutRef.current)
         fitTimeoutRef.current = null
       }
+      if (refreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(refreshFrameRef.current)
+        refreshFrameRef.current = null
+      }
       onControllerReadyRef.current?.(null)
       hostRef.current?.removeEventListener('pointerup', handlePointerUp)
       hostRef.current?.removeEventListener('pointerover', handlePointerOver)
@@ -911,29 +916,42 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   React.useEffect(() => {
     const instance = instanceRef.current
     if (!instance) return
-    debugLog('refresh.before', {
-      documentId: document.id,
-      version: document.version,
-      expandedState: summarizeExpandedState(document.root),
-    })
-    instance.refresh(toMindElixirData(document))
-    debugLog('refresh.after', {
-      documentId: document.id,
-      version: document.version,
-      expandedState: summarizeExpandedState((instance.getData() as MindElixirData).nodeData),
-    })
-    emitNodeAnchor()
-    const viewKey = `${document.id}:${document.version}`
-    if (initialViewState && appliedViewStateKeyRef.current !== viewKey) {
-      applyViewState(instance, initialViewState)
-      appliedViewStateKeyRef.current = viewKey
-      fittedViewKeyRef.current = null
-      return
+    if (refreshFrameRef.current !== null) {
+      window.cancelAnimationFrame(refreshFrameRef.current)
+      refreshFrameRef.current = null
     }
-    if (!initialViewState && fittedViewKeyRef.current !== viewKey) {
-      fitDocumentToViewport(instance)
-      fittedViewKeyRef.current = viewKey
-      appliedViewStateKeyRef.current = null
+    refreshFrameRef.current = window.requestAnimationFrame(() => {
+      refreshFrameRef.current = null
+      debugLog('refresh.before', {
+        documentId: document.id,
+        version: document.version,
+        expandedState: summarizeExpandedState(document.root),
+      })
+      instance.refresh(toMindElixirData(document))
+      debugLog('refresh.after', {
+        documentId: document.id,
+        version: document.version,
+        expandedState: summarizeExpandedState((instance.getData() as MindElixirData).nodeData),
+      })
+      emitNodeAnchor()
+      const viewKey = `${document.id}:${document.version}`
+      if (initialViewState && appliedViewStateKeyRef.current !== viewKey) {
+        applyViewState(instance, initialViewState)
+        appliedViewStateKeyRef.current = viewKey
+        fittedViewKeyRef.current = null
+        return
+      }
+      if (!initialViewState && fittedViewKeyRef.current !== viewKey) {
+        fitDocumentToViewport(instance)
+        fittedViewKeyRef.current = viewKey
+        appliedViewStateKeyRef.current = null
+      }
+    })
+    return () => {
+      if (refreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(refreshFrameRef.current)
+        refreshFrameRef.current = null
+      }
     }
   }, [document, fitDocumentToViewport, emitNodeAnchor])
 

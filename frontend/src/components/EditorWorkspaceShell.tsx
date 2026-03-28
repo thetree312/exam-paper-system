@@ -79,7 +79,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
             void onRunGlmOcr()
           }}
         >
-          <span className="material-symbols-outlined text-[20px]">title</span>
+          <span className="material-symbols-outlined text-[18px] leading-none">title</span>
         </button>
         <button
           className={`shrink-0 rounded-full p-2 text-slate-600 ${studioView === 'flashcard' ? 'bg-slate-200' : ''}`}
@@ -87,7 +87,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           title={t('editor_workspace.flashcard_button')}
           onClick={() => onStudioViewChange(studioView === 'flashcard' ? 'editor' : 'flashcard')}
         >
-          <span className="material-symbols-outlined text-[20px]">image</span>
+          <span className="material-symbols-outlined text-[18px] leading-none">image</span>
         </button>
         <button
           className={`shrink-0 rounded-full p-2 text-slate-600 ${studioView === 'mindmap' ? 'bg-slate-200' : ''}`}
@@ -95,7 +95,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           title={t('editor_workspace.mindmap_button')}
           onClick={() => onStudioViewChange(studioView === 'mindmap' ? 'editor' : 'mindmap')}
         >
-          <span className="material-symbols-outlined text-[20px]">account_tree</span>
+          <span className="material-symbols-outlined text-[18px] leading-none">account_tree</span>
         </button>
         <button
           className={`flex shrink-0 items-center gap-1.5 rounded-full p-2 text-sm ${
@@ -105,7 +105,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           title={t('editor_workspace.answer_mode_button')}
           onClick={onToggleAnswerMode}
         >
-          <span className="material-symbols-outlined text-[18px]">edit_note</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">edit_note</span>
         </button>
         <div className="mx-1 hidden w-px bg-slate-200 sm:block" />
         <button
@@ -114,7 +114,7 @@ export const EditorWorkspaceShell: React.FC<EditorWorkspaceShellProps> = ({
           onClick={onOpenAgentDrawer}
           title={t('editor_workspace.copilot_button')}
         >
-          <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+          <span className="material-symbols-outlined text-[16px] leading-none">auto_awesome</span>
           {t('editor_workspace.copilot_button')}
         </button>
       </div>

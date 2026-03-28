@@ -10,8 +10,8 @@ _LOOP_ALERT_THRESHOLD = 3
 def init_world_model(previous: dict[str, Any] | None = None) -> dict[str, Any]:
     base = copy.deepcopy(previous) if isinstance(previous, dict) else {}
 
-    if not isinstance(base.get("environment"), dict):
-        base["environment"] = {}
+    if not isinstance(base.get("runtime_state"), dict):
+        base["runtime_state"] = {}
     if not isinstance(base.get("facts"), dict):
         base["facts"] = {}
     if not isinstance(base.get("recent_observations"), list):
@@ -22,19 +22,10 @@ def init_world_model(previous: dict[str, Any] | None = None) -> dict[str, Any]:
         base["recent_user_inputs"] = []
 
     if not isinstance(base.get("topology"), dict):
-        base["topology"] = {
-            "scene": "workroom",
-            "surfaces": {
-                "knowledge_base": {},
-                "studio": {},
-                "agent_panel": {},
-                "favorites": {},
-            },
-        }
+        base["topology"] = {"runtime": {}}
     if not isinstance(base.get("entities"), dict):
         base["entities"] = {
-            "studio_document": {},
-            "knowledge_sources": [],
+            "runtime": {},
             "favorites": {},
             "latest_tool": {},
         }
@@ -79,10 +70,6 @@ def _diff_dict(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         if before.get(key) != after.get(key):
             diff[key] = {"from": before.get(key), "to": after.get(key)}
     return diff
-
-
-def _entity_ref(kind: str, value: Any) -> str:
-    return f"{kind}:{value}" if value is not None and str(value) else ""
 
 
 def _stable_tool_signature(tool_name: str, args: dict[str, Any]) -> str:
@@ -170,9 +157,12 @@ def observe_environment(
     before = init_world_model(previous)
     after = copy.deepcopy(before)
 
-    studio = observation_packet.get("studio") if isinstance(observation_packet.get("studio"), dict) else {}
-    kb = observation_packet.get("knowledge_base") if isinstance(observation_packet.get("knowledge_base"), dict) else {}
-    favorites = observation_packet.get("favorites") if isinstance(observation_packet.get("favorites"), dict) else {}
+    task = observation_packet.get("task") if isinstance(observation_packet.get("task"), dict) else {}
+    transition_state = (
+        observation_packet.get("runtime_snapshot", {}).get("transition_state")
+        if isinstance(observation_packet.get("runtime_snapshot"), dict)
+        else {}
+    )
     latest_tool = (
         observation_packet.get("latest_tool_observation")
         if isinstance(observation_packet.get("latest_tool_observation"), dict)
@@ -182,50 +172,50 @@ def observe_environment(
     after["version"] = int(before.get("version") or 0) + 1
     after["last_step"] = int(step_count)
 
-    after["environment"] = {
-        "studio": studio,
-        "knowledge_base": kb,
-        "favorites": favorites,
+    runtime_snapshot = observation_packet.get("runtime_snapshot") if isinstance(observation_packet.get("runtime_snapshot"), dict) else {}
+    after["runtime_state"] = {
+        "runtime_snapshot": runtime_snapshot,
+        "task": task,
+        "transition_state": transition_state if isinstance(transition_state, dict) else {},
         "latest_tool_observation": latest_tool,
     }
 
-    topology = after.get("topology") if isinstance(after.get("topology"), dict) else {"scene": "workroom", "surfaces": {}}
-    surfaces = topology.get("surfaces") if isinstance(topology.get("surfaces"), dict) else {}
-    surfaces["studio"] = {
-        "studio_document_id": studio.get("studio_document_id"),
-        "studio_view": studio.get("studio_view"),
+    topology = after.get("topology") if isinstance(after.get("topology"), dict) else {"runtime": {}}
+    env_window = runtime_snapshot.get("environment_window") if isinstance(runtime_snapshot.get("environment_window"), dict) else {}
+    panels = env_window.get("panels") if isinstance(env_window.get("panels"), dict) else {}
+    left_panel = panels.get("left") if isinstance(panels.get("left"), dict) else {}
+    center_panel = panels.get("center") if isinstance(panels.get("center"), dict) else {}
+    right_panel = panels.get("right") if isinstance(panels.get("right"), dict) else {}
+    selection = env_window.get("selection") if isinstance(env_window.get("selection"), dict) else {}
+    bindings = env_window.get("bindings") if isinstance(env_window.get("bindings"), dict) else {}
+    bound_source_file_ids = list(bindings.get("source_file_ids") or [])
+    topology["runtime"] = {
+        "workroom_id": env_window.get("workroom_id"),
+        "center_panel_mode": center_panel.get("studio_view"),
+        "regions": {
+            "left": "knowledge_base",
+            "center": "studio",
+            "right": "agent_drawer",
+        },
     }
-    surfaces["knowledge_base"] = {
-        "source_file_ids": list(kb.get("source_file_ids") or []),
-        "source_count": int(kb.get("source_count") or 0),
-    }
-    surfaces["favorites"] = {
-        "favorite_question_count": int(favorites.get("favorite_question_count") or 0),
-    }
-    surfaces["agent_panel"] = {
-        "latest_tool_name": latest_tool.get("tool_name"),
-        "latest_tool_status": latest_tool.get("status"),
-    }
-    topology["scene"] = "workroom"
-    topology["surfaces"] = surfaces
     after["topology"] = topology
 
     entities = after.get("entities") if isinstance(after.get("entities"), dict) else {}
-    studio_doc_id = studio.get("studio_document_id")
-    entities["studio_document"] = {
-        "id": studio_doc_id,
-        "view": studio.get("studio_view"),
+    entities["runtime"] = {
+        "workroom_id": topology["runtime"].get("workroom_id"),
+        "center_panel_mode": topology["runtime"].get("center_panel_mode"),
+        "active_center_document_id": selection.get("active_center_document_id"),
+        "source_file_ids": bound_source_file_ids,
+        "left_knowledge_base": {
+            "has_bound_sources": bool(bound_source_file_ids),
+            "bound_source_count": len(bound_source_file_ids),
+            "pane": left_panel.get("pane"),
+        },
+        "right_agent_drawer": {
+            "open": bool(right_panel.get("is_agent_drawer_open")),
+            "view_id": right_panel.get("agent_view_id"),
+        },
     }
-    kb_sources = []
-    for fid in list(kb.get("source_file_ids") or []):
-        try:
-            file_id = int(fid)
-        except Exception:
-            continue
-        if file_id > 0:
-            kb_sources.append({"file_id": file_id})
-    entities["knowledge_sources"] = kb_sources
-    entities["favorites"] = {"count": int(favorites.get("favorite_question_count") or 0)}
     entities["latest_tool"] = {
         "tool_name": latest_tool.get("tool_name"),
         "status": latest_tool.get("status"),
@@ -233,28 +223,26 @@ def observe_environment(
     }
     after["entities"] = entities
 
-    relations = list(after.get("relations") or [])
-    wr_doc_ref = _entity_ref("studio_document", studio_doc_id)
-    for src in kb_sources:
-        src_ref = _entity_ref("kb_file", src.get("file_id"))
-        if src_ref and wr_doc_ref:
-            relations.append({"src": src_ref, "rel": "can_support", "dst": wr_doc_ref})
-    after["relations"] = _trim_relations(relations)
+    after["relations"] = _trim_relations(list(after.get("relations") or []))
 
     recent = list(after.get("recent_observations") or [])
     recent.append(
         {
             "step": int(step_count),
-            "studio_document_id": studio_doc_id,
-            "kb_source_count": int(kb.get("source_count") or 0),
-            "studio_view": studio.get("studio_view"),
+            "workroom_id": topology["runtime"].get("workroom_id"),
+            "center_panel_mode": topology["runtime"].get("center_panel_mode"),
+            "active_center_document_id": entities["runtime"].get("active_center_document_id"),
+            "bound_source_count": len(entities["runtime"].get("source_file_ids") or []),
         }
     )
     after["recent_observations"] = _trim_tail(recent, max_items=20)
 
-    after["facts"]["studio_document_id"] = studio_doc_id
-    after["facts"]["kb_source_count"] = int(kb.get("source_count") or 0)
-    after["facts"]["studio_view"] = studio.get("studio_view")
+    after["facts"]["workroom_id"] = topology["runtime"].get("workroom_id")
+    after["facts"]["active_center_document_id"] = entities["runtime"].get("active_center_document_id")
+    after["facts"]["bound_source_count"] = len(entities["runtime"].get("source_file_ids") or [])
+    after["facts"]["center_panel_mode"] = topology["runtime"].get("center_panel_mode")
+    after["facts"]["right_agent_drawer_open"] = entities["runtime"]["right_agent_drawer"].get("open")
+    after["facts"]["environment_transition"] = transition_state if isinstance(transition_state, dict) else {}
     after["facts"]["target_object"] = str(after["facts"].get("last_user_input") or "").strip()
     if "target_resolution" not in after["facts"]:
         after["facts"]["target_resolution"] = "unknown"
@@ -361,25 +349,12 @@ def record_tool_result(
     else:
         after["facts"]["strategy_feedback"] = {}
 
-    studio_doc_id = (after.get("facts") or {}).get("studio_document_id")
-    wr_doc_ref = _entity_ref("studio_document", studio_doc_id)
     relations = list(after.get("relations") or [])
     entities = after.get("entities") if isinstance(after.get("entities"), dict) else {}
-    kb_sources = entities.get("knowledge_sources") if isinstance(entities.get("knowledge_sources"), list) else []
-    known_file_ids = {int(item.get("file_id")) for item in kb_sources if isinstance(item, dict) and str(item.get("file_id") or "").isdigit()}
     for ref in source_refs:
         src = str(ref or "").strip()
-        if src and wr_doc_ref:
-            relations.append({"src": src, "rel": "supports", "dst": wr_doc_ref, "by": tool_name})
-        if src.startswith("file:"):
-            try:
-                fid = int(src.split(":", 1)[1])
-            except Exception:
-                fid = 0
-            if fid > 0 and fid not in known_file_ids:
-                kb_sources.append({"file_id": fid})
-                known_file_ids.add(fid)
-    entities["knowledge_sources"] = kb_sources
+        if src:
+            relations.append({"src": tool_name, "rel": "observed", "dst": src})
     entities["latest_tool"] = {
         "tool_name": tool_name,
         "status": status,
@@ -436,7 +411,7 @@ def query_world_model(
         "recent_observations": list(wm.get("recent_observations") or [])[-tail:],
         "recent_tool_results": list(wm.get("recent_tool_results") or [])[-tail:],
         "recent_user_inputs": list(wm.get("recent_user_inputs") or [])[-tail:],
-        "environment": wm.get("environment") if isinstance(wm.get("environment"), dict) else {},
+        "runtime_state": wm.get("runtime_state") if isinstance(wm.get("runtime_state"), dict) else {},
         "facts": wm.get("facts") if isinstance(wm.get("facts"), dict) else {},
     }
 

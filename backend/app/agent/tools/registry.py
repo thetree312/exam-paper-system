@@ -16,19 +16,19 @@ def tool_definitions() -> list[ToolDefinition]:
     return [
         ToolDefinition(
             name="list_studio_sources",
-            description="Inspect which objects currently exist in the center studio, including question cards, flashcards, and mindmap nodes.",
+            description="Inspect which objects currently exist in the studio area of the current workroom, including question cards, flashcards, and mindmap nodes.",
             parameters={"type": "object", "properties": {}, "additionalProperties": False},
             handler=tool_list_studio_sources,
         ),
         ToolDefinition(
             name="get_studio_resource_summary",
-            description="Read a neutral summary of current studio objects and counts.",
+            description="Read a neutral summary of objects and counts currently available in the studio area of the current workroom.",
             parameters={"type": "object", "properties": {}, "additionalProperties": False},
             handler=tool_get_studio_resource_summary,
         ),
         ToolDefinition(
             name="resolve_question_card_candidates",
-            description="Locate possible studio question-card objects that may match the user's query.",
+            description="Locate possible studio question-card objects within the current workroom that may match the user's query.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -42,7 +42,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="read_studio_question_card",
-            description="Read one already-identified studio question card by question_id or sequence_index.",
+            description="Read one already-identified studio question card from the current workroom by question_id or sequence_index.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -55,7 +55,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="read_kb_evidence",
-            description="Read evidence objects from the knowledge base for the current query, including snippets and asset references.",
+            description="Read evidence objects from knowledge-base content in the current workroom's bound source files for the current query, including snippets and asset references.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -69,7 +69,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="search_kb_candidates",
-            description="Locate candidate knowledge-base references related to the current query without fully reading their content.",
+            description="Locate candidate knowledge-base references from the current workroom's bound source files related to the current query without fully reading their content.",
             parameters={
                 "type": "object",
                 "properties": {

@@ -16,6 +16,22 @@ class WorkroomRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def get_workroom(self, *, tenant_id: int, user_id: int, workroom_id: int) -> dict[str, Any] | None:
+        row = self.db.execute(
+            text(
+                """
+                SELECT *
+                FROM workrooms
+                WHERE tenant_id = :tenant_id
+                  AND user_id = :user_id
+                  AND id = :workroom_id
+                LIMIT 1
+                """
+            ),
+            {"tenant_id": tenant_id, "user_id": user_id, "workroom_id": workroom_id},
+        ).mappings().first()
+        return dict(row) if row else None
+
     def get_current_workroom(self, *, tenant_id: int, user_id: int) -> dict[str, Any] | None:
         row = self.db.execute(
             text(

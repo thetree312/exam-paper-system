@@ -49,7 +49,8 @@ def build_default_session_context() -> dict[str, Any]:
 
 def build_default_studio_state() -> dict[str, Any]:
     return {
-        "environment_window": {"active_surface": "studio", "surface_states": {}},
+        "environment_window": {"surface_states": {}},
+        "transition_state": {"latest_tool_name": None, "latest_tool_status": None, "added_source_refs": [], "errored_tools": []},
         "attention_state": {"focused_objects": [], "stalled_paths": []},
         "active_window": {"objects": []},
     }

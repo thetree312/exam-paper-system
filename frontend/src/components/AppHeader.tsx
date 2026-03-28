@@ -2,6 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserInfo } from '../types'
 import BrandIcon from './BrandIcon'
+import { LanguageSelector } from './LanguageSelector'
 
 interface AppHeaderProps {
   statusMessage: string
@@ -65,22 +66,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex items-center text-xs font-semibold rounded-full border border-slate-200 overflow-hidden">
-          <button
-            type="button"
-            className={`px-2 py-1 transition-colors ${currentLang === 'zh' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
-            onClick={() => switchLanguage('zh')}
-          >
-            {t('language.zh')}
-          </button>
-          <button
-            type="button"
-            className={`px-2 py-1 transition-colors ${currentLang === 'en' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
-            onClick={() => switchLanguage('en')}
-          >
-            {t('language.en')}
-          </button>
-        </div>
+        <LanguageSelector />
         <button
           className="flex items-center gap-2 h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition-colors"
           type="button"
