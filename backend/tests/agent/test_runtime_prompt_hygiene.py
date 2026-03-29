@@ -299,6 +299,45 @@ def test_execute_tools_does_not_pollute_visible_conversation_with_tool_messages(
     assert all(item["role"] in {"user", "assistant"} for item in updates["conversation_messages"])
 
 
+def test_execute_tools_with_assistant_tool_message_does_not_raise_on_direct_interrupt() -> None:
+    from app.agent.assistant_graph import runtime_bootstrap as rb
+
+    state = {
+        "context": {},
+        "messages": [
+            {"role": "system", "content": "policy"},
+            {"role": "user", "content": "继续"},
+        ],
+        "conversation_messages": [
+            {"role": "user", "content": "继续"},
+        ],
+        "step_count": 3,
+        "model_turn": {
+            "response_text": "",
+            "tool_calls": [],
+            "interrupt_request": {"prompt": "请补充约束"},
+            "assistant_tool_message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "request_user_clarification", "arguments": "{}"},
+                    }
+                ],
+            },
+        },
+        "runtime_snapshot": {},
+    }
+
+    result = rb._node_execute_tools(state)
+
+    assert result.goto == "interrupt_user"
+    assert result.update["halt_reason"] == "interrupt"
+    assert result.update["interrupt_payload"] == {"prompt": "请补充约束"}
+
+
 def test_interrupt_user_resume_only_writes_visible_user_message(monkeypatch) -> None:
     from app.agent.assistant_graph import runtime_bootstrap as rb
 

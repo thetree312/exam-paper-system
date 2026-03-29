@@ -2,10 +2,9 @@ import React, { useEffect } from 'react'
 import { SelectionWorkspace } from './SelectionWorkspace'
 import { useSelectionInteraction } from '../hooks/useSelectionInteraction'
 import type {
+  AgentCitationFocus,
   PageSelectionSegment,
   SelectionBox,
-  SelectionExclusion,
-  SelectionLegend,
   RegionPayload,
   LegendRegionPayload,
 } from '../types'
@@ -15,16 +14,19 @@ interface SelectionPaneProps {
   previewType: string | null
   activeStatus: string
   hasActiveFile: boolean
+  activeFileId?: number | null
   pageRefs: React.MutableRefObject<Record<number, HTMLDivElement | null>>
   imageRefs: React.MutableRefObject<Record<number, HTMLImageElement | null>>
   isExtracting: boolean
   previewScrollRef: React.RefObject<HTMLDivElement>
+  citationFocus?: AgentCitationFocus | null
   onSelectionSnapshotChange?: (snapshot: {
     selection: SelectionBox | null
     pendingExclusions: PageSelectionSegment[]
     pendingLegends: PageSelectionSegment[]
     buildRegionsPayload: () => RegionPayload[] | null
     buildLegendsPayload: () => LegendRegionPayload[] | null
+    clearSelection: () => void
   }) => void
   onAddClick: () => void
   onClearSelection: () => void
@@ -35,10 +37,12 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
   previewType,
   activeStatus,
   hasActiveFile,
+  activeFileId,
   pageRefs,
   imageRefs,
   isExtracting,
   previewScrollRef,
+  citationFocus,
   onSelectionSnapshotChange,
   onAddClick,
   onClearSelection,
@@ -92,6 +96,14 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
     onClearSelection()
   }
 
+  useEffect(() => {
+    if (!citationFocus || !hasActiveFile) return
+    if (activeFileId != null && citationFocus.fileId !== activeFileId) return
+    const pageNode = pageRefs.current[citationFocus.pageNo]
+    if (!pageNode) return
+    pageNode.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [activeFileId, citationFocus, hasActiveFile, pageRefs])
+
   return (
     <div
       ref={previewScrollRef}
@@ -103,6 +115,7 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
         previewType={previewType}
         activeStatus={activeStatus}
         hasActiveFile={hasActiveFile}
+        citationFocus={citationFocus}
         selection={selection}
         pendingExclusions={pendingExclusions}
         pendingLegends={pendingLegends}

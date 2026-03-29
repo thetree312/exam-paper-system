@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type {
+  AgentCitationAnchor,
+  AgentCitationStatus,
   AgentNoteFocus,
   AgentRunMessage,
   AgentRunRequest,
@@ -48,6 +50,41 @@ export function useAgentChat({
     messagesRef.current = next
     setMessages(next)
   }, [])
+
+  const patchLastAssistant = useCallback((patch: Partial<AgentRunMessage> | ((message: AgentRunMessage) => AgentRunMessage)) => {
+    const current = messagesRef.current
+    if (!current.length) return
+    const lastIndex = current.length - 1
+    const last = current[lastIndex]
+    if (!last || last.role !== 'assistant') return
+    const next = [...current]
+    next[lastIndex] = typeof patch === 'function' ? patch(last) : { ...last, ...patch }
+    updateMessages(next)
+  }, [updateMessages])
+
+  const applyAssistantCitations = useCallback(
+    (citations: AgentCitationAnchor[], citationStatus: AgentCitationStatus) => {
+      patchLastAssistant((last) => ({
+        ...last,
+        citations,
+        citationStatus,
+        usedRagEvidence: citations.length > 0,
+      }))
+    },
+    [patchLastAssistant],
+  )
+
+  const applyAssistantFinal = useCallback(
+    (answerText: string, citationStatus: AgentCitationStatus) => {
+      patchLastAssistant((last) => ({
+        ...last,
+        content: answerText,
+        citationStatus,
+        usedRagEvidence: last.usedRagEvidence ?? false,
+      }))
+    },
+    [patchLastAssistant],
+  )
 
   const appendAgentTraceToLastAssistant = useCallback((event: Extract<AgentStreamEvent, { type: 'agent_trace' }>) => {
     const current = messagesRef.current
@@ -147,15 +184,8 @@ export function useAgentChat({
   const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId && workroomId), [backendBaseUrl, tenantId, userId, workroomId])
 
   const markLastAssistantFinished = useCallback(() => {
-    const current = messagesRef.current
-    if (!current.length) return
-    const lastIndex = current.length - 1
-    const last = current[lastIndex]
-    if (!last || last.role !== 'assistant') return
-    if (!last.isStreaming) return
-    const next = current.map((msg, idx) => (idx === lastIndex ? { ...msg, isStreaming: false } : msg))
-    updateMessages(next)
-  }, [updateMessages])
+    patchLastAssistant((last) => (last.isStreaming ? { ...last, isStreaming: false } : last))
+  }, [patchLastAssistant])
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -201,6 +231,7 @@ export function useAgentChat({
         // 拖拽/动画时明显掉帧。
         let acc = ''
         let pendingContent = ''
+        let authoritativeFinalText: string | null = null
         let rafId: number | null = null
 
         const flush = () => {
@@ -215,7 +246,7 @@ export function useAgentChat({
           // 以便 React.memo 能正确感知 props 变化并触发重渲染。
           const next = current.map((msg, index) =>
             index === lastIndex
-              ? { ...msg, content: pendingContent }
+              ? { ...msg, content: authoritativeFinalText ?? pendingContent }
               : msg,
           )
           updateMessages(next)
@@ -246,6 +277,13 @@ export function useAgentChat({
             }
           } else if (event.type === 'agent_trace') {
             appendAgentTraceToLastAssistant(event)
+          } else if (event.type === 'assistant_citations') {
+            applyAssistantCitations(event.citations, event.citation_status)
+          } else if (event.type === 'assistant_final') {
+            authoritativeFinalText = event.answer_text
+            acc = event.answer_text
+            pendingContent = event.answer_text
+            applyAssistantFinal(event.answer_text, event.citation_status)
           } else if (event.type === 'ag_ui') {
             console.debug('[agentStream] ag_ui received', event.event)
             onAgUiEvent?.({ ...event, type: 'ag_ui' })
@@ -272,6 +310,8 @@ export function useAgentChat({
     },
     [
       appendAgentTraceToLastAssistant,
+      applyAssistantCitations,
+      applyAssistantFinal,
       backendBaseUrl,
       isReady,
       markLastAssistantFinished,
@@ -323,6 +363,7 @@ export function useAgentChat({
         const last = current[lastIndex]
         let acc = typeof last?.content === 'string' ? last.content : ''
         let pendingContent = acc
+        let authoritativeFinalText: string | null = null
         let rafId: number | null = null
 
         const flush = () => {
@@ -335,7 +376,7 @@ export function useAgentChat({
 
           const next = snapshot.map((msg, index) =>
             index === li
-              ? { ...msg, content: pendingContent }
+              ? { ...msg, content: authoritativeFinalText ?? pendingContent }
               : msg,
           )
           updateMessages(next)
@@ -371,6 +412,13 @@ export function useAgentChat({
               }
             } else if (event.type === 'agent_trace') {
               appendAgentTraceToLastAssistant(event)
+            } else if (event.type === 'assistant_citations') {
+              applyAssistantCitations(event.citations, event.citation_status)
+            } else if (event.type === 'assistant_final') {
+              authoritativeFinalText = event.answer_text
+              acc = event.answer_text
+              pendingContent = event.answer_text
+              applyAssistantFinal(event.answer_text, event.citation_status)
             } else if (event.type === 'ag_ui') {
               console.debug('[agentResumeStream] ag_ui received', event.event)
               onAgUiEvent?.({ ...event, type: 'ag_ui' })
@@ -394,6 +442,8 @@ export function useAgentChat({
     },
     [
       appendAgentTraceToLastAssistant,
+      applyAssistantCitations,
+      applyAssistantFinal,
       backendBaseUrl,
       documentId,
       isReady,

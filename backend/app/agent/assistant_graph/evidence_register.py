@@ -7,6 +7,7 @@ _MAX_REGISTER_FRAMES = 4
 _MAX_CARRYFORWARD_FRAMES = 2
 _MAX_COMPACT_SNIPPETS = 2
 _MAX_SNIPPET_TEXT = 120
+_MAX_CITATION_CANDIDATES = 4
 
 
 def _as_source_refs(values: Any) -> list[str]:
@@ -77,6 +78,38 @@ def _compact_snippets(values: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _compact_citation_candidates(values: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in values if isinstance(values, list) else []:
+        if not isinstance(item, dict):
+            continue
+        compact: dict[str, Any] = {}
+        for key in (
+            "citation_id",
+            "citation_index",
+            "source_ref",
+            "anchor_type",
+            "file_id",
+            "page_no",
+            "unit_key",
+            "chunk_id",
+            "chunk_type",
+            "asset_ref",
+            "preview_url",
+            "bbox_norm",
+        ):
+            if item.get(key) is not None:
+                compact[key] = item.get(key)
+        excerpt = str(item.get("excerpt") or "").strip()
+        if excerpt:
+            compact["excerpt"] = excerpt[:_MAX_SNIPPET_TEXT]
+        if compact:
+            out.append(compact)
+        if len(out) >= _MAX_CITATION_CANDIDATES:
+            break
+    return out
+
+
 def _compact_payload(
     *,
     tool_name: str,
@@ -115,6 +148,9 @@ def _compact_payload(
     snippets = _compact_snippets(payload.get("snippets"))
     if snippets:
         compact["snippets"] = snippets
+    citation_candidates = _compact_citation_candidates(payload.get("citation_candidates"))
+    if citation_candidates:
+        compact["citation_candidates"] = citation_candidates
     return compact
 
 

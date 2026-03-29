@@ -1,11 +1,11 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
+  AgentCitationFocus,
   PageSelectionSegment,
   SelectionBox,
   SelectionExclusion,
   SelectionLegend,
-  UploadedFileTab,
 } from '../types'
 
 interface SelectionWorkspaceProps {
@@ -13,6 +13,7 @@ interface SelectionWorkspaceProps {
   previewType: string | null
   activeStatus: string
   hasActiveFile: boolean
+  citationFocus?: AgentCitationFocus | null
   selection: SelectionBox | null
   pendingExclusions: PageSelectionSegment[]
   pendingLegends: PageSelectionSegment[]
@@ -180,6 +181,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
   previewType,
   activeStatus,
   hasActiveFile,
+  citationFocus,
   selection,
   pendingExclusions,
   pendingLegends,
@@ -206,6 +208,9 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
         const pageLegends = selection?.legends?.filter((seg) => seg.page === page) ?? []
         const pending = pendingExclusions.filter((seg) => seg.page === page)
         const pendingLegendSegments = pendingLegends.filter((seg) => seg.page === page)
+        const citationOnPage = citationFocus?.pageNo === page ? citationFocus : null
+        const citationBBox = citationOnPage?.bboxNorm ?? null
+        const isPageLevelCitation = Boolean(citationOnPage && !citationBBox)
         return (
           <div
             key={`${src}-${idx}`}
@@ -227,6 +232,26 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
               className="w-full h-auto block select-none"
               draggable={false}
             />
+            {isPageLevelCitation && citationOnPage && (
+              <div
+                className="absolute inset-3 border-[3px] border-amber-500 bg-amber-300/10 shadow-[0_0_0_4px_rgba(251,191,36,0.2)] transition-all duration-300"
+                data-citation-highlight="true"
+                data-citation-id={citationOnPage.citationId}
+              />
+            )}
+            {citationOnPage && citationBBox && (
+              <div
+                className="absolute border-[3px] border-amber-500 bg-amber-300/20 shadow-[0_0_0_4px_rgba(251,191,36,0.25)] transition-all duration-300"
+                style={{
+                  left: `${citationBBox.x * 100}%`,
+                  top: `${citationBBox.y * 100}%`,
+                  width: `${citationBBox.w * 100}%`,
+                  height: `${citationBBox.h * 100}%`,
+                }}
+                data-citation-highlight="true"
+                data-citation-id={citationOnPage.citationId}
+              />
+            )}
             {pageSegments.map((segment) => {
               const isAnchor = firstSegment &&
                 segment.page === firstSegment.page &&

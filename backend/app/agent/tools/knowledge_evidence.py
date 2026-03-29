@@ -9,6 +9,7 @@ from typing import Any
 
 from PIL import Image
 
+from ..citations import build_citation_anchor_from_chunk, build_citation_anchor_from_unit, dedupe_citation_anchors
 from ...services.kb.rag_service import RAGService
 from .common import build_feedback, ctx_source_file_ids, normalize_int
 
@@ -70,6 +71,21 @@ def _unit_ids_from_refs(refs: list[Any] | None) -> list[int]:
         if unit_id > 0:
             unit_ids.append(unit_id)
     return unit_ids
+
+
+def _group_ids_from_refs(refs: list[Any] | None) -> list[int]:
+    group_ids: list[int] = []
+    for item in refs or []:
+        ref = str(item or "").strip()
+        if not ref.startswith("group:"):
+            continue
+        try:
+            group_id = int(ref.split(":", 1)[1])
+        except (TypeError, ValueError):
+            continue
+        if group_id > 0:
+            group_ids.append(group_id)
+    return group_ids
 
 
 def _row_modality(row: dict[str, Any]) -> str:
@@ -211,6 +227,214 @@ def _build_doc_coverage(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+def _member_asset_path(member: dict[str, Any]) -> str:
+    metadata = member.get("metadata_json") if isinstance(member.get("metadata_json"), dict) else {}
+    return str(metadata.get("asset_ref") or metadata.get("asset_rel_path") or "").strip()
+
+
+def _select_primary_visual_ref(group: dict[str, Any], members: list[dict[str, Any]]) -> str | None:
+    preferred_asset_path = str(group.get("primary_image_path") or "").strip()
+    image_members = [
+        member
+        for member in members
+        if isinstance(member, dict) and "image" in str(member.get("chunk_type") or "").strip().lower()
+    ]
+    if preferred_asset_path:
+        for member in image_members:
+            if _member_asset_path(member) == preferred_asset_path:
+                chunk_id = _safe_int(member.get("chunk_id")) or 0
+                return f"chunk:{chunk_id}" if chunk_id > 0 else None
+    for member in image_members:
+        chunk_id = _safe_int(member.get("chunk_id")) or 0
+        if chunk_id > 0:
+            return f"chunk:{chunk_id}"
+    return None
+
+
+def _build_flat_evidence_package(
+    *,
+    source_refs: list[str],
+    snippets: list[dict[str, Any]],
+    asset_refs: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not source_refs and not snippets and not asset_refs:
+        return None
+    text_refs = [
+        str(item.get("source_ref") or "")
+        for item in snippets
+        if str(item.get("source_ref") or "").strip()
+        and "table" not in str(item.get("chunk_type") or "").strip().lower()
+    ]
+    table_refs = [
+        str(item.get("source_ref") or "")
+        for item in snippets
+        if str(item.get("source_ref") or "").strip()
+        and "table" in str(item.get("chunk_type") or "").strip().lower()
+    ]
+    visual_refs = [
+        str(item.get("source_ref") or "")
+        for item in asset_refs
+        if str(item.get("source_ref") or "").strip()
+    ]
+    primary_visual_ref = visual_refs[0] if visual_refs else None
+    return {
+        "package_id": "package:0",
+        "group_ref": None,
+        "group_type": "ad_hoc",
+        "title": snippets[0].get("title") if snippets else (asset_refs[0].get("title") if asset_refs else None),
+        "primary_visual_ref": primary_visual_ref,
+        "supporting_text_refs": text_refs,
+        "supporting_table_refs": table_refs,
+        "member_refs": [ref for ref in source_refs if str(ref or "").strip()],
+        "page_span": {
+            "start": _safe_int((snippets[0] if snippets else asset_refs[0] if asset_refs else {}).get("page_start"))
+            or _safe_int((asset_refs[0] if asset_refs else {}).get("page_no")),
+            "end": _safe_int((snippets[-1] if snippets else asset_refs[-1] if asset_refs else {}).get("page_end"))
+            or _safe_int((asset_refs[-1] if asset_refs else {}).get("page_no")),
+        },
+        "answerability_focus": "multimodal_grounding" if primary_visual_ref else "text_grounding",
+        "citation_order_refs": (
+            ([primary_visual_ref] if primary_visual_ref else [])
+            + text_refs
+            + table_refs
+            + [ref for ref in visual_refs if ref != primary_visual_ref]
+        ),
+    }
+
+
+def _reindex_citation_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for index, item in enumerate(candidates, start=1):
+        row = dict(item)
+        row["citation_index"] = index
+        row["citation_id"] = f"cite:{index}"
+        out.append(row)
+    return out
+
+
+def _scope_built_to_selected_packages(
+    built: dict[str, Any],
+    *,
+    evidence_packages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    packages = [dict(item) for item in evidence_packages if isinstance(item, dict)]
+    selected_packages = packages[:1]
+    built["evidence_packages"] = packages
+    built["active_evidence_packages"] = selected_packages
+    built["source_refs"] = [
+        str(item.get("group_ref") or "").strip()
+        for item in selected_packages
+        if str(item.get("group_ref") or "").strip()
+    ] or list(built.get("source_refs") or [])
+
+    ordered_refs: list[str] = []
+    for package in selected_packages:
+        for ref in package.get("citation_order_refs") or package.get("member_refs") or []:
+            ref_text = str(ref or "").strip()
+            if ref_text and ref_text not in ordered_refs:
+                ordered_refs.append(ref_text)
+
+    snippets = built.get("snippets") if isinstance(built.get("snippets"), list) else []
+    asset_refs = built.get("asset_refs") if isinstance(built.get("asset_refs"), list) else []
+    evidence_objects = built.get("evidence_objects") if isinstance(built.get("evidence_objects"), list) else []
+    citation_candidates = built.get("citation_candidates") if isinstance(built.get("citation_candidates"), list) else []
+
+    snippet_map = {str(item.get("source_ref") or "").strip(): item for item in snippets if isinstance(item, dict)}
+    asset_map = {str(item.get("source_ref") or "").strip(): item for item in asset_refs if isinstance(item, dict)}
+    evidence_map = {str(item.get("source_ref") or "").strip(): item for item in evidence_objects if isinstance(item, dict)}
+    citation_map = {str(item.get("source_ref") or "").strip(): item for item in citation_candidates if isinstance(item, dict)}
+
+    built["snippets"] = [snippet_map[ref] for ref in ordered_refs if ref in snippet_map]
+    built["asset_refs"] = [asset_map[ref] for ref in ordered_refs if ref in asset_map]
+    built["evidence_objects"] = [evidence_map[ref] for ref in ordered_refs if ref in evidence_map]
+    built["citation_candidates"] = _reindex_citation_candidates(
+        [citation_map[ref] for ref in ordered_refs if ref in citation_map]
+    )
+    return built
+
+
+def _apply_evidence_packages_to_built(
+    built: dict[str, Any],
+    *,
+    evidence_packages: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    packages = [item for item in (evidence_packages or []) if isinstance(item, dict)]
+    built = _scope_built_to_selected_packages(built, evidence_packages=packages)
+    packages = built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else []
+    active_packages = (
+        built.get("active_evidence_packages") if isinstance(built.get("active_evidence_packages"), list) else []
+    )
+    asset_refs = built.get("asset_refs") if isinstance(built.get("asset_refs"), list) else []
+    asset_by_ref = {
+        str(item.get("source_ref") or ""): item
+        for item in asset_refs
+        if isinstance(item, dict) and str(item.get("source_ref") or "").strip()
+    }
+    selected_asset = None
+    for package in active_packages:
+        primary_ref = str(package.get("primary_visual_ref") or "").strip()
+        if primary_ref and primary_ref in asset_by_ref:
+            selected_asset = asset_by_ref[primary_ref]
+            break
+    if selected_asset is None and asset_refs:
+        selected_asset = asset_refs[0]
+    built["best_asset_ref"] = selected_asset
+
+    vision_asset_inline = None
+    if isinstance(selected_asset, dict):
+        data_url = _encode_asset_as_data_url(str(selected_asset.get("asset_rel_path") or ""))
+        if data_url:
+            vision_asset_inline = {
+                "chunk_id": selected_asset.get("chunk_id"),
+                "file_id": selected_asset.get("file_id"),
+                "page_no": selected_asset.get("page_no"),
+                "data_url": data_url,
+            }
+    built["vision_asset_inline"] = (
+        {
+            "chunk_id": vision_asset_inline.get("chunk_id"),
+            "file_id": vision_asset_inline.get("file_id"),
+            "page_no": vision_asset_inline.get("page_no"),
+        }
+        if vision_asset_inline
+        else None
+    )
+
+    model_input = built.get("model_input") if isinstance(built.get("model_input"), dict) else {}
+    model_input["evidence_packages"] = packages
+    model_input["active_evidence_packages"] = active_packages
+    model_input["primary_evidence_package"] = active_packages[0] if active_packages else None
+    model_input["snippets"] = list(built.get("snippets") or [])[:_MAX_SNIPPETS_TO_MODEL]
+    model_input["asset_refs"] = [
+        {
+            "source_ref": item.get("source_ref"),
+            "chunk_id": item.get("chunk_id"),
+            "file_id": item.get("file_id"),
+            "page_no": item.get("page_no"),
+            "asset_kind": item.get("asset_kind"),
+            "distance": item.get("distance"),
+        }
+        for item in list(built.get("asset_refs") or [])[:_MAX_ASSET_REFS_TO_MODEL]
+        if isinstance(item, dict)
+    ]
+    model_input["citation_candidates"] = list(built.get("citation_candidates") or [])
+    model_input["source_refs"] = list(built.get("source_refs") or [])
+    if isinstance(selected_asset, dict):
+        model_input["best_asset_ref"] = {
+            "chunk_id": selected_asset.get("chunk_id"),
+            "file_id": selected_asset.get("file_id"),
+            "page_no": selected_asset.get("page_no"),
+            "asset_kind": selected_asset.get("asset_kind"),
+            "distance": selected_asset.get("distance"),
+        }
+    built["model_input"] = model_input
+    built["model_message_content"] = _build_model_message_content(
+        text_payload=model_input,
+        image_data_url=(str(vision_asset_inline.get("data_url") or "") if vision_asset_inline else None),
+    )
+    return built
+
+
 def _resolve_bound_file_id(doc_coverage: list[dict[str, Any]]) -> int | None:
     if not doc_coverage:
         return None
@@ -246,14 +470,26 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
             source_refs.append(source_ref)
 
         if modality == "image":
+            asset_kind = str(metadata.get("asset_kind") or "").strip()
+            asset_rel_path = str(
+                metadata.get("asset_rel_path") or metadata.get("asset_ref") or ""
+            ).strip()
             item = {
+                "source_ref": source_ref,
                 "chunk_id": chunk_id,
+                "chunk_type": str(row.get("chunk_type") or ""),
                 "file_id": file_id,
                 "title": title,
                 "preview_url": preview_url,
                 "page_no": page_no,
-                "asset_kind": str(metadata.get("asset_kind") or ""),
-                "asset_rel_path": str(metadata.get("asset_rel_path") or ""),
+                "asset_kind": asset_kind,
+                "asset_rel_path": asset_rel_path,
+                "bbox_norm": metadata.get("bbox_norm") if isinstance(metadata.get("bbox_norm"), dict) else None,
+                "bbox_abs": metadata.get("bbox_abs") if isinstance(metadata.get("bbox_abs"), dict) else None,
+                "layout_unit_key": str(metadata.get("layout_unit_key") or "").strip() or None,
+                "parent_unit_key": str(metadata.get("parent_unit_key") or "").strip() or None,
+                "relation_type": str(metadata.get("relation_type") or "").strip() or None,
+                "block_label": str(metadata.get("block_label") or "").strip() or None,
                 "distance": distance,
             }
             asset_refs.append(item)
@@ -262,17 +498,27 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
                     "kind": "asset_ref",
                     "source_ref": source_ref,
                     "distance": distance,
-                    "payload": {"file_id": file_id, "page_no": page_no, "preview_url": preview_url},
+                    "payload": {
+                        "file_id": file_id,
+                        "page_no": page_no,
+                        "preview_url": preview_url,
+                        "bbox_norm": metadata.get("bbox_norm") if isinstance(metadata.get("bbox_norm"), dict) else None,
+                        "bbox_abs": metadata.get("bbox_abs") if isinstance(metadata.get("bbox_abs"), dict) else None,
+                    },
                 }
             )
         else:
             item = {
+                "source_ref": source_ref,
                 "chunk_id": chunk_id,
+                "chunk_type": str(row.get("chunk_type") or ""),
                 "file_id": file_id,
                 "title": title,
                 "page_start": row.get("page_start"),
                 "page_end": row.get("page_end"),
                 "content": preview,
+                "bbox_norm": metadata.get("bbox_norm") if isinstance(metadata.get("bbox_norm"), dict) else None,
+                "bbox_abs": metadata.get("bbox_abs") if isinstance(metadata.get("bbox_abs"), dict) else None,
                 "distance": distance,
             }
             snippets.append(item)
@@ -286,6 +532,8 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
                         "page_start": row.get("page_start"),
                         "page_end": row.get("page_end"),
                         "content": preview,
+                        "bbox_norm": metadata.get("bbox_norm") if isinstance(metadata.get("bbox_norm"), dict) else None,
+                        "bbox_abs": metadata.get("bbox_abs") if isinstance(metadata.get("bbox_abs"), dict) else None,
                     },
                 }
             )
@@ -357,20 +605,17 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
         }
     )
 
-    best_asset_ref = asset_refs[0] if asset_refs else None
-    vision_asset_inline: dict[str, Any] | None = None
-    if best_asset_ref:
-        data_url = _encode_asset_as_data_url(str(best_asset_ref.get("asset_rel_path") or ""))
-        if data_url:
-            vision_asset_inline = {
-                "chunk_id": best_asset_ref.get("chunk_id"),
-                "file_id": best_asset_ref.get("file_id"),
-                "page_no": best_asset_ref.get("page_no"),
-                "data_url": data_url,
-            }
+    asset_refs.sort(
+        key=lambda item: (
+            0 if str(item.get("asset_kind") or "") == "layout_crop" else 1,
+            _safe_float(item.get("distance")),
+            _safe_int(item.get("chunk_id")) or 0,
+        )
+    )
 
     model_asset_refs = [
         {
+            "source_ref": item.get("source_ref"),
             "chunk_id": item.get("chunk_id"),
             "file_id": item.get("file_id"),
             "page_no": item.get("page_no"),
@@ -398,22 +643,25 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
             }
         )
 
+    citation_candidates = dedupe_citation_anchors(
+        [
+            build_citation_anchor_from_chunk(
+                row,
+                citation_id=f"cite:{index + 1}",
+                citation_index=index + 1,
+                source_ref=f"chunk:{int(row.get('chunk_id') or 0)}",
+            )
+            for index, row in enumerate(rows)
+            if int(_safe_int(row.get("chunk_id")) or 0) > 0
+        ]
+    )
+
     model_text_payload = {
         "query": query,
         "evidence_objects": model_evidence_objects,
         "snippets": snippets[:_MAX_SNIPPETS_TO_MODEL],
         "asset_refs": model_asset_refs,
-        "best_asset_ref": (
-            {
-                "chunk_id": best_asset_ref.get("chunk_id"),
-                "file_id": best_asset_ref.get("file_id"),
-                "page_no": best_asset_ref.get("page_no"),
-                "asset_kind": best_asset_ref.get("asset_kind"),
-                "distance": best_asset_ref.get("distance"),
-            }
-            if best_asset_ref
-            else None
-        ),
+        "citation_candidates": citation_candidates,
         "evidence_summary": summary,
         "answerability": answerability,
         "insufficiency": insufficiency,
@@ -431,18 +679,12 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
             "asset_file_ids": asset_file_ids,
         },
     }
-
-    model_message_content = _build_model_message_content(
-        text_payload=model_text_payload,
-        image_data_url=(str(vision_asset_inline.get("data_url") or "") if vision_asset_inline else None),
-    )
-
-    return {
+    built = {
         "query": query,
         "snippets": snippets,
         "asset_refs": asset_refs,
         "evidence_objects": evidence_objects,
-        "best_asset_ref": best_asset_ref,
+        "citation_candidates": citation_candidates,
         "evidence_summary": summary,
         "answerability": answerability,
         "insufficiency": insufficiency,
@@ -456,18 +698,17 @@ def _build_evidence_from_rows(query: str, rows: list[dict[str, Any]]) -> dict[st
         "candidate_asset_count": len(asset_refs),
         "snippet_file_ids": snippet_file_ids,
         "asset_file_ids": asset_file_ids,
-        "vision_asset_inline": (
-            {
-                "chunk_id": vision_asset_inline.get("chunk_id"),
-                "file_id": vision_asset_inline.get("file_id"),
-                "page_no": vision_asset_inline.get("page_no"),
-            }
-            if vision_asset_inline
-            else None
-        ),
-        "model_message_content": model_message_content,
         "model_input": model_text_payload,
     }
+    flat_package = _build_flat_evidence_package(
+        source_refs=source_refs,
+        snippets=snippets,
+        asset_refs=asset_refs,
+    )
+    return _apply_evidence_packages_to_built(
+        built,
+        evidence_packages=[flat_package] if flat_package else [],
+    )
 
 
 def _build_evidence_from_units(query: str, units: list[dict[str, Any]]) -> dict[str, Any]:
@@ -478,19 +719,36 @@ def _build_evidence_from_units(query: str, units: list[dict[str, Any]]) -> dict[
         page_no_start = _safe_int(unit.get("page_no_start"))
         title = str(unit.get("title") or "")
         text_content = str(unit.get("text_content") or "").strip()
-        primary_image_path = str(unit.get("primary_image_path") or "").strip()
         distance = _safe_float(unit.get("distance"))
+        metadata_json = unit.get("metadata_json") if isinstance(unit.get("metadata_json"), dict) else {}
+        primary_image_path = str(unit.get("primary_image_path") or "").strip()
+        if not primary_image_path:
+            primary_image_path = str(
+                metadata_json.get("asset_ref")
+                or metadata_json.get("asset_rel_path")
+                or ""
+            ).strip()
         if primary_image_path:
+            asset_kind = "layout_crop" if str(unit.get("unit_type") or "").startswith("layout_") else "page_preview"
             rows.append(
                 {
                     "chunk_id": unit_id,
                     "distance": distance,
-                    "chunk_type": "page_image",
+                    "chunk_type": str(unit.get("unit_type") or "page_image"),
                     "content": f"[unit image page {page_no_start or 1}]",
                     "metadata_json": {
                         "modality": "image",
                         "asset_rel_path": primary_image_path,
+                        "asset_kind": asset_kind,
                         "page_no": page_no_start,
+                        "unit_type": unit.get("unit_type"),
+                        "unit_key": unit.get("unit_key"),
+                        "layout_unit_key": metadata_json.get("layout_unit_key"),
+                        "parent_unit_key": metadata_json.get("parent_unit_key"),
+                        "relation_type": metadata_json.get("relation_type"),
+                        "block_label": metadata_json.get("block_label"),
+                        "bbox_norm": metadata_json.get("bbox_norm") if isinstance(metadata_json.get("bbox_norm"), dict) else None,
+                        "bbox_abs": metadata_json.get("bbox_abs") if isinstance(metadata_json.get("bbox_abs"), dict) else None,
                     },
                     "file_id": file_id,
                     "document_id": unit.get("document_id"),
@@ -508,7 +766,17 @@ def _build_evidence_from_units(query: str, units: list[dict[str, Any]]) -> dict[
                     "distance": distance,
                     "chunk_type": "unit_text",
                     "content": text_content,
-                    "metadata_json": {"modality": "text", "unit_type": unit.get("unit_type"), "unit_key": unit.get("unit_key")},
+                    "metadata_json": {
+                        "modality": "text",
+                        "unit_type": unit.get("unit_type"),
+                        "unit_key": unit.get("unit_key"),
+                        "layout_unit_key": metadata_json.get("layout_unit_key"),
+                        "parent_unit_key": metadata_json.get("parent_unit_key"),
+                        "relation_type": metadata_json.get("relation_type"),
+                        "block_label": metadata_json.get("block_label"),
+                        "bbox_norm": metadata_json.get("bbox_norm") if isinstance(metadata_json.get("bbox_norm"), dict) else None,
+                        "bbox_abs": metadata_json.get("bbox_abs") if isinstance(metadata_json.get("bbox_abs"), dict) else None,
+                    },
                     "file_id": file_id,
                     "document_id": unit.get("document_id"),
                     "page_start": page_no_start,
@@ -553,12 +821,26 @@ def _build_evidence_from_units(query: str, units: list[dict[str, Any]]) -> dict[
             "title": unit.get("title"),
             "text_content": str(unit.get("text_content") or "")[:1200],
             "primary_image_path": unit.get("primary_image_path"),
+            "metadata_json": unit.get("metadata_json") if isinstance(unit.get("metadata_json"), dict) else {},
             "distance": _safe_float(unit.get("distance")),
         }
         for unit in units
     ]
+    built["citation_candidates"] = dedupe_citation_anchors(
+        [
+            build_citation_anchor_from_unit(
+                unit,
+                citation_id=f"cite:{index + 1}",
+                citation_index=index + 1,
+                source_ref=f"unit:{int(_safe_int(unit.get('unit_id')) or 0)}",
+            )
+            for index, unit in enumerate(units)
+            if int(_safe_int(unit.get("unit_id")) or 0) > 0
+        ]
+    )
     model_input = built.get("model_input") if isinstance(built.get("model_input"), dict) else {}
     model_input["evidence_units"] = built.get("evidence_units")
+    model_input["citation_candidates"] = built.get("citation_candidates")
     built["model_input"] = model_input
     return built
 
@@ -625,6 +907,188 @@ def _build_candidate_refs_from_units(query: str, units: list[dict[str, Any]]) ->
     return {
         "query": query,
         "candidate_refs": candidate_refs,
+        "source_refs": candidate_refs,
+        "doc_coverage": doc_coverage,
+        "target_resolution": target_resolution,
+        "evidence_modality": evidence_modality,
+        "model_message_content": _build_model_message_content(text_payload=model_text_payload),
+        "model_input": model_text_payload,
+    }
+
+
+def _build_evidence_from_groups(query: str, groups: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    source_refs: list[str] = []
+    evidence_groups: list[dict[str, Any]] = []
+    evidence_packages: list[dict[str, Any]] = []
+    for group in groups:
+        group_id = _safe_int(group.get("group_id")) or 0
+        group_ref = f"group:{group_id}" if group_id > 0 else None
+        if group_id > 0:
+            source_refs.append(group_ref)
+        evidence_groups.append(
+            {
+                "group_id": group_id,
+                "group_key": group.get("group_key"),
+                "group_type": group.get("group_type"),
+                "file_id": _safe_int(group.get("file_id")),
+                "page_no_start": _safe_int(group.get("page_no_start")),
+                "page_no_end": _safe_int(group.get("page_no_end")),
+                "title": group.get("title"),
+                "text_content": str(group.get("text_content") or "")[:1200],
+                "primary_image_path": group.get("primary_image_path"),
+                "metadata_json": group.get("metadata_json") if isinstance(group.get("metadata_json"), dict) else {},
+                "distance": _safe_float(group.get("distance")),
+            }
+        )
+        package_member_refs: list[str] = []
+        package_text_refs: list[str] = []
+        package_table_refs: list[str] = []
+        for member in group.get("members") if isinstance(group.get("members"), list) else []:
+            if not isinstance(member, dict):
+                continue
+            chunk_id = _safe_int(member.get("chunk_id")) or 0
+            source_ref = f"chunk:{chunk_id}" if chunk_id > 0 else ""
+            if source_ref:
+                package_member_refs.append(source_ref)
+            chunk_type = str(member.get("chunk_type") or "").strip().lower()
+            if source_ref:
+                if "image" in chunk_type:
+                    pass
+                elif "table" in chunk_type:
+                    package_table_refs.append(source_ref)
+                else:
+                    package_text_refs.append(source_ref)
+            rows.append(
+                {
+                    "chunk_id": chunk_id,
+                    "distance": _safe_float(group.get("distance")),
+                    "chunk_type": str(member.get("chunk_type") or ""),
+                    "content": str(member.get("content") or ""),
+                    "metadata_json": member.get("metadata_json") if isinstance(member.get("metadata_json"), dict) else {},
+                    "file_id": _safe_int(member.get("file_id")),
+                    "document_id": member.get("document_id"),
+                    "page_start": _safe_int(member.get("page_start")),
+                    "page_end": _safe_int(member.get("page_end")),
+                    "source_id": _safe_int(member.get("source_id")),
+                    "source_type": member.get("source_type"),
+                    "title": member.get("title"),
+                }
+            )
+        primary_visual_ref = _select_primary_visual_ref(
+            group,
+            group.get("members") if isinstance(group.get("members"), list) else [],
+        )
+        evidence_packages.append(
+            {
+                "package_id": f"package:group:{group_id}" if group_id > 0 else f"package:group:{len(evidence_packages)}",
+                "group_ref": group_ref,
+                "group_type": group.get("group_type"),
+                "title": group.get("title"),
+                "page_span": {
+                    "start": _safe_int(group.get("page_no_start")),
+                    "end": _safe_int(group.get("page_no_end")),
+                },
+                "primary_visual_ref": primary_visual_ref,
+                "supporting_text_refs": package_text_refs,
+                "supporting_table_refs": package_table_refs,
+                "member_refs": package_member_refs,
+                "answerability_focus": "multimodal_grounding" if primary_visual_ref else "text_grounding",
+                "distance": _safe_float(group.get("distance")),
+                "citation_order_refs": (
+                    ([primary_visual_ref] if primary_visual_ref else [])
+                    + package_text_refs
+                    + package_table_refs
+                    + [ref for ref in package_member_refs if ref not in package_text_refs and ref not in package_table_refs and ref != primary_visual_ref]
+                ),
+            }
+        )
+    built = _build_evidence_from_rows(query=query, rows=rows)
+    built["source_refs"] = source_refs
+    built["evidence_groups"] = evidence_groups
+    model_input = built.get("model_input") if isinstance(built.get("model_input"), dict) else {}
+    model_input["evidence_groups"] = evidence_groups
+    built["model_input"] = model_input
+    return _apply_evidence_packages_to_built(built, evidence_packages=evidence_packages)
+
+
+def _build_candidate_refs_from_groups(query: str, groups: list[dict[str, Any]]) -> dict[str, Any]:
+    candidate_refs: list[str] = []
+    doc_rows: list[dict[str, Any]] = []
+    modality_kinds: set[str] = set()
+    candidate_packages: list[dict[str, Any]] = []
+    for group in groups:
+        group_id = _safe_int(group.get("group_id"))
+        if group_id is not None and group_id > 0:
+            members = group.get("members") if isinstance(group.get("members"), list) else []
+            primary_visual_ref = _select_primary_visual_ref(group, members)
+            candidate_packages.append(
+                {
+                    "package_id": f"package:group:{group_id}",
+                    "group_ref": f"group:{group_id}",
+                    "group_type": group.get("group_type"),
+                    "title": group.get("title"),
+                    "page_span": {
+                        "start": _safe_int(group.get("page_no_start")),
+                        "end": _safe_int(group.get("page_no_end")),
+                    },
+                    "distance": _safe_float(group.get("distance")),
+                    "primary_visual_ref": primary_visual_ref,
+                    "has_primary_visual": bool(primary_visual_ref),
+                }
+            )
+        file_id = _safe_int(group.get("file_id"))
+        if file_id is not None:
+            matched = group.get("matched_embed_kinds")
+            matched_kinds = matched if isinstance(matched, list) and matched else [group.get("matched_embed_kind")]
+            text_hit_count = len([kind for kind in matched_kinds if str(kind or "").strip().lower() == "text"])
+            image_hit_count = len([kind for kind in matched_kinds if str(kind or "").strip().lower() == "image"])
+            doc_rows.append(
+                {
+                    "file_id": file_id,
+                    "distance": _safe_float(group.get("distance")),
+                    "chunk_type": "page_image" if image_hit_count and not text_hit_count else "unit_text",
+                    "metadata_json": {"modality": "image" if image_hit_count and not text_hit_count else "text"},
+                }
+            )
+            for kind in matched_kinds:
+                kind_text = str(kind or "").strip().lower()
+                if kind_text:
+                    modality_kinds.add(kind_text)
+    doc_coverage = _build_doc_coverage(doc_rows)
+    unique_files = [int(item.get("file_id")) for item in doc_coverage if item.get("file_id") is not None]
+    if not candidate_refs:
+        target_resolution = "unbound"
+    elif len(unique_files) == 1:
+        target_resolution = "bound"
+    else:
+        target_resolution = "ambiguous"
+    if {"text", "image"} <= modality_kinds:
+        evidence_modality = "mixed"
+    elif "text" in modality_kinds:
+        evidence_modality = "text"
+    elif "image" in modality_kinds:
+        evidence_modality = "visual"
+    else:
+        evidence_modality = "none"
+    candidate_refs = [
+        str(item.get("group_ref") or "").strip()
+        for item in candidate_packages
+        if str(item.get("group_ref") or "").strip()
+    ]
+    model_text_payload = {
+        "query": query,
+        "candidate_refs": candidate_refs,
+        "candidate_packages": candidate_packages,
+        "doc_coverage": doc_coverage,
+        "target_resolution": target_resolution,
+        "answerability": "candidate_only",
+        "evidence_modality": evidence_modality,
+    }
+    return {
+        "query": query,
+        "candidate_refs": candidate_refs,
+        "candidate_packages": candidate_packages,
         "source_refs": candidate_refs,
         "doc_coverage": doc_coverage,
         "target_resolution": target_resolution,
@@ -803,7 +1267,7 @@ def tool_read_kb_evidence(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
 
     top_k = normalize_int(args.get("top_k"), _DEFAULT_TOP_K, min_v=1, max_v=_MAX_TOP_K)
     rag = RAGService()
-    units = rag.search_units(
+    groups = rag.search_semantic_groups(
         tenant_id=int(ctx["tenant_id"]),
         user_id=int(ctx["user_id"]),
         workroom_id=int(ctx["workroom_id"]) if ctx.get("workroom_id") is not None else None,
@@ -811,8 +1275,8 @@ def tool_read_kb_evidence(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
         limit=max(top_k, _DEFAULT_TOP_K),
         source_file_ids=ctx_source_file_ids(ctx),
     )
-    ranked_units = sorted(units, key=lambda row: _safe_float(row.get("distance")))[:top_k]
-    built = _build_evidence_from_units(query=query, units=ranked_units)
+    ranked_groups = sorted(groups, key=lambda row: _safe_float(row.get("distance")))[:top_k]
+    built = _build_evidence_from_groups(query=query, groups=ranked_groups)
     snippet_count = len(built.get("snippets") or [])
     asset_ref_count = len(built.get("asset_refs") or [])
     answerability, feedback = _derive_read_kb_evidence_semantics(
@@ -839,6 +1303,70 @@ def tool_read_kb_evidence(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
 
 
 def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]) -> dict[str, Any]:
+    group_ids = _group_ids_from_refs(refs)
+    if group_ids:
+        rag = RAGService()
+        groups = rag.get_semantic_groups_by_ids(
+            tenant_id=int(ctx["tenant_id"]),
+            user_id=int(ctx["user_id"]),
+            group_ids=group_ids,
+        )
+        built = _build_evidence_from_groups(query=query, groups=groups)
+        snippets = built.get("snippets") if isinstance(built.get("snippets"), list) else []
+        asset_refs = built.get("asset_refs") if isinstance(built.get("asset_refs"), list) else []
+        answerability, feedback = _derive_snippet_semantics(
+            target_resolution=str(built.get("target_resolution") or "unbound"),
+            evidence_modality=str(built.get("evidence_modality") or "none"),
+            snippet_count=len(snippets),
+            asset_ref_count=len(asset_refs),
+        )
+        citation_candidates = (
+            built.get("citation_candidates") if isinstance(built.get("citation_candidates"), list) else []
+        )
+        model_text_payload = {
+            "query": query,
+            "snippets": snippets[:_MAX_SNIPPETS_TO_MODEL],
+            "asset_refs": [
+                {
+                    "source_ref": item.get("source_ref"),
+                    "chunk_id": item.get("chunk_id"),
+                    "file_id": item.get("file_id"),
+                    "page_no": item.get("page_no"),
+                    "asset_kind": item.get("asset_kind"),
+                    "distance": item.get("distance"),
+                }
+                for item in asset_refs[:_MAX_ASSET_REFS_TO_MODEL]
+            ],
+            "source_refs": refs,
+            "target_resolution": built.get("target_resolution"),
+            "answerability": answerability,
+            "evidence_modality": built.get("evidence_modality"),
+            "citation_candidates": citation_candidates,
+            "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
+            "primary_evidence_package": ((built.get("evidence_packages") or [None])[0]),
+            "best_asset_ref": built.get("best_asset_ref"),
+        }
+        image_data_url = _extract_first_image_data_url(built.get("model_message_content"))
+        return {
+            "query": query,
+            "snippets": snippets,
+            "asset_refs": asset_refs,
+            "citation_candidates": citation_candidates,
+            "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
+            "evidence_groups": built.get("evidence_groups"),
+            "source_refs": built.get("source_refs") if isinstance(built.get("source_refs"), list) else refs,
+            "doc_coverage": built.get("doc_coverage") if isinstance(built.get("doc_coverage"), list) else [],
+            "target_resolution": built.get("target_resolution"),
+            "answerability": answerability,
+            "evidence_modality": built.get("evidence_modality"),
+            "feedback": feedback,
+            "model_message_content": _build_model_message_content(
+                text_payload=model_text_payload,
+                image_data_url=image_data_url,
+            ),
+            "model_input": model_text_payload,
+        }
+
     unit_ids = _unit_ids_from_refs(refs)
     if unit_ids:
         rag = RAGService()
@@ -856,11 +1384,15 @@ def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]
             snippet_count=len(snippets),
             asset_ref_count=len(asset_refs),
         )
+        citation_candidates = (
+            built.get("citation_candidates") if isinstance(built.get("citation_candidates"), list) else []
+        )
         model_text_payload = {
             "query": query,
             "snippets": snippets[:_MAX_SNIPPETS_TO_MODEL],
             "asset_refs": [
                 {
+                    "source_ref": item.get("source_ref"),
                     "chunk_id": item.get("chunk_id"),
                     "file_id": item.get("file_id"),
                     "page_no": item.get("page_no"),
@@ -873,12 +1405,18 @@ def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]
             "target_resolution": built.get("target_resolution"),
             "answerability": answerability,
             "evidence_modality": built.get("evidence_modality"),
+            "citation_candidates": citation_candidates,
+            "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
+            "primary_evidence_package": ((built.get("evidence_packages") or [None])[0]),
+            "best_asset_ref": built.get("best_asset_ref"),
         }
         image_data_url = _extract_first_image_data_url(built.get("model_message_content"))
         return {
             "query": query,
             "snippets": snippets,
             "asset_refs": asset_refs,
+            "citation_candidates": citation_candidates,
+            "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
             "evidence_units": built.get("evidence_units"),
             "source_refs": built.get("source_refs") if isinstance(built.get("source_refs"), list) else refs,
             "doc_coverage": built.get("doc_coverage") if isinstance(built.get("doc_coverage"), list) else [],
@@ -924,12 +1462,16 @@ def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]
         snippet_count=len(snippets),
         asset_ref_count=len(asset_refs),
     )
+    citation_candidates = (
+        built.get("citation_candidates") if isinstance(built.get("citation_candidates"), list) else []
+    )
 
     model_text_payload = {
         "query": query,
         "snippets": snippets[:_MAX_SNIPPETS_TO_MODEL],
         "asset_refs": [
             {
+                "source_ref": item.get("source_ref"),
                 "chunk_id": item.get("chunk_id"),
                 "file_id": item.get("file_id"),
                 "page_no": item.get("page_no"),
@@ -942,6 +1484,10 @@ def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]
         "target_resolution": built.get("target_resolution"),
         "answerability": answerability,
         "evidence_modality": built.get("evidence_modality"),
+        "citation_candidates": citation_candidates,
+        "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
+        "primary_evidence_package": ((built.get("evidence_packages") or [None])[0]),
+        "best_asset_ref": built.get("best_asset_ref"),
         "visual_guidance": "If snippets are empty and an image is attached, use the image evidence directly.",
     }
 
@@ -951,8 +1497,10 @@ def _read_kb_snippets_from_refs(refs: list[str], query: str, ctx: dict[str, Any]
         "query": query,
         "snippets": snippets,
         "asset_refs": asset_refs,
+        "citation_candidates": citation_candidates,
+        "evidence_packages": built.get("evidence_packages") if isinstance(built.get("evidence_packages"), list) else [],
         "source_refs": built.get("source_refs") if isinstance(built.get("source_refs"), list) else refs,
-        "doc_coverage": built.get("doc_coverage") if isinstance(built.get("doc_coverage"), list) else [],
+        "doc_coverage": built.get("doc_coverage") if isinstance(built.get("doc_coverage"), list) else [],        
         "target_resolution": built.get("target_resolution"),
         "answerability": answerability,
         "evidence_modality": built.get("evidence_modality"),
@@ -984,7 +1532,7 @@ def tool_search_kb_candidates(args: dict[str, Any], ctx: dict[str, Any]) -> dict
 
     top_k = normalize_int(args.get("top_k"), _DEFAULT_TOP_K, min_v=1, max_v=_MAX_TOP_K)
     rag = RAGService()
-    units = rag.search_unit_refs(
+    groups = rag.search_semantic_groups(
         tenant_id=int(ctx["tenant_id"]),
         user_id=int(ctx["user_id"]),
         workroom_id=int(ctx["workroom_id"]) if ctx.get("workroom_id") is not None else None,
@@ -992,8 +1540,8 @@ def tool_search_kb_candidates(args: dict[str, Any], ctx: dict[str, Any]) -> dict
         limit=max(top_k, _DEFAULT_TOP_K),
         source_file_ids=ctx_source_file_ids(ctx),
     )
-    ranked_units = sorted(units, key=lambda row: _safe_float(row.get("distance")))[:top_k]
-    raw = _build_candidate_refs_from_units(query=query, units=ranked_units)
+    ranked_groups = sorted(groups, key=lambda row: _safe_float(row.get("distance")))[:top_k]
+    raw = _build_candidate_refs_from_groups(query=query, groups=ranked_groups)
 
     candidate_refs = raw.get("candidate_refs") if isinstance(raw.get("candidate_refs"), list) else []
     doc_coverage = raw.get("doc_coverage") if isinstance(raw.get("doc_coverage"), list) else []
@@ -1008,6 +1556,7 @@ def tool_search_kb_candidates(args: dict[str, Any], ctx: dict[str, Any]) -> dict
     return {
         "query": raw.get("query"),
         "candidate_refs": candidate_refs,
+        "candidate_packages": raw.get("candidate_packages") if isinstance(raw.get("candidate_packages"), list) else [],
         "doc_coverage": doc_coverage,
         "target_resolution": target_resolution,
         "answerability": answerability,
@@ -1042,12 +1591,14 @@ def tool_read_kb_snippets(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
         snippet_count=len(snippets),
         asset_ref_count=len(asset_refs),
     )
+    citation_candidates = raw.get("citation_candidates") if isinstance(raw.get("citation_candidates"), list) else []
 
     model_text_payload = {
         "query": raw.get("query"),
         "snippets": snippets[:_MAX_SNIPPETS_TO_MODEL],
         "asset_refs": [
             {
+                "source_ref": item.get("source_ref"),
                 "chunk_id": item.get("chunk_id"),
                 "file_id": item.get("file_id"),
                 "page_no": item.get("page_no"),
@@ -1059,6 +1610,10 @@ def tool_read_kb_snippets(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
         "target_resolution": raw.get("target_resolution"),
         "answerability": answerability,
         "evidence_modality": raw.get("evidence_modality"),
+        "citation_candidates": citation_candidates,
+        "evidence_packages": raw.get("evidence_packages") if isinstance(raw.get("evidence_packages"), list) else [],
+        "primary_evidence_package": ((raw.get("evidence_packages") or [None])[0]),
+        "best_asset_ref": raw.get("best_asset_ref"),
         "visual_guidance": "If snippets are empty and an image is attached, use the image evidence directly.",
     }
     image_data_url = _extract_first_image_data_url(raw.get("model_message_content"))
@@ -1067,6 +1622,8 @@ def tool_read_kb_snippets(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str
         "query": raw.get("query"),
         "snippets": snippets,
         "asset_refs": asset_refs,
+        "citation_candidates": citation_candidates,
+        "evidence_packages": raw.get("evidence_packages") if isinstance(raw.get("evidence_packages"), list) else [],
         "source_refs": raw.get("source_refs") if isinstance(raw.get("source_refs"), list) else [],
         "doc_coverage": raw.get("doc_coverage") if isinstance(raw.get("doc_coverage"), list) else [],
         "target_resolution": raw.get("target_resolution"),

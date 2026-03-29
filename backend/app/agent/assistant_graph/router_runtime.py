@@ -536,16 +536,41 @@ def persist_agent_messages(
     user_id: int,
     session_id: int | None,
     result_messages: list[dict[str, Any]] | None,
+    final_answer_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if session_id is None:
         return {"session_id": None, "input_message_id": None, "output_message_id": None}
 
-    visible_messages: list[tuple[str, str]] = []
+    assistant_metadata: dict[str, Any] | None = None
+    if isinstance(final_answer_payload, dict):
+        citations = final_answer_payload.get("citations") if isinstance(final_answer_payload.get("citations"), list) else []
+        citation_status = str(final_answer_payload.get("citation_status") or "").strip() or None
+        used_rag_evidence = bool(final_answer_payload.get("used_rag_evidence"))
+        if citations or citation_status or used_rag_evidence:
+            assistant_metadata = {
+                "citations": citations,
+                "citation_status": citation_status,
+                "used_rag_evidence": used_rag_evidence,
+            }
+
+    visible_messages: list[dict[str, Any]] = []
     for item in result_messages or []:
         role = str(item.get("role") or "").lower().strip()
         if role not in ("user", "assistant"):
             continue
-        visible_messages.append((role, str(item.get("content") or "")))
+        visible_messages.append(
+            {
+                "role": role,
+                "content": str(item.get("content") or ""),
+                "metadata_json": None,
+            }
+        )
+
+    if assistant_metadata:
+        for item in reversed(visible_messages):
+            if item["role"] == "assistant":
+                item["metadata_json"] = assistant_metadata
+                break
 
     svc = AgentService(db)
     existing_rows = svc.list_messages(tenant_id=tenant_id, session_id=session_id, limit=5000)
@@ -556,19 +581,20 @@ def persist_agent_messages(
         if str(row.role or "").lower().strip() in ("user", "assistant")
     ]
 
-    append_batch: list[tuple[str, str]] = []
+    visible_pairs = [(item["role"], item["content"]) for item in visible_messages]
+    append_batch: list[dict[str, Any]] = []
     if not existing_visible:
         append_batch = visible_messages
-    elif len(visible_messages) >= len(existing_visible) and visible_messages[: len(existing_visible)] == existing_visible:
+    elif len(visible_pairs) >= len(existing_visible) and visible_pairs[: len(existing_visible)] == existing_visible:
         append_batch = visible_messages[len(existing_visible) :]
-    elif len(existing_visible) > len(visible_messages) and existing_visible[: len(visible_messages)] == visible_messages:
+    elif len(existing_visible) > len(visible_pairs) and existing_visible[: len(visible_pairs)] == visible_pairs:
         append_batch = []
     else:
         # Divergent payload: preserve existing history, append only unseen tail by suffix alignment.
-        max_overlap = min(len(existing_visible), len(visible_messages))
+        max_overlap = min(len(existing_visible), len(visible_pairs))
         overlap = 0
         for k in range(max_overlap, -1, -1):
-            if existing_visible[-k:] == visible_messages[:k]:
+            if existing_visible[-k:] == visible_pairs[:k]:
                 overlap = k
                 break
         append_batch = visible_messages[overlap:]

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import type { UploadedFileTab, UserInfo } from '../types'
+import type { AgentCitationFocus, UploadedFileTab, UserInfo } from '../types'
 import { FileTabsBar } from './FileTabsBar'
 import { SelectionPane } from './SelectionPane'
 import { FavoritesPage } from './FavoritesPage'
@@ -27,10 +27,12 @@ interface PreviewPaneShellProps {
   previewType: UploadedFileTab['previewType']
   activeStatus: UploadedFileTab['status']
   hasActiveFile: boolean
+  activeFileId?: number | null
   pageRefs: React.MutableRefObject<Record<number, HTMLDivElement | null>>
   imageRefs: React.MutableRefObject<Record<number, HTMLImageElement | null>>
   isExtracting: boolean
   previewScrollRef: React.RefObject<HTMLDivElement>
+  citationFocus?: AgentCitationFocus | null
   onSelectionSnapshotChange: (snapshot: any) => void
   onSelectionAddClick: () => void
   onClearSelection: () => void
@@ -63,10 +65,12 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   previewType,
   activeStatus,
   hasActiveFile,
+  activeFileId,
   pageRefs,
   imageRefs,
   isExtracting,
   previewScrollRef,
+  citationFocus,
   onSelectionSnapshotChange,
   onSelectionAddClick,
   onClearSelection,
@@ -100,10 +104,12 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
             previewType={previewType}
             activeStatus={activeStatus}
             hasActiveFile={hasActiveFile}
+            activeFileId={activeFileId}
             pageRefs={pageRefs}
             imageRefs={imageRefs}
             isExtracting={isExtracting}
             previewScrollRef={previewScrollRef}
+            citationFocus={citationFocus}
             onSelectionSnapshotChange={onSelectionSnapshotChange}
             onAddClick={onSelectionAddClick}
             onClearSelection={onClearSelection}

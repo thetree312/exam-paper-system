@@ -23,7 +23,15 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="Asia/Shanghai",
     enable_utc=True,
-    task_default_queue="exam_preview",
+    task_default_queue=settings.celery_queue_preview,
+    task_routes={
+        "generate_previews_for_session": {"queue": settings.celery_queue_preview},
+        "schedule_layout_for_file": {"queue": settings.celery_queue_glm_layout},
+        "parse_layout_for_page": {"queue": settings.celery_queue_glm_layout},
+        "finalize_layout_for_file": {"queue": settings.celery_queue_glm_layout},
+        "materialize_kb_for_file": {"queue": settings.celery_queue_embed},
+        "ingest_kb_for_file": {"queue": settings.celery_queue_embed},
+    },
 )
 
 # 明确包含任务模块，避免 worker 无法识别自定义任务

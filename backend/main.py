@@ -50,6 +50,28 @@ settings = get_settings()
 
 celery_process: Optional[subprocess.Popen] = None
 
+
+def _build_celery_worker_command() -> list[str]:
+    queue_names = [
+        settings.celery_queue_preview,
+        settings.celery_queue_glm_layout,
+        settings.celery_queue_embed,
+    ]
+    joined_queues = ",".join(queue_names)
+    return [
+        sys.executable,
+        "-m",
+        "celery",
+        "-A",
+        "app.celery_app.celery_app",
+        "worker",
+        "--pool=solo",
+        "-l",
+        "info",
+        "-Q",
+        joined_queues,
+    ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -80,17 +102,7 @@ async def start_celery_worker() -> None:
     if celery_process is not None and celery_process.poll() is None:
         return
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "celery",
-        "-A",
-        "app.celery_app.celery_app",
-        "worker",
-        "--pool=solo",
-        "-l",
-        "info",
-    ]
+    cmd = _build_celery_worker_command()
 
     env = {**os.environ, "REDIS_URL": settings.redis_url}
     try:

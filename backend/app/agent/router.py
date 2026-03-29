@@ -22,6 +22,7 @@ from .assistant_graph.adapters.message_adapter import (
     to_state_messages,
     visible_conversation_messages,
 )
+from .final_answer_citations import build_final_answer_payload
 from .assistant_graph.runtime_bootstrap import get_compiled_agent_app
 from ..config import get_settings
 from .services.agent_invocation_service import build_run_thread_id
@@ -57,6 +58,25 @@ grade_limit = rate_limit("agent-grade", limit=10, window_seconds=60)
 split_limit = rate_limit("agent-split", limit=10, window_seconds=60)
 sync_limit = rate_limit("agent-sync", limit=60, window_seconds=60)
 snapshot_limit = rate_limit("agent-snapshot", limit=60, window_seconds=60)
+
+
+def _extract_final_reply(messages: list[dict[str, Any]] | None) -> str:
+    visible = visible_conversation_messages(messages or [])
+    for item in reversed(visible):
+        if str(item.get("role") or "").strip().lower() != "assistant":
+            continue
+        text = str(item.get("content") or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _resolve_final_answer_payload(result: dict[str, Any]) -> dict[str, Any] | None:
+    existing = result.get("final_answer_payload")
+    if isinstance(existing, dict):
+        return existing
+    final_reply = _extract_final_reply(result.get("conversation_messages") or result.get("messages"))
+    return build_final_answer_payload(final_reply, list(result.get("tool_results") or []))
 
 class AgentMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
@@ -106,6 +126,7 @@ class AgentRunResponse(BaseModel):
     halt_reason: Optional[str] = None
     interrupt_payload: Optional[dict] = None
     ag_ui_events: List[dict] = Field(default_factory=list)
+    final_answer_payload: Optional[dict[str, Any]] = None
 
 
 class AgentSessionMeta(BaseModel):
@@ -135,11 +156,33 @@ class AgentSessionUpdateRequest(BaseModel):
     status: Optional[str] = None
 
 
+class AgentCitationAnchor(BaseModel):
+    citation_id: str
+    citation_index: int
+    source_ref: str
+    anchor_type: Optional[str] = None
+    file_id: int
+    page_no: int
+    unit_key: Optional[str] = None
+    chunk_id: Optional[int] = None
+    chunk_type: Optional[str] = None
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    asset_kind: Optional[str] = None
+    asset_ref: Optional[str] = None
+    preview_url: Optional[str] = None
+    bbox_norm: Optional[dict[str, Any]] = None
+    bbox_abs: Optional[dict[str, Any]] = None
+
+
 class AgentHistoryMessage(BaseModel):
     id: int
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     created_at: datetime
+    citations: List[AgentCitationAnchor] = Field(default_factory=list)
+    citation_status: Optional[str] = None
+    used_rag_evidence: bool = False
 
 
 class AgentSessionMessagesResponse(BaseModel):
@@ -654,12 +697,14 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
 
     config = {"configurable": {"thread_id": thread_id}}
     result = _app.invoke({**context, "ingress_messages": ingress_messages}, config=config)
+    final_answer_payload = result.get("final_answer_payload") if isinstance(result.get("final_answer_payload"), dict) else None
     persist_agent_messages(
         db=db,
         tenant_id=payload.tenant_id,
         user_id=payload.user_id,
         session_id=session_id,
         result_messages=result["messages"],
+        final_answer_payload=final_answer_payload,
     )
     return AgentRunResponse(
         session_id=session_id,
@@ -667,6 +712,7 @@ def agent_run(payload: AgentRunRequest, db: Session = Depends(get_db)) -> AgentR
         halt_reason=result.get("halt_reason"),
         interrupt_payload=result.get("interrupt_payload"),
         ag_ui_events=list(result.get("ag_ui_events") or []),
+        final_answer_payload=final_answer_payload,
     )
 
 
@@ -1483,7 +1529,9 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                 },
             )
             streamed_messages: list[Any] = []
+            streamed_tool_results: list[Any] = []
             streamed_conversation_messages: list[Any] = []
+            streamed_tool_results: list[Any] = []
             emitted_text: dict[str, str] = {}
             trace_reducer = StreamTraceReducer()
             emitted_final_text = False
@@ -1582,24 +1630,44 @@ def agent_run_stream(payload: AgentRunRequest, db: Session = Depends(get_db)) ->
                         conversation_messages_update = node_update.get("conversation_messages")
                         if isinstance(conversation_messages_update, list):
                             streamed_conversation_messages = conversation_messages_update
+                        tool_results_update = node_update.get("tool_results")
+                        if isinstance(tool_results_update, list):
+                            streamed_tool_results = tool_results_update
             result = {
                 "messages": streamed_messages,
                 "conversation_messages": streamed_conversation_messages,
+                "tool_results": streamed_tool_results,
             }
+            final_reply = _extract_final_reply(result.get("conversation_messages") or result["messages"])
+            final_answer_payload = _resolve_final_answer_payload(result)
             persist_agent_messages(
                 db=db_local,
                 tenant_id=payload.tenant_id,
                 user_id=payload.user_id,
                 session_id=session_id,
                 result_messages=result.get("conversation_messages") or result["messages"],
+                final_answer_payload=final_answer_payload if isinstance(final_answer_payload, dict) else None,
             )
-            visible = visible_conversation_messages(result.get("conversation_messages") or result["messages"])
-            final_reply = ""
-            for item in reversed(visible):
-                if str(item.get("role") or "").strip().lower() == "assistant":
-                    final_reply = str(item.get("content") or "").strip()
-                    if final_reply:
-                        break
+            if (
+                isinstance(final_answer_payload, dict)
+                and bool(final_answer_payload.get("used_rag_evidence"))
+                and isinstance(final_answer_payload.get("citations"), list)
+                and final_answer_payload.get("citations")
+            ):
+                stream_queue.put(
+                    {
+                        "type": "assistant_citations",
+                        "citations": final_answer_payload.get("citations"),
+                        "citation_status": str(final_answer_payload.get("citation_status") or "partial"),
+                    }
+                )
+                stream_queue.put(
+                    {
+                        "type": "assistant_final",
+                        "answer_text": str(final_answer_payload.get("answer_text") or final_reply),
+                        "citation_status": str(final_answer_payload.get("citation_status") or "partial"),
+                    }
+                )
             if final_reply and not emitted_final_text:
                 stream_queue.put({"type": "delta", "role": "assistant", "delta": final_reply})
                 emitted_final_text = True
@@ -1789,12 +1857,17 @@ def get_agent_session_messages(
 
     items: list[AgentHistoryMessage] = []
     for m in raw_messages:
+        metadata = m.metadata_json if isinstance(getattr(m, "metadata_json", None), dict) else {}
+        raw_citations = metadata.get("citations") if isinstance(metadata.get("citations"), list) else []
         items.append(
             AgentHistoryMessage(
                 id=m.id,
                 role=m.role,  # 已由 AgentService 保证 role 为简单字符串
                 content=m.content,
                 created_at=m.created_at,
+                citations=[AgentCitationAnchor(**item) for item in raw_citations if isinstance(item, dict)],
+                citation_status=str(metadata.get("citation_status") or "").strip() or None,
+                used_rag_evidence=bool(metadata.get("used_rag_evidence")),
             )
         )
 
@@ -1875,12 +1948,14 @@ def agent_run_resume(payload: AgentResumeRequest, db: Session = Depends(get_db))
         },
         config=config,
     )
+    final_answer_payload = _resolve_final_answer_payload(result)
     persist_agent_messages(
         db=db,
         tenant_id=payload.tenant_id,
         user_id=payload.user_id,
         session_id=session_id,
         result_messages=result.get("messages") or [],
+        final_answer_payload=final_answer_payload if isinstance(final_answer_payload, dict) else None,
     )
     return AgentRunResponse(
         session_id=session_id,
@@ -1888,6 +1963,7 @@ def agent_run_resume(payload: AgentResumeRequest, db: Session = Depends(get_db))
         halt_reason=result.get("halt_reason"),
         interrupt_payload=result.get("interrupt_payload"),
         ag_ui_events=list(result.get("ag_ui_events") or []),
+        final_answer_payload=final_answer_payload if isinstance(final_answer_payload, dict) else None,
     )
 
 
@@ -2061,20 +2137,43 @@ def agent_run_resume_stream(payload: AgentResumeRequest, db: Session = Depends(g
                         messages = node_update.get("messages")
                         if isinstance(messages, list):
                             streamed_messages = messages
+                        tool_results_update = node_update.get("tool_results")
+                        if isinstance(tool_results_update, list):
+                            streamed_tool_results = tool_results_update
+            result = {
+                "messages": streamed_messages,
+                "tool_results": streamed_tool_results,
+            }
+            final_answer_payload = _resolve_final_answer_payload(result)
             persist_agent_messages(
                 db=db_local,
                 tenant_id=payload.tenant_id,
                 user_id=payload.user_id,
                 session_id=session_id,
                 result_messages=streamed_messages,
+                final_answer_payload=final_answer_payload if isinstance(final_answer_payload, dict) else None,
             )
-            visible = from_state_messages(streamed_messages)
-            final_reply = ""
-            for item in reversed(visible):
-                if str(item.get("role") or "").strip().lower() == "assistant":
-                    final_reply = str(item.get("content") or "").strip()
-                    if final_reply:
-                        break
+            final_reply = _extract_final_reply(from_state_messages(streamed_messages))
+            if (
+                isinstance(final_answer_payload, dict)
+                and bool(final_answer_payload.get("used_rag_evidence"))
+                and isinstance(final_answer_payload.get("citations"), list)
+                and final_answer_payload.get("citations")
+            ):
+                stream_queue.put(
+                    {
+                        "type": "assistant_citations",
+                        "citations": final_answer_payload.get("citations"),
+                        "citation_status": str(final_answer_payload.get("citation_status") or "partial"),
+                    }
+                )
+                stream_queue.put(
+                    {
+                        "type": "assistant_final",
+                        "answer_text": str(final_answer_payload.get("answer_text") or final_reply),
+                        "citation_status": str(final_answer_payload.get("citation_status") or "partial"),
+                    }
+                )
             if final_reply and not emitted_final_text:
                 stream_queue.put({"type": "delta", "role": "assistant", "delta": final_reply})
                 emitted_final_text = True

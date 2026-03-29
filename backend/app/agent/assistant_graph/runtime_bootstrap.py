@@ -43,6 +43,7 @@ from .evidence_register import (
     select_carryforward_evidence_messages as _select_carryforward_evidence_messages,
 )
 from .dialogue_focus import derive_dialogue_focus as _derive_dialogue_focus
+from ..final_answer_citations import build_final_answer_payload as _build_final_answer_payload
 from .world_model import (
     init_world_model as _init_world_model,
     observe_environment as _observe_environment,
@@ -67,6 +68,7 @@ _AGENT_POLICY_TEXT = (
     "你的职责是围绕用户当前问题，结合真实对话、工具返回和运行时状态来观察对象、读取证据并给出帮助。"
     "不要假设信息只来自单一区域，也不要把某个面板或区域当成整个环境。"
     "可以调用提供的工具；禁止虚构事实、证据或工具。"
+    "当你直接依赖 KB/RAG 工具返回的证据作答时，只有在工具 payload 中存在 citation_candidates 时，才允许在对应句子后使用 [n] 行内引用；如果没有直接使用这些证据，则不要添加引用。"
     "当缺失关键约束需要用户补充时，调用工具 request_user_clarification。"
     "不确定时直接说明不确定，必要时再向用户提问。"
     "输出语言必须与最新用户消息一致。"
@@ -299,11 +301,7 @@ def _build_pre_model_hook_messages(
     runtime first, then policy/conversation, then transient tool receipts and
     carryforward evidence.
     """
-    persisted_messages = [
-        item
-        for item in _normalize_messages(state.get("message_window") or state.get("messages") or [])
-        if str(item.get("role") or "").strip().lower() != "tool"
-    ]
+    persisted_messages = _normalize_messages(state.get("message_window") or state.get("messages") or [])
     transient_tool_messages = _normalize_messages(state.get("transient_tool_messages") or [])
     carryforward_messages, updated_evidence_register = _select_carryforward_evidence_messages(
         state.get("evidence_register") if isinstance(state.get("evidence_register"), list) else [],
@@ -1243,6 +1241,9 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
     )
     pending_tool_calls = model_turn.get("tool_calls") if isinstance(model_turn.get("tool_calls"), list) else []
     normalized_pending_calls: list[dict[str, Any]] = []
+    history_prefix: list[dict[str, Any]] = []
+    if isinstance(pending_assistant_tool_message, dict):
+        history_prefix.append(pending_assistant_tool_message)
     for item in pending_tool_calls:
         if not isinstance(item, dict):
             continue
@@ -1282,10 +1283,6 @@ def _node_execute_tools(state: GraphState) -> Command[Literal["memory_sync", "in
             "step_count": next_step_count,
             "evidence_register": evidence_register,
         }
-        history_prefix: list[dict[str, Any]] = []
-        if isinstance(pending_assistant_tool_message, dict):
-            history_prefix.append(pending_assistant_tool_message)
-
         # 执行有界并行批次，随后用已返回的部分结果立即继续推进。
         with ThreadPoolExecutor(max_workers=max_parallel) as pool:
             future_map = {}
@@ -1828,6 +1825,13 @@ class _CompiledAgentApp:
                     },
                 }
             ],
+            "final_answer_payload": {
+                "answer_text": "",
+                "used_rag_evidence": False,
+                "citation_status": "none",
+                "citations": [],
+                "cited_indices": [],
+            },
         }
 
     def invoke(self, payload: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1870,6 +1874,24 @@ class _CompiledAgentApp:
             "interrupt_payload": result.get("interrupt_payload"),
             "ag_ui_events": list(result.get("ag_ui_events") or []),
             "last_error": result.get("last_error"),
+            "final_answer_payload": _build_final_answer_payload(
+                (
+                    next(
+                        (
+                            str(item.get("content") or "").strip()
+                            for item in reversed(
+                                _normalize_visible_conversation(
+                                    result.get("conversation_messages") or result.get("messages") or incoming_messages
+                                )
+                            )
+                            if str(item.get("role") or "").strip().lower() == "assistant"
+                            and str(item.get("content") or "").strip()
+                        ),
+                        "",
+                    )
+                ),
+                list(result.get("tool_results") or []),
+            ),
         }
 
     def stream(self, payload: dict[str, Any], config: dict[str, Any] | None = None, stream_mode: list[str] | None = None):

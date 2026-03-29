@@ -20,7 +20,18 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..db import get_db
 from ..models import File, ExtractionSession
-from ..schemas import FileUploadResponse, SessionStatusResponse, WorkroomFileTabOut
+from ..schemas import (
+    FileUploadResponse,
+    KbManifestBlockOut,
+    KbManifestChunkOut,
+    KbManifestJobOut,
+    KbManifestLayoutPageOut,
+    KbManifestResponse,
+    KbManifestSourceOut,
+    KbManifestUnitOut,
+    SessionStatusResponse,
+    WorkroomFileTabOut,
+)
 from ..services.workroom import WorkroomService
 
 
@@ -220,6 +231,78 @@ def _detect_page_count(file: File, backend_root: Path) -> int:
     if not file.preview_path:
         return 0
 
+    preview_rel = Path(str(file.preview_path).replace("\\", "/"))
+    preview_abs = (backend_root / preview_rel).resolve()
+    if not preview_abs.exists():
+        return 0
+
+    if ".page" not in preview_rel.name:
+        return 1
+
+    try:
+        prefix, suffix = preview_rel.name.rsplit(".page", 1)
+        _page_id, ext = suffix.split(".", 1)
+    except ValueError:
+        return 1
+
+    page_count = 0
+    while True:
+        candidate = preview_abs.with_name(f"{prefix}.page{page_count + 1}.{ext}")
+        if not candidate.exists():
+            break
+        page_count += 1
+    return page_count
+
+
+def _derive_ingestion_status(
+    *,
+    db: Session,
+    session: ExtractionSession,
+    file: File,
+) -> str:
+    session_status = str(session.status or "pending").strip().lower() or "pending"
+    if session_status in {"pending", "processing", "failed"}:
+        return session_status
+    if session_status != "done":
+        return session_status
+
+    detected_page_count = _detect_page_count(file, Path(__file__).resolve().parents[2])
+    page_count = int(detected_page_count or 0)
+    if page_count <= 0:
+        return "processing"
+
+    source_row = db.execute(
+        text(
+            """
+            SELECT status
+            FROM kb_sources
+            WHERE tenant_id = :tenant_id
+              AND user_id = :user_id
+              AND file_id = :file_id
+              AND ((workroom_id IS NULL AND :workroom_id IS NULL) OR workroom_id = :workroom_id)
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ),
+        {
+            "tenant_id": int(session.tenant_id),
+            "user_id": int(session.user_id),
+            "file_id": int(file.id),
+            "workroom_id": int(session.workroom_id) if session.workroom_id is not None else None,
+        },
+    ).mappings().first()
+    if not source_row:
+        return "preview_ready"
+
+    source_status = str(source_row.get("status") or "").strip().lower()
+    if source_status == "ready":
+        return "kb_ready"
+    if source_status == "failed":
+        return "degraded_ready"
+    if source_status in {"processing", "layout_scheduling", "layout_queued", "layout_running", "embedding"}:
+        return "layout_running"
+    return "preview_ready"
+
     rel = Path(file.preview_path)
     name = rel.name
     if ".page" not in name:
@@ -281,6 +364,144 @@ async def get_file_preview(
     return FileResponse(path=str(abs_path), media_type=media_type)
 
 
+@router.get("/{file_id}/kb-manifest", response_model=KbManifestResponse)
+def get_file_kb_manifest(file_id: int, db: Session = Depends(get_db)) -> KbManifestResponse:
+    file = db.query(File).filter(File.id == file_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="file not found")
+
+    source_row = db.execute(
+        text(
+            """
+            SELECT id, status, title
+            FROM kb_sources
+            WHERE file_id = :file_id
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ),
+        {"file_id": int(file_id)},
+    ).mappings().first()
+    if not source_row:
+        return KbManifestResponse(file_id=int(file_id))
+
+    source_id = int(source_row["id"])
+
+    job_rows = db.execute(
+        text(
+            """
+            SELECT stage, status
+            FROM kb_ingest_jobs
+            WHERE source_id = :source_id
+            ORDER BY id ASC
+            """
+        ),
+        {"source_id": source_id},
+    ).mappings().all()
+
+    layout_rows = db.execute(
+        text(
+            """
+            SELECT page_no, status, blocks_json
+            FROM file_page_layout_cache
+            WHERE file_id = :file_id
+            ORDER BY page_no ASC
+            """
+        ),
+        {"file_id": int(file_id)},
+    ).mappings().all()
+
+    unit_rows = db.execute(
+        text(
+            """
+            SELECT id, unit_key, unit_type, page_no_start, title, text_content, primary_image_path, metadata_json
+            FROM kb_units
+            WHERE source_id = :source_id
+            ORDER BY id ASC
+            """
+        ),
+        {"source_id": source_id},
+    ).mappings().all()
+
+    chunk_rows = db.execute(
+        text(
+            """
+            SELECT id, chunk_type, page_no, content, metadata_json
+            FROM kb_chunks
+            WHERE source_id = :source_id
+            ORDER BY id ASC
+            """
+        ),
+        {"source_id": source_id},
+    ).mappings().all()
+
+    layout_pages: list[KbManifestLayoutPageOut] = []
+    for row in layout_rows:
+        raw_blocks = row.get("blocks_json") if isinstance(row.get("blocks_json"), list) else []
+        blocks = [
+            KbManifestBlockOut(
+                page_no=int(block.get("page_no") or row.get("page_no") or 0),
+                layout_unit_key=str(block.get("layout_unit_key") or "").strip() or None,
+                block_label=str(block.get("block_label") or "").strip() or None,
+                bbox_norm=block.get("bbox_norm") if isinstance(block.get("bbox_norm"), dict) else None,
+            )
+            for block in raw_blocks
+            if isinstance(block, dict)
+        ]
+        layout_pages.append(
+            KbManifestLayoutPageOut(
+                page_no=int(row.get("page_no") or 0),
+                status=str(row.get("status") or ""),
+                blocks=blocks,
+            )
+        )
+
+    units = [
+        KbManifestUnitOut(
+            id=int(row["id"]),
+            unit_key=str(row.get("unit_key") or ""),
+            unit_type=str(row.get("unit_type") or ""),
+            page_no_start=int(row["page_no_start"]) if row.get("page_no_start") is not None else None,
+            title=str(row.get("title") or "").strip() or None,
+            excerpt=str(row.get("text_content") or "").strip()[:180] or None,
+            primary_image_path=str(row.get("primary_image_path") or "").strip() or None,
+            bbox_norm=(row.get("metadata_json") or {}).get("bbox_norm")
+            if isinstance(row.get("metadata_json"), dict)
+            else None,
+        )
+        for row in unit_rows
+    ]
+
+    chunks = [
+        KbManifestChunkOut(
+            id=int(row["id"]),
+            chunk_type=str(row.get("chunk_type") or ""),
+            page_no=int(row["page_no"]) if row.get("page_no") is not None else None,
+            excerpt=str(row.get("content") or "").strip()[:180] or None,
+            bbox_norm=(row.get("metadata_json") or {}).get("bbox_norm")
+            if isinstance(row.get("metadata_json"), dict)
+            else None,
+        )
+        for row in chunk_rows
+    ]
+
+    return KbManifestResponse(
+        file_id=int(file_id),
+        source=KbManifestSourceOut(
+            id=source_id,
+            status=str(source_row.get("status") or ""),
+            title=str(source_row.get("title") or "").strip() or None,
+        ),
+        jobs=[
+            KbManifestJobOut(stage=str(row.get("stage") or ""), status=str(row.get("status") or ""))
+            for row in job_rows
+        ],
+        layout_pages=layout_pages,
+        units=units,
+        chunks=chunks,
+    )
+
+
 @router.get("/session/{session_id}", response_model=SessionStatusResponse)
 def get_session_status(session_id: int, db: Session = Depends(get_db)) -> SessionStatusResponse:
     """Return current status and preview pages for a given ExtractionSession.
@@ -299,18 +520,21 @@ def get_session_status(session_id: int, db: Session = Depends(get_db)) -> Sessio
     preview_pages: list[str] = []
 
     if session.status == "done":
-        page_count = _detect_page_count(file, backend_root)
+        detected_page_count = _detect_page_count(file, backend_root)
+        page_count = int(detected_page_count or 0)
         if page_count > 0:
             preview_url = f"/api/files/preview/{file.id}"
             preview_pages = [
                 f"/api/files/preview/{file.id}?page={idx + 1}"
                 for idx in range(page_count)
             ]
+    ingestion_status = _derive_ingestion_status(db=db, session=session, file=file)
 
     return SessionStatusResponse(
         session_id=session.id,
         file_id=file.id,
         status=session.status,
+        ingestion_status=ingestion_status,
         preview_url=preview_url,
         preview_pages=preview_pages,
     )
@@ -372,8 +596,8 @@ def list_workroom_tabs(
 
         preview_url: str | None = None
         preview_pages: list[str] = []
+        file = db.query(File).filter(File.id == file_id).first()
         if status == "done":
-            file = db.query(File).filter(File.id == file_id).first()
             if file is not None:
                 page_count = _detect_page_count(file, backend_root)
                 if page_count > 0:
@@ -382,6 +606,19 @@ def list_workroom_tabs(
                         f"/api/files/preview/{file_id}?page={idx + 1}"
                         for idx in range(page_count)
                     ]
+        if file is None:
+            file = db.query(File).filter(File.id == file_id).first()
+        ingestion_status = status
+        if file is not None:
+            session_like = ExtractionSession(
+                id=session_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                file_id=file_id,
+                workroom_id=workroom_id,
+                status=status,
+            )
+            ingestion_status = _derive_ingestion_status(db=db, session=session_like, file=file)
 
         out.append(
             WorkroomFileTabOut(
@@ -390,6 +627,7 @@ def list_workroom_tabs(
                 name=str(row.get("original_name") or f"source-{file_id}"),
                 source_type=source_type,
                 status=status,
+                ingestion_status=ingestion_status,
                 preview_url=preview_url,
                 preview_pages=preview_pages,
             )

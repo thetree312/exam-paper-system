@@ -24,6 +24,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
   const appView = useAppStore((state) => state.appView)
   const setAppView = useAppStore((state) => state.setAppView)
   const viewportWidth = useAppStore((state) => state.viewportWidth)
+  const agentDocumentId = useAppStore((state) => state.agentDocumentId)
 
   const {
     fileTabs,
@@ -82,10 +83,12 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
             previewType={previewType}
             activeStatus={activeStatus}
             hasActiveFile={!!currentFile}
+            activeFileId={currentFile?.fileId ?? null}
             pageRefs={pageRefs}
             imageRefs={imageRefs}
             isExtracting={false}
             previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
+            citationFocus={null}
             onSelectionSnapshotChange={handleSelectionSnapshotChange}
             onAddClick={() => handleAddToEditor(sessionId, currentFile, selectionSnapshotRef.current)}
             onClearSelection={() => {

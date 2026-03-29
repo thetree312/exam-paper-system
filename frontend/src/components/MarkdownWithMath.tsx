@@ -1,5 +1,5 @@
 import React from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -14,6 +14,8 @@ interface MarkdownWithMathProps {
   children: string
   className?: string
   compact?: boolean
+  components?: Components
+  transformMarkdown?: (content: string) => string
 }
 
 const FRACTION_PATTERN = /\\d?frac\s*\{[^{}]+\}\s*\{[^{}]+\}/g
@@ -64,6 +66,8 @@ function normalizeMathMarkdown(raw: string): string {
 }
 
 const sanitizeSchema: RehypeSanitizeOptions = (() => {
+  type SanitizeAttrValue = string | number | boolean | RegExp | null | undefined
+  type SanitizeAttr = string | [string, ...SanitizeAttrValue[]]
   const mathTags = [
     'math',
     'mi',
@@ -86,8 +90,8 @@ const sanitizeSchema: RehypeSanitizeOptions = (() => {
   ]
 
   const allowAttr = (
-    current: (string | [string, ...unknown[]])[] | undefined,
-    additions: (string | [string, ...unknown[]])[],
+    current: SanitizeAttr[] | undefined,
+    additions: SanitizeAttr[],
   ) => [...(current || []), ...additions]
 
   return {
@@ -120,12 +124,15 @@ const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?
   className,
   compact = false,
   disableMath = false,
+  components,
+  transformMarkdown,
 }) => {
   const rootClass = ['markdown-body', 'english-serif', compact ? 'markdown-body--compact' : '', className]
     .filter(Boolean)
     .join(' ')
 
-  const processedContent = disableMath ? escapeCurrencyDollars(children) : children
+  const input = transformMarkdown ? transformMarkdown(children) : children
+  const processedContent = disableMath ? escapeCurrencyDollars(input) : input
   const normalized = disableMath ? processedContent : normalizeMathMarkdown(processedContent)
 
   const remarkPlugins = disableMath ? [remarkGfm] : [remarkMath, remarkGfm]
@@ -133,36 +140,39 @@ const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?
   // 数学渲染路径下只使用 rehype-katex，避免 rehype-sanitize 将 KaTeX 生成的 SVG / MathML 结构裁剪掉
   const rehypePlugins: any[] = disableMath ? [[rehypeSanitize, sanitizeSchema]] : [[rehypeKatex]]
 
+  const mergedComponents: Components = {
+    p: ({ children }) => (
+      <p className={`whitespace-pre-wrap ${compact ? 'mb-0 leading-snug' : 'leading-relaxed mb-1 last:mb-0'}`}>
+        {children}
+      </p>
+    ),
+    table: ({ children }) => (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm border-collapse border border-slate-300">
+          {children}
+        </table>
+      </div>
+    ),
+    th: ({ children }) => (
+      <th className="border border-slate-300 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700">
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td className="border border-slate-300 px-2 py-1 text-sm text-slate-700 align-top">
+        {children}
+      </td>
+    ),
+    img: ({ ...props }) => <img {...props} style={{ maxWidth: '100%', height: 'auto' }} />,
+    ...(components || {}),
+  }
+
   return (
     <div className={rootClass}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
-        components={{
-          p: ({ children }) => (
-            <p className={`whitespace-pre-wrap ${compact ? 'mb-0 leading-snug' : 'leading-relaxed mb-1 last:mb-0'}`}>
-              {children}
-            </p>
-          ),
-          table: ({ children }) => (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse border border-slate-300">
-                {children}
-              </table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="border border-slate-300 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-slate-300 px-2 py-1 text-sm text-slate-700 align-top">
-              {children}
-            </td>
-          ),
-          img: ({ ...props }) => <img {...props} style={{ maxWidth: '100%', height: 'auto' }} />,
-        }}
+        components={mergedComponents}
       >
         {normalized}
       </ReactMarkdown>
@@ -171,10 +181,10 @@ const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?
 }
 
 class MarkdownErrorBoundary extends React.Component<
-  { fallback: React.ReactNode; debug?: { preview: string } },
+  { fallback: React.ReactNode; debug?: { preview: string }; children?: React.ReactNode },
   { hasError: boolean }
 > {
-  constructor(props: { fallback: React.ReactNode; debug?: { preview: string } }) {
+  constructor(props: { fallback: React.ReactNode; debug?: { preview: string }; children?: React.ReactNode }) {
     super(props)
     this.state = { hasError: false }
   }

@@ -157,6 +157,9 @@ export const useConversation = (
                 content: m.content,
                 id: m.id,
                 created_at: m.created_at,
+                citations: m.citations ?? [],
+                citationStatus: m.citation_status ?? null,
+                usedRagEvidence: Boolean(m.used_rag_evidence),
               }))
               debug('initial history fetched', { key: initialKey, count: historyResp.messages.length })
             } catch (e) {
@@ -324,6 +327,9 @@ export const useConversation = (
             content: m.content,
             id: m.id,
             created_at: m.created_at,
+            citations: m.citations ?? [],
+            citationStatus: m.citation_status ?? null,
+            usedRagEvidence: Boolean(m.used_rag_evidence),
           }))
 
           setStoreConversationMessages((prev) => ({

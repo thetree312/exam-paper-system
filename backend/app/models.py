@@ -321,6 +321,51 @@ class FileOcrCache(Base):
     document: Mapped[Optional[Document]] = relationship("Document")
 
 
+class FilePageLayoutCache(Base):
+    __tablename__ = "file_page_layout_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "content_hash",
+            "page_no",
+            "model",
+            "schema_version",
+            name="uq_file_page_layout_cache_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    file_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("files.id", ondelete="CASCADE"), nullable=False
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    page_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    lease_owner: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    request_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_asset_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    transport_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="data_url")
+    layout_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    blocks_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    file: Mapped[File] = relationship("File")
+
+
 class MindMap(Base):
     __tablename__ = "mindmaps"
 
@@ -527,6 +572,7 @@ class AgentMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     token_usage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

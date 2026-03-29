@@ -1,8 +1,11 @@
-# 工作交接日志
+# Operational Notes
 
-1. 修复环境输入：删除旧的伪环境链（`decision_state.py`、`context_assembler.py`、并行 runtime 相关文件）后，`router.py`+`router_runtime.py`现在直接从实际 `Workroom`、三个面板状态、绑定源、产物、focus 组装 `environment_state`。
-2. 保持 runtime 可见性：增加 `_build_runtime_context_block` 及 `_build_runtime_context_message`，`_node_decide` 每轮额外插入当前 runtime 快照（只作用于本轮 `llm_messages`，不写入 `messages`/历史），测试在 `tests/agent/test_runtime_prompt_hygiene.py` 校验该块仅在当前 turn 可见。
-3. 工具与 policy 调整：studio 工具改为读取新结构，`tool` 描述去掉暗示；policy/tool meta 不再把 environment 摘要写进 prompt，`world_model`/`runtime_snapshot` 也只跟踪 `center_panel_mode`、`active_center_document_id`、`bound_source_ids` 这些字段。
-4. 验证：`pytest tests/agent/... tests/services/...`（共 34 条）以及 `py_compile app/agent/assistant_graph/runtime_bootstrap.py tests/agent/test_runtime_prompt_hygiene.py` 均通过，证明改动没有语法错误，输入处理行为符合预期。
-
-请继续用最新日志验证首轮是否真正感知 runtime 快照、studio bias 是否被缓解。
+1. Captured runtime instrumentation in `decision_state.py`, `context_assembler.py`, `outer.py`, and `outer_runtime.py`, plus the Workroom/environment state wiring, focus, and bound source metadata required by this plan.
+2. Confirmed runtime bootstrap now injects `_build_runtime_context_block`/`_build_runtime_context_message` output into `_node_decide`, so tests such as `tests/agent/test_runtime_prompt_hygiene.py` verify the current turn still supplies `llm_messages` rather than raw fragments.
+3. Documented policy/tool metadata changes: the studio runtime now reads guardrail policy, tool traces are surfaced into `environment_state`, and `world_model`/`runtime_snapshot` expose `center_panel_mode`, `active_center_document_id`, and `bound_source_ids`.
+4. Testing expectations stay: run `pytest tests/agent/... tests/services/...` plus `py_compile app/agent/assistant_graph/runtime_bootstrap.py tests/agent/test_runtime_prompt_hygiene.py` before landing.
+5. Current open issue: stream mode only collected `messages`/`conversation_messages`, so `final_answer_payload` never saw `tool_results` and therefore could not publish citations even though `read_kb_evidence` produced `citation_candidates`, and the frontend flush routine could overwrite the `assistant_final` text. Attempts made:
+   - Updated `router.stream` and `router.resume_stream` to accumulate `tool_results` with the streamed messages, then recompute the final payload via `_extract_final_reply` + `_resolve_final_answer_payload`.
+   - Added `authoritativeFinalText` handling inside `useAgentChat` so `assistant_final` becomes the final displayed text and prevents later `delta` events from clobbering it.
+   - Introduced `backend/tests/agent/test_router_stream_final_answer_payload.py` to ensure stream-only results can still produce `[1]` inline citations.
+   Latest action: stream/resume now aggregate `tool_results` before emitting `final_answer_payload`, and the frontend treats `assistant_final` as authoritative. Verification still pending—restart backend and front-end services and replay a real question to confirm inline citations appear.

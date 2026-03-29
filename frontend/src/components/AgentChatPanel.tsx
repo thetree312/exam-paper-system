@@ -2,7 +2,8 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 import { useTranslation } from 'react-i18next'
 import { useAgentChat } from '../hooks/useAgentChat'
 import { useConversation } from '../hooks'
-import type { AgentRunContext, AgentSendPayload, AgUiEvent, UserInfo } from '../types'
+import type { AgentCitationAnchor, AgentRunContext, AgentSendPayload, AgUiEvent, UserInfo } from '../types'
+import { InlineCitationMarkdown } from './InlineCitationMarkdown'
 import { MarkdownWithMath } from './MarkdownWithMath'
 import Lottie from 'lottie-react'
 import workingCatAnimation from '../assets/animations/workingCat.json'
@@ -29,6 +30,7 @@ interface AgentChatPanelProps {
   onAgUiEvent?: (event: AgUiEvent) => void
   onAppendTokenConsumed?: (id: number) => void
   onDocumentResolved?: (documentId: number) => void
+  onCitationClick?: (citation: AgentCitationAnchor) => void
 }
 
 type GreetingInfo = {
@@ -234,6 +236,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onAgUiEvent,
   onAppendTokenConsumed,
   onDocumentResolved,
+  onCitationClick,
 }) => {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
@@ -790,7 +793,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
               {msg.content?.trim() && (
                 <div className="prose prose-slate max-w-none text-[15px] leading-relaxed">
-                  <MarkdownWithMath>{normalizeAiMarkdown(msg.content)}</MarkdownWithMath>
+                  <InlineCitationMarkdown
+                    content={normalizeAiMarkdown(msg.content)}
+                    citations={Array.isArray(msg.citations) ? msg.citations : []}
+                    onCitationClick={onCitationClick}
+                  />
                 </div>
               )}
 
@@ -821,8 +828,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         && prev.msg?.content === next.msg?.content
         && prev.msg?.isStreaming === next.msg?.isStreaming
         && prev.msg?.historyTraces === next.msg?.historyTraces
+        && prev.msg?.citations === next.msg?.citations
+        && prev.msg?.citationStatus === next.msg?.citationStatus
       )),
-    [],
+    [onCitationClick, t],
   )
 
   const UserMessage: React.FC<{ msg: any }> = useMemo(

@@ -85,7 +85,7 @@ class Settings:
 
         # 向量化/embedding 模型配置（用于对话长期记忆等场景）
         self.alibaba_model_embedding: str = os.getenv(
-            "ALIBABA_MODEL_EMBEDDING", "text-embedding-v4"
+            "ALIBABA_MODEL_EMBEDDING", "tongyi-embedding-vision-flash"
         )
         # 默认维度与 pgvector 列保持一致；如需变更，请同步更新 DDL
         self.alibaba_embedding_dimensions: int = int(
@@ -110,9 +110,33 @@ class Settings:
         self.zhipu_model_glm_ocr: str = (
             os.getenv("ZHIPU_MODEL_GLM_OCR", "glm-ocr").strip() or "glm-ocr"
         )
+        self.asset_transport_mode: str = (
+            os.getenv("ASSET_TRANSPORT_MODE", "base64").strip().lower() or "base64"
+        )
+        self.public_asset_base_url: str = (
+            os.getenv("PUBLIC_ASSET_BASE_URL", "").strip().rstrip("/")
+        )
+        self.page_layout_schema_version: str = (
+            os.getenv("PAGE_LAYOUT_SCHEMA_VERSION", "v1").strip() or "v1"
+        )
+        self.glm_layout_max_concurrency: int = int(
+            os.getenv("GLM_LAYOUT_MAX_CONCURRENCY", "2")
+        )
+        self.glm_layout_lease_seconds: int = int(
+            os.getenv("GLM_LAYOUT_LEASE_SECONDS", "180")
+        )
 
         # Redis / Celery 配置
         self.redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/1")
+        self.celery_queue_preview: str = (
+            os.getenv("CELERY_QUEUE_PREVIEW", "exam_preview").strip() or "exam_preview"
+        )
+        self.celery_queue_glm_layout: str = (
+            os.getenv("CELERY_QUEUE_GLM_LAYOUT", "exam_glm_layout").strip() or "exam_glm_layout"
+        )
+        self.celery_queue_embed: str = (
+            os.getenv("CELERY_QUEUE_EMBED", "exam_embed").strip() or "exam_embed"
+        )
 
         # CORS 配置
         self.environment: str = os.getenv("ENVIRONMENT", "development")

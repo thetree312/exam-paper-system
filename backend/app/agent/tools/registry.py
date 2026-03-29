@@ -55,7 +55,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="read_kb_evidence",
-            description="Read evidence objects from knowledge-base content in the current workroom's bound source files for the current query, including snippets and asset references.",
+            description="Read structured evidence packages from knowledge-base content in the current workroom's bound source files for the current query, including primary visual evidence, supporting snippets, and asset references.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -69,7 +69,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="search_kb_candidates",
-            description="Locate candidate knowledge-base references from the current workroom's bound source files related to the current query without fully reading their content.",
+            description="Locate candidate evidence packages from the current workroom's bound source files related to the current query without fully reading their content.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -83,7 +83,7 @@ def tool_definitions() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="read_kb_snippets",
-            description="Read text snippets from already-located knowledge-base references or directly from a query.",
+            description="Read concise snippets from already-located knowledge-base evidence packages or directly from a query while preserving primary visual grounding.",
             parameters={
                 "type": "object",
                 "properties": {

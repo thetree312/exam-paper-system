@@ -21,17 +21,38 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
     raise TypeError(f"Unsupported row type: {type(row)!r}")
 
 
+def _row_modality(row: dict[str, Any]) -> str:
+    metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
+    modality = str(metadata.get("modality") or "").strip().lower()
+    chunk_type = str(row.get("chunk_type") or "").strip().lower()
+    if modality:
+        return "image" if modality == "image" else "text"
+    return "image" if "image" in chunk_type else "text"
+
+
 def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class RAGService:
     def __init__(self) -> None:
         self._engine = engine
-        self._embedding = QwenEmbeddingClient()
+        self._embedding: QwenEmbeddingClient | None = None
+
+    def _get_embedding_client(self) -> QwenEmbeddingClient:
+        if self._embedding is None:
+            self._embedding = QwenEmbeddingClient()
+        return self._embedding
 
     def _embed_query(self, query_text: str) -> list[float]:
-        vectors = self._embedding.embed([query_text])
+        vectors = self._get_embedding_client().embed([query_text])
         return vectors[0] if vectors else []
 
     def _fetch_candidates(
@@ -99,7 +120,20 @@ class RAGService:
         }
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params)
-            return [_row_to_dict(row) for row in rows]
+            items = [_row_to_dict(row) for row in rows]
+        if chunk_type_filter == "page_image":
+            return [
+                row
+                for row in items
+                if _row_modality(row) == "image"
+            ]
+        if chunk_type_filter == "non_image":
+            return [
+                row
+                for row in items
+                if _row_modality(row) != "image"
+            ]
+        return items
 
     def _fetch_unit_candidates(
         self,
@@ -154,6 +188,106 @@ class RAGService:
             "fetch_limit": fetch_limit,
             "query_embedding": _vector_literal(query_vector),
         }
+        with self._engine.connect() as conn:
+            rows = conn.execute(sql, params)
+            return [_row_to_dict(row) for row in rows]
+
+    def _fetch_semantic_group_candidates(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int | None,
+        query_text: str,
+        source_file_ids: list[int] | None,
+        fetch_limit: int,
+    ) -> list[dict[str, Any]]:
+        query_vector = self._embed_query(query_text)
+        if not query_vector:
+            return []
+        sql = text(
+            """
+            SELECT
+                g.id AS group_id,
+                g.group_key,
+                g.group_type,
+                g.page_no_start,
+                g.page_no_end,
+                g.title,
+                g.text_content,
+                g.primary_image_path,
+                g.metadata_json,
+                e.embed_kind,
+                (e.embedding <=> CAST(:query_embedding AS vector))::float AS distance,
+                s.id AS source_id,
+                s.file_id,
+                s.document_id,
+                s.source_kind AS source_type
+            FROM kb_semantic_group_embeddings AS e
+            JOIN kb_semantic_groups AS g ON g.id = e.group_id
+            JOIN kb_sources AS s ON s.id = g.source_id
+            WHERE s.tenant_id = :tenant_id
+              AND s.user_id = :user_id
+              AND e.tenant_id = :tenant_id
+              AND e.user_id = :user_id
+              AND (:workroom_id IS NULL OR s.workroom_id IS NULL OR s.workroom_id = :workroom_id)
+              AND (:source_file_ids_empty OR s.file_id = ANY(:source_file_ids))
+            ORDER BY e.embedding <=> CAST(:query_embedding AS vector), g.id DESC
+            LIMIT :fetch_limit
+            """
+        )
+        params = {
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "workroom_id": workroom_id,
+            "source_file_ids": list(source_file_ids or []),
+            "source_file_ids_empty": not bool(source_file_ids),
+            "fetch_limit": fetch_limit,
+            "query_embedding": _vector_literal(query_vector),
+        }
+        with self._engine.connect() as conn:
+            rows = conn.execute(sql, params)
+            return [_row_to_dict(row) for row in rows]
+
+    def _fetch_semantic_group_members(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        group_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        normalized_ids = [int(group_id) for group_id in group_ids if int(group_id) > 0]
+        if not normalized_ids:
+            return []
+        sql = text(
+            """
+            SELECT
+                gm.group_id,
+                gm.member_role,
+                gm.member_order,
+                c.id AS chunk_id,
+                c.chunk_type,
+                c.content,
+                c.content_hash,
+                c.metadata_json,
+                s.file_id,
+                s.document_id,
+                c.page_no AS page_start,
+                c.page_no AS page_end,
+                s.id AS source_id,
+                s.source_kind AS source_type,
+                s.title
+            FROM kb_semantic_group_members AS gm
+            JOIN kb_chunks AS c ON c.id = gm.chunk_id
+            JOIN kb_semantic_groups AS g ON g.id = gm.group_id
+            JOIN kb_sources AS s ON s.id = g.source_id
+            WHERE gm.group_id = ANY(:group_ids)
+              AND s.tenant_id = :tenant_id
+              AND s.user_id = :user_id
+            ORDER BY array_position(CAST(:group_ids AS bigint[]), gm.group_id), gm.member_order ASC, c.id ASC
+            """
+        )
+        params = {"group_ids": normalized_ids, "tenant_id": tenant_id, "user_id": user_id}
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params)
             return [_row_to_dict(row) for row in rows]
@@ -223,7 +357,11 @@ class RAGService:
         }
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params)
-            return [_row_to_dict(row) for row in rows]
+            return [
+                item
+                for item in (_row_to_dict(row) for row in rows)
+                if str(item.get("chunk_type") or "") == "page_image"
+            ]
 
     def search_chunks(
         self,
@@ -345,9 +483,22 @@ class RAGService:
             top_text_k=max(limit * 2, 4),
             top_image_k=max(limit * 2, 2),
         )
+        rows = self._expand_page_bundle_context(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            workroom_id=workroom_id,
+            source_file_ids=source_file_ids,
+            rows=rows,
+        )
 
         grouped: dict[tuple[Any, Any], dict[str, Any]] = {}
+        seen_chunk_ids: set[int] = set()
         for row in rows:
+            chunk_id = int(row.get("chunk_id") or 0)
+            if chunk_id > 0 and chunk_id in seen_chunk_ids:
+                continue
+            if chunk_id > 0:
+                seen_chunk_ids.add(chunk_id)
             key = (row.get("file_id"), row.get("page_start"))
             bundle = grouped.setdefault(
                 key,
@@ -357,6 +508,7 @@ class RAGService:
                     "page_no": row.get("page_start"),
                     "text_chunks": [],
                     "primary_image": None,
+                    "related_images": [],
                     "preview_image_path": None,
                     "source_refs": [],
                     "_score": float(row.get("distance") or 0.0),
@@ -370,6 +522,8 @@ class RAGService:
                     metadata = row.get("metadata_json") or {}
                     if isinstance(metadata, dict):
                         bundle["preview_image_path"] = metadata.get("asset_rel_path")
+            elif _row_modality(row) == "image":
+                bundle["related_images"].append(row)
             else:
                 bundle["text_chunks"].append(row)
 
@@ -379,6 +533,100 @@ class RAGService:
             item.pop("_score", None)
             result.append(item)
         return result
+
+    def _expand_page_bundle_context(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int | None,
+        source_file_ids: list[int] | None,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        page_pairs = [
+            (int(row.get("file_id")), int(row.get("page_start")))
+            for row in rows
+            if row.get("file_id") is not None and row.get("page_start") is not None
+        ]
+        if not page_pairs:
+            return rows
+        expanded = list(rows)
+        expanded.extend(
+            self._fetch_page_context_rows(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                workroom_id=workroom_id,
+                source_file_ids=source_file_ids,
+                page_pairs=page_pairs,
+            )
+        )
+        return expanded
+
+    def _fetch_page_context_rows(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int | None,
+        source_file_ids: list[int] | None,
+        page_pairs: list[tuple[int, int]],
+    ) -> list[dict[str, Any]]:
+        normalized_pairs = [
+            {"file_id": int(file_id), "page_no": int(page_no)}
+            for file_id, page_no in page_pairs
+            if int(file_id) > 0 and int(page_no) > 0
+        ]
+        if not normalized_pairs:
+            return []
+
+        sql = text(
+            """
+            WITH target_pages AS (
+                SELECT
+                    CAST(item->>'file_id' AS bigint) AS file_id,
+                    CAST(item->>'page_no' AS integer) AS page_no
+                FROM jsonb_array_elements(CAST(:page_pairs AS jsonb)) AS item
+            )
+            SELECT
+                c.id AS chunk_id,
+                0.0::float AS distance,
+                c.chunk_type,
+                c.content,
+                c.content_hash,
+                c.metadata_json,
+                s.file_id,
+                s.document_id,
+                c.page_no AS page_start,
+                c.page_no AS page_end,
+                s.id AS source_id,
+                s.source_kind AS source_type,
+                s.title,
+                f.preview_path AS file_preview_path,
+                f.storage_path AS file_storage_path
+            FROM kb_chunks AS c
+            JOIN kb_sources AS s ON s.id = c.source_id
+            LEFT JOIN files AS f ON f.id = s.file_id
+            JOIN target_pages AS tp
+              ON tp.file_id = s.file_id
+             AND tp.page_no = c.page_no
+            WHERE s.tenant_id = :tenant_id
+              AND s.user_id = :user_id
+              AND (:workroom_id IS NULL OR s.workroom_id IS NULL OR s.workroom_id = :workroom_id)
+              AND (:source_file_ids_empty OR s.file_id = ANY(:source_file_ids))
+            ORDER BY c.id DESC
+            """
+        )
+        params = {
+            "page_pairs": json.dumps(normalized_pairs, ensure_ascii=False),
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "workroom_id": workroom_id,
+            "source_file_ids": list(source_file_ids or []),
+            "source_file_ids_empty": not bool(source_file_ids),
+        }
+        with self._engine.connect() as conn:
+            rows = conn.execute(sql, params)
+            return [_row_to_dict(row) for row in rows]
 
     def get_chunks_by_ids(
         self,
@@ -425,6 +673,109 @@ class RAGService:
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params)
             return [_row_to_dict(row) for row in rows]
+
+    def search_semantic_groups(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        workroom_id: int | None,
+        query_text: str,
+        limit: int = 6,
+        source_file_ids: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0:
+            return []
+        rows = self._fetch_semantic_group_candidates(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            workroom_id=workroom_id,
+            query_text=query_text,
+            source_file_ids=source_file_ids,
+            fetch_limit=max(24, limit * 6),
+        )
+        if not rows:
+            return []
+
+        merged_by_group: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            group_id = int(row.get("group_id") or 0)
+            if group_id <= 0:
+                continue
+            current = merged_by_group.get(group_id)
+            distance = float(row.get("distance") or 0.0)
+            current_distance = float(current.get("distance") or 9999.0) if current is not None else 9999.0
+            if current is None or distance < current_distance:
+                merged_by_group[group_id] = {
+                    **row,
+                    "distance": distance,
+                    "matched_embed_kind": str(row.get("embed_kind") or ""),
+                }
+        selected = sorted(merged_by_group.values(), key=lambda item: float(item.get("distance") or 0.0))[
+            : max(limit * 3, limit)
+        ]
+        members = self._fetch_semantic_group_members(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            group_ids=[int(item.get("group_id") or 0) for item in selected],
+        )
+        members_by_group: dict[int, list[dict[str, Any]]] = {}
+        for member in members:
+            members_by_group.setdefault(int(member.get("group_id") or 0), []).append(member)
+        for item in selected:
+            item["members"] = members_by_group.get(int(item.get("group_id") or 0), [])
+        return selected[:limit]
+
+    def get_semantic_groups_by_ids(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        group_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        normalized_ids = [int(group_id) for group_id in group_ids if int(group_id) > 0]
+        if not normalized_ids:
+            return []
+        sql = text(
+            """
+            SELECT
+                g.id AS group_id,
+                g.group_key,
+                g.group_type,
+                g.page_no_start,
+                g.page_no_end,
+                g.title,
+                g.text_content,
+                g.primary_image_path,
+                g.metadata_json,
+                s.id AS source_id,
+                s.file_id,
+                s.document_id,
+                s.source_kind AS source_type,
+                0.0::float AS distance
+            FROM kb_semantic_groups AS g
+            JOIN kb_sources AS s ON s.id = g.source_id
+            WHERE g.id = ANY(:group_ids)
+              AND s.tenant_id = :tenant_id
+              AND s.user_id = :user_id
+            ORDER BY array_position(CAST(:group_ids AS bigint[]), g.id)
+            """
+        )
+        params = {"group_ids": normalized_ids, "tenant_id": tenant_id, "user_id": user_id}
+        with self._engine.connect() as conn:
+            rows = conn.execute(sql, params)
+            groups = [_row_to_dict(row) for row in rows]
+        members = self._fetch_semantic_group_members(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            group_ids=normalized_ids,
+        )
+        members_by_group: dict[int, list[dict[str, Any]]] = {}
+        for member in members:
+            members_by_group.setdefault(int(member.get("group_id") or 0), []).append(member)
+        for item in groups:
+            item["members"] = members_by_group.get(int(item.get("group_id") or 0), [])
+        return groups
 
     def search_units(
         self,
@@ -512,7 +863,22 @@ class RAGService:
 
         units = list(merged_by_unit.values())
         units.sort(key=lambda item: float(item.get("distance") or 0.0))
-        return units[:limit]
+        non_page_units = [item for item in units if str(item.get("unit_type") or "") != "page"]
+        if not non_page_units:
+            return units[:limit]
+
+        supported_pages = {
+            (int(item.get("file_id") or 0), int(item.get("page_no_start") or 0))
+            for item in non_page_units
+            if int(item.get("file_id") or 0) > 0 and int(item.get("page_no_start") or 0) > 0
+        }
+        page_fallback_units = [
+            item
+            for item in units
+            if str(item.get("unit_type") or "") == "page"
+            and (int(item.get("file_id") or 0), int(item.get("page_no_start") or 0)) not in supported_pages
+        ]
+        return (non_page_units + page_fallback_units)[:limit]
 
     def search_unit_refs(
         self,

@@ -67,6 +67,7 @@ class SessionStatusResponse(BaseModel):
     session_id: int
     file_id: int
     status: str
+    ingestion_status: str
     preview_url: Optional[str] = None
     preview_pages: List[str] = []
 
@@ -77,8 +78,61 @@ class WorkroomFileTabOut(BaseModel):
     name: str
     source_type: Optional[str] = None
     status: str
+    ingestion_status: str
     preview_url: Optional[str] = None
     preview_pages: List[str] = Field(default_factory=list)
+
+
+class KbManifestSourceOut(BaseModel):
+    id: int
+    status: str
+    title: Optional[str] = None
+
+
+class KbManifestJobOut(BaseModel):
+    stage: str
+    status: str
+
+
+class KbManifestBlockOut(BaseModel):
+    page_no: int
+    layout_unit_key: Optional[str] = None
+    block_label: Optional[str] = None
+    bbox_norm: Optional[dict] = None
+
+
+class KbManifestLayoutPageOut(BaseModel):
+    page_no: int
+    status: str
+    blocks: List[KbManifestBlockOut] = Field(default_factory=list)
+
+
+class KbManifestUnitOut(BaseModel):
+    id: int
+    unit_key: str
+    unit_type: str
+    page_no_start: Optional[int] = None
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    primary_image_path: Optional[str] = None
+    bbox_norm: Optional[dict] = None
+
+
+class KbManifestChunkOut(BaseModel):
+    id: int
+    chunk_type: str
+    page_no: Optional[int] = None
+    excerpt: Optional[str] = None
+    bbox_norm: Optional[dict] = None
+
+
+class KbManifestResponse(BaseModel):
+    file_id: int
+    source: Optional[KbManifestSourceOut] = None
+    jobs: List[KbManifestJobOut] = Field(default_factory=list)
+    layout_pages: List[KbManifestLayoutPageOut] = Field(default_factory=list)
+    units: List[KbManifestUnitOut] = Field(default_factory=list)
+    chunks: List[KbManifestChunkOut] = Field(default_factory=list)
 
 
 class UserOut(BaseModel):

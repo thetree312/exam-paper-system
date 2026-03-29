@@ -99,6 +99,8 @@ def tool_result_to_trace(tool_name: str, args: dict[str, Any], output: dict[str,
         compact_output["question_anchor_match"] = output.get("question_anchor_match")
     if isinstance(output.get("best_asset_ref"), dict):
         compact_output["best_asset_ref"] = output.get("best_asset_ref")
+    if isinstance(output.get("citation_candidates"), list):
+        compact_output["citation_candidates"] = output.get("citation_candidates")
     if isinstance(output.get("source_refs"), list):
         compact_output["source_refs"] = output.get("source_refs")
 

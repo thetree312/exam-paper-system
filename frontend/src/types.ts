@@ -305,6 +305,50 @@ export interface AgentMessage {
   created_at: string
 }
 
+export interface CitationBBoxNorm {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type AgentCitationStatus = 'none' | 'partial' | 'complete'
+
+export interface AgentCitationAnchor {
+  citation_id: string
+  citation_index: number
+  source_ref: string
+  anchor_type?: string | null
+  file_id: number
+  page_no: number
+  unit_key?: string | null
+  chunk_id?: number | null
+  chunk_type?: string | null
+  title?: string | null
+  excerpt?: string | null
+  asset_kind?: string | null
+  asset_ref?: string | null
+  preview_url?: string | null
+  bbox_norm?: CitationBBoxNorm | null
+  bbox_abs?: Record<string, unknown> | null
+}
+
+export interface AgentFinalAnswerPayload {
+  answer_text: string
+  used_rag_evidence: boolean
+  citation_status: AgentCitationStatus
+  citations: AgentCitationAnchor[]
+  cited_indices?: number[]
+}
+
+export interface AgentCitationFocus {
+  token: number
+  citationId: string
+  fileId: number
+  pageNo: number
+  bboxNorm?: CitationBBoxNorm | null
+}
+
 export type AgentRunContext = 'blank' | 'exam_editor' | 'code_editor' | 'other' | 'batch_question'
 
 export type AgentThinkingTraceKind = 'thought' | 'tool'
@@ -348,6 +392,9 @@ export interface AgentRunMessage {
   activeTool?: AgentThinkingToolTrace | null
   /** 宸叉矇娣€鐨勬€濊€?宸ュ叿杞ㄨ抗锛岀敤浜庡彲瑙嗗寲 Agentic 杩囩▼銆?*/
   historyTraces?: AgentThinkingTrace[]
+  citations?: AgentCitationAnchor[]
+  citationStatus?: AgentCitationStatus | null
+  usedRagEvidence?: boolean
 }
 
 export interface AgentNoteFocus {
@@ -436,6 +483,7 @@ export interface AgentRunResponse {
   /** 鍚庣杩斿洖鐨勪細璇?ID锛屽墠绔渶鍦ㄥ悗缁姹備腑缁х画鎼哄甫 */
   sessionId?: number | null
   messages: AgentRunMessage[]
+  finalAnswerPayload?: AgentFinalAnswerPayload | null
 }
 
 // ===== Agent 浼氳瘽绠＄悊 =====
@@ -488,6 +536,9 @@ export interface AgentHistoryMessageDto {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   created_at: string
+  citations?: AgentCitationAnchor[]
+  citation_status?: AgentCitationStatus | null
+  used_rag_evidence?: boolean
 }
 
 export interface AgentSessionMessagesResponseDto {

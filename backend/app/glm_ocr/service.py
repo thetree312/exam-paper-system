@@ -11,7 +11,6 @@ from html import unescape
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import httpx
 from PIL import Image
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -19,7 +18,10 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..models import Document, File, Question, FileOcrCache
 from ..services.cache_manager import FileOcrCacheManager
+from ..services.glm_rate_limiter import GlmConcurrencyLimiter
 from ..services.legend_service import LegendService
+from ..services.page_layout_cache_manager import FilePageLayoutCacheManager
+from ..services.page_layout_service import PageLayoutService
 
 
 CACHE_TTL = timedelta(days=180)
@@ -65,18 +67,12 @@ class GlmOcrService:
         document: Optional[Document] = None,
         force_refresh: bool = False,
     ) -> Tuple[Dict[str, Any], Optional[FileOcrCache]]:
-        api_key = settings.zhipu_api_key  # type: ignore[attr-defined]
-        layout_url = settings.zhipu_layout_url  # type: ignore[attr-defined]
         model = settings.zhipu_model_glm_ocr  # type: ignore[attr-defined]
-
-        if not api_key:
-            raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+        schema_version = str(settings.page_layout_schema_version).strip() or "v1"
 
         content_hash = file.content_hash
-        file_bytes: Optional[bytes] = None
-        mime: Optional[str] = None
         if not content_hash:
-            file_bytes, mime = self._load_file_bytes(file)
+            file_bytes, _mime = self._load_file_bytes(file)
             content_hash = hashlib.sha256(file_bytes).hexdigest()
             file.content_hash = content_hash
             db.add(file)
@@ -100,33 +96,15 @@ class GlmOcrService:
             cache_manager.touch(cache_entry)
             return cached_result, cache_entry
 
-        if file_bytes is None or mime is None:
-            file_bytes, mime = self._load_file_bytes(file)
-        data_uri = self._to_data_uri(file_bytes, mime)
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        payload: Dict[str, Any] = {
-            "model": model,
-            "file": data_uri,
-            "need_layout_visualization": False,
-        }
-
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(layout_url, headers=headers, json=payload)
-
-        if resp.status_code != 200:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            raise HTTPException(status_code=502, detail={"message": "GLM-OCR 请求失败", "response": detail})
-
-        data = resp.json()
-        if isinstance(data, dict) and data.get("code") not in (None, 0, 200):
-            raise HTTPException(status_code=502, detail=data)
+        data = self._build_layout_result_from_shared_page_cache(
+            db=db,
+            file=file,
+            tenant_id=tenant_id,
+            content_hash=content_hash or "",
+            model=model,
+            schema_version=schema_version,
+            force_refresh=force_refresh,
+        )
 
         cache_entry = cache_manager.upsert(
             tenant_id=tenant_id,
@@ -159,9 +137,159 @@ class GlmOcrService:
             mime = "application/pdf" if abs_path.suffix.lower() == ".pdf" else "image/png"
         return data, mime
 
-    def _to_data_uri(self, data: bytes, mime: str) -> str:
-        b64 = base64.b64encode(data).decode("ascii")
-        return f"data:{mime};base64,{b64}"
+    def _build_layout_result_from_shared_page_cache(
+        self,
+        *,
+        db: Session,
+        file: File,
+        tenant_id: int,
+        content_hash: str,
+        model: str,
+        schema_version: str,
+        force_refresh: bool,
+    ) -> Dict[str, Any]:
+        page_asset_refs = self._discover_page_asset_refs(file)
+        if not page_asset_refs:
+            raise HTTPException(status_code=400, detail="No preview pages available for GLM-OCR layout parsing")
+
+        page_cache_manager = FilePageLayoutCacheManager(db)
+        page_layout_service = PageLayoutService(model=model)
+        concurrency_limiter = GlmConcurrencyLimiter()
+        page_entries: List[Tuple[int, Any, str]] = []
+
+        for page_no, asset_ref in page_asset_refs:
+            entry = None if force_refresh else page_cache_manager.get_completed(
+                tenant_id=tenant_id,
+                content_hash=content_hash,
+                page_no=page_no,
+                model=model,
+                schema_version=schema_version,
+                ttl=CACHE_TTL,
+            )
+            if entry is None:
+                lease_owner = f"glm-ocr:file:{file.id}:page:{page_no}"
+                running_entry = page_cache_manager.try_acquire(
+                    tenant_id=tenant_id,
+                    file_id=file.id,
+                    content_hash=content_hash,
+                    page_no=page_no,
+                    model=model,
+                    schema_version=schema_version,
+                    source_asset_ref=asset_ref,
+                    lease_owner=lease_owner,
+                    lease_ttl=timedelta(seconds=settings.glm_layout_lease_seconds),
+                )
+                if running_entry is None:
+                    entry = page_cache_manager.get_completed(
+                        tenant_id=tenant_id,
+                        content_hash=content_hash,
+                        page_no=page_no,
+                        model=model,
+                        schema_version=schema_version,
+                        ttl=CACHE_TTL,
+                    )
+                    if entry is None:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"page layout cache is running for file={file.id} page={page_no}",
+                        )
+                else:
+                    limiter_lease = concurrency_limiter.acquire(owner=lease_owner)
+                    if limiter_lease is None:
+                        raise HTTPException(status_code=429, detail="GLM layout concurrency limit reached")
+                    try:
+                        page_result = page_layout_service.parse_page(asset_ref=asset_ref, page_no=page_no)
+                        entry = page_cache_manager.mark_completed(
+                            entry=running_entry,
+                            layout_json=json.dumps(page_result.raw_payload, ensure_ascii=False),
+                            blocks_json=json.dumps(page_result.blocks, ensure_ascii=False),
+                            transport_kind=page_result.transport_kind,
+                        )
+                    except Exception as exc:
+                        page_cache_manager.mark_failed(entry=running_entry, error=str(exc))
+                        raise
+                    finally:
+                        concurrency_limiter.release(lease=limiter_lease, owner=lease_owner)
+            page_entries.append((page_no, entry, asset_ref))
+
+        layout_details: List[List[Dict[str, Any]]] = []
+        pages_meta: List[Dict[str, Any]] = []
+        markdown_pages: List[str] = []
+
+        for page_no, entry, asset_ref in sorted(page_entries, key=lambda item: item[0]):
+            blocks = self._deserialize_page_blocks(entry.blocks_json, page_no=page_no)
+            layout_details.append(blocks)
+            pages_meta.append(self._load_page_dimensions_from_asset_ref(asset_ref))
+            markdown = self._blocks_to_markdown(blocks)
+            if markdown:
+                markdown_pages.append(markdown)
+
+        return {
+            "layout_details": layout_details,
+            "data_info": {"pages": pages_meta},
+            "md_results": "\n\n".join(markdown_pages),
+        }
+
+    def _discover_page_asset_refs(self, file: File) -> List[Tuple[int, str]]:
+        first_page = str(file.preview_path or "").replace("\\", "/").strip()
+        if not first_page:
+            raise HTTPException(status_code=400, detail=f"file {file.id} has no preview_path")
+
+        if ".page" not in first_page:
+            return [(1, first_page)]
+
+        asset_refs: List[Tuple[int, str]] = []
+        page_no = 1
+        while True:
+            try:
+                page_path = self._resolve_image_path_for_page(file, page_no)
+            except FileNotFoundError:
+                if page_no == 1:
+                    raise HTTPException(status_code=400, detail=f"preview page missing for file {file.id}")
+                break
+            asset_refs.append((page_no, self._to_asset_ref(page_path)))
+            page_no += 1
+        return asset_refs
+
+    def _to_asset_ref(self, path_value: str) -> str:
+        backend_root = Path(__file__).resolve().parents[2]
+        path = Path(path_value)
+        resolved = path.resolve() if path.is_absolute() else (backend_root / path).resolve()
+        try:
+            relative = resolved.relative_to(backend_root)
+            return relative.as_posix()
+        except ValueError:
+            return resolved.as_posix()
+
+    def _load_page_dimensions_from_asset_ref(self, asset_ref: str) -> Dict[str, int]:
+        backend_root = Path(__file__).resolve().parents[2]
+        path = Path(asset_ref)
+        resolved = path.resolve() if path.is_absolute() else (backend_root / path).resolve()
+        with Image.open(resolved) as image:
+            width, height = image.size
+        return {"width": int(width), "height": int(height)}
+
+    def _deserialize_page_blocks(self, blocks_json: str, *, page_no: int) -> List[Dict[str, Any]]:
+        try:
+            raw_blocks = json.loads(blocks_json or "[]")
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=500, detail=f"invalid page layout cache for page {page_no}") from exc
+
+        blocks: List[Dict[str, Any]] = []
+        for raw in raw_blocks or []:
+            if not isinstance(raw, dict):
+                continue
+            normalized = dict(raw)
+            normalized.setdefault("page_no", page_no)
+            normalized.setdefault("label", normalized.get("block_label") or "text")
+            normalized.setdefault("bbox_2d", raw.get("bbox_2d") or [])
+            normalized.setdefault("content", str(raw.get("content") or ""))
+            blocks.append(normalized)
+        return blocks
+
+    def _blocks_to_markdown(self, blocks: List[Dict[str, Any]]) -> str:
+        lines = [str(block.get("content") or "").strip() for block in blocks]
+        return "\n".join(line for line in lines if line)
 
     def _resolve_image_path_for_page(self, file: File, page: int) -> str:
         """根据 File.preview_path / storage_path 定位指定页的预览图路径。

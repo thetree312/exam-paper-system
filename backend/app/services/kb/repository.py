@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...models import File
-from .types import KBChunkRow, KBUnitRow
+from .types import KBChunkRow, KBSemanticGroupMemberRow, KBSemanticGroupRow, KBUnitRow
 
 
 def _vector_literal(vector: list[float]) -> str:
@@ -273,21 +273,145 @@ class KBRepository:
                             "created_at": datetime.utcnow(),
                         },
                     )
-            if unit.primary_image_path:
+
+    def replace_source_semantic_groups_and_embeddings(
+        self,
+        *,
+        source: dict[str, Any],
+        group_rows: list[KBSemanticGroupRow],
+        memberships: list[KBSemanticGroupMemberRow],
+        text_vectors: list[list[float]],
+        image_vectors: list[list[float]],
+        model_name: str,
+    ) -> None:
+        source_id = int(source["id"])
+        tenant_id = int(source["tenant_id"])
+        user_id = int(source["user_id"])
+
+        old_group_ids = [
+            row[0]
+            for row in self.db.execute(
+                text("SELECT id FROM kb_semantic_groups WHERE source_id = :source_id"),
+                {"source_id": source_id},
+            ).fetchall()
+        ]
+        if old_group_ids:
+            self.db.execute(
+                text("DELETE FROM kb_semantic_group_embeddings WHERE group_id = ANY(:group_ids)"),
+                {"group_ids": old_group_ids},
+            )
+            self.db.execute(
+                text("DELETE FROM kb_semantic_group_members WHERE group_id = ANY(:group_ids)"),
+                {"group_ids": old_group_ids},
+            )
+        self.db.execute(text("DELETE FROM kb_semantic_groups WHERE source_id = :source_id"), {"source_id": source_id})
+
+        chunk_id_by_hash = {
+            str(row[1]): int(row[0])
+            for row in self.db.execute(
+                text("SELECT id, content_hash FROM kb_chunks WHERE source_id = :source_id"),
+                {"source_id": source_id},
+            ).fetchall()
+            if str(row[1] or "").strip()
+        }
+
+        inserted_group_ids: list[int] = []
+        group_id_by_key: dict[str, int] = {}
+        for group in group_rows:
+            row = self.db.execute(
+                text(
+                    """
+                    INSERT INTO kb_semantic_groups
+                        (source_id, group_key, group_type, page_no_start, page_no_end, title, text_content, primary_image_path, token_count, metadata_json, content_hash, version, created_at)
+                    VALUES
+                        (:source_id, :group_key, :group_type, :page_no_start, :page_no_end, :title, :text_content, :primary_image_path, :token_count, CAST(:metadata_json AS jsonb), :content_hash, 1, :created_at)
+                    RETURNING id
+                    """
+                ),
+                {
+                    "source_id": source_id,
+                    "group_key": group.group_key,
+                    "group_type": group.group_type,
+                    "page_no_start": group.page_no_start,
+                    "page_no_end": group.page_no_end,
+                    "title": group.title,
+                    "text_content": group.text_content,
+                    "primary_image_path": group.primary_image_path,
+                    "token_count": group.token_count,
+                    "metadata_json": __import__("json").dumps(group.metadata_json, ensure_ascii=False),
+                    "content_hash": group.content_hash,
+                    "created_at": datetime.utcnow(),
+                },
+            ).one()
+            group_id = int(row[0])
+            inserted_group_ids.append(group_id)
+            group_id_by_key[group.group_key] = group_id
+
+        for member in memberships:
+            group_id = group_id_by_key.get(member.group_key)
+            chunk_id = chunk_id_by_hash.get(member.chunk_content_hash)
+            if group_id is None or chunk_id is None:
+                continue
+            self.db.execute(
+                text(
+                    """
+                    INSERT INTO kb_semantic_group_members
+                        (group_id, chunk_id, member_role, member_order, created_at)
+                    VALUES
+                        (:group_id, :chunk_id, :member_role, :member_order, :created_at)
+                    """
+                ),
+                {
+                    "group_id": group_id,
+                    "chunk_id": chunk_id,
+                    "member_role": member.member_role,
+                    "member_order": member.member_order,
+                    "created_at": datetime.utcnow(),
+                },
+            )
+
+        text_idx = 0
+        image_idx = 0
+        for group_id, group in zip(inserted_group_ids, group_rows, strict=False):
+            if group.text_content:
+                vector = text_vectors[text_idx] if text_idx < len(text_vectors) else None
+                text_idx += 1
+                if vector:
+                    self.db.execute(
+                        text(
+                            """
+                            INSERT INTO kb_semantic_group_embeddings
+                                (group_id, tenant_id, user_id, model_name, embed_kind, dim, embedding, created_at)
+                            VALUES
+                                (:group_id, :tenant_id, :user_id, :model_name, :embed_kind, :dim, CAST(:embedding AS vector), :created_at)
+                            """
+                        ),
+                        {
+                            "group_id": group_id,
+                            "tenant_id": tenant_id,
+                            "user_id": user_id,
+                            "model_name": model_name,
+                            "embed_kind": "text",
+                            "dim": len(vector),
+                            "embedding": _vector_literal(vector),
+                            "created_at": datetime.utcnow(),
+                        },
+                    )
+            if group.primary_image_path:
                 vector = image_vectors[image_idx] if image_idx < len(image_vectors) else None
                 image_idx += 1
                 if vector:
                     self.db.execute(
                         text(
                             """
-                            INSERT INTO kb_unit_embeddings
-                                (unit_id, tenant_id, user_id, model_name, embed_kind, dim, embedding, created_at)
+                            INSERT INTO kb_semantic_group_embeddings
+                                (group_id, tenant_id, user_id, model_name, embed_kind, dim, embedding, created_at)
                             VALUES
-                                (:unit_id, :tenant_id, :user_id, :model_name, :embed_kind, :dim, CAST(:embedding AS vector), :created_at)
+                                (:group_id, :tenant_id, :user_id, :model_name, :embed_kind, :dim, CAST(:embedding AS vector), :created_at)
                             """
                         ),
                         {
-                            "unit_id": unit_id,
+                            "group_id": group_id,
                             "tenant_id": tenant_id,
                             "user_id": user_id,
                             "model_name": model_name,

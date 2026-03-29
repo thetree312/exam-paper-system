@@ -1,4 +1,7 @@
 import type {
+  AgentCitationAnchor,
+  AgentCitationStatus,
+  AgentFinalAnswerPayload,
   AgentRunRequest,
   AgentRunResponse,
   AgentSnapshotResponse,
@@ -131,6 +134,8 @@ export type AgentStreamEvent =
   | { type: 'ag_ui'; event: AgUiEvent }
   | { type: 'session'; session_id: number; document_id?: number | null; studio_document_id?: number | null }
   | { type: 'agent_trace'; stage?: string; payload?: Record<string, unknown> }
+  | { type: 'assistant_citations'; citations: AgentCitationAnchor[]; citation_status: AgentCitationStatus }
+  | { type: 'assistant_final'; answer_text: string; citation_status: AgentCitationStatus; final_answer_payload?: AgentFinalAnswerPayload | null }
 
 export async function sendAgentRunStream(
   baseUrl: string,

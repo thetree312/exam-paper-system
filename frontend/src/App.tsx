@@ -21,6 +21,8 @@ import { useAppStore } from './store/appStore'
 import { buildOcrItemsFromSnapshot } from './utils/workroomRestore'
 import type {
   AggregatedOcrItem,
+  AgentCitationAnchor,
+  AgentCitationFocus,
   AgentSendPayload,
   StatusMessageKey,
   StatusMessageSetter,
@@ -262,6 +264,7 @@ const App: React.FC = () => {
 
   const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false)
   const [agentDrawerWidth, setAgentDrawerWidth] = useState(360)
+  const [citationFocus, setCitationFocus] = useState<AgentCitationFocus | null>(null)
   const [agentAppendToken, setAgentAppendToken] = useState<
     | {
         id: number
@@ -294,6 +297,7 @@ const App: React.FC = () => {
     setFileTabs([])
     setActiveTabIndex(-1)
     setOcrItems([])
+    setCitationFocus(null)
     setWorkroom(null)
     setWorkroomRuntimeState(null)
     setWorkroomSources([])
@@ -795,6 +799,35 @@ const App: React.FC = () => {
     setAgentAppendToken({ id: Date.now(), payload })
   }, [])
 
+  const handleAgentCitationClick = useCallback((citation: AgentCitationAnchor) => {
+    if (!citation || typeof citation.file_id !== 'number' || typeof citation.page_no !== 'number') {
+      return
+    }
+    const nextBbox = citation.bbox_norm ?? null
+    const sameCitation =
+      citationFocus?.citationId === citation.citation_id &&
+      citationFocus.fileId === citation.file_id &&
+      citationFocus.pageNo === citation.page_no &&
+      JSON.stringify(citationFocus.bboxNorm ?? null) === JSON.stringify(nextBbox)
+
+    if (sameCitation) {
+      setCitationFocus(null)
+      return
+    }
+
+    const targetTabIndex = fileTabs.findIndex((tab) => tab.fileId === citation.file_id)
+    if (targetTabIndex >= 0 && targetTabIndex !== activeTabIndex) {
+      handleTabSelect(targetTabIndex)
+    }
+    setCitationFocus({
+      token: Date.now(),
+      citationId: citation.citation_id,
+      fileId: citation.file_id,
+      pageNo: citation.page_no,
+      bboxNorm: nextBbox,
+    })
+  }, [activeTabIndex, citationFocus, fileTabs, handleTabSelect])
+
   const handleAppendTokenConsumed = useCallback((tokenId: number) => {
     setAgentAppendToken((current) => {
       if (!current || current.id !== tokenId) return current
@@ -975,10 +1008,12 @@ const App: React.FC = () => {
               previewType={previewType}
               activeStatus={activeStatus}
               hasActiveFile={!!currentFile}
+              activeFileId={currentFile?.fileId ?? null}
               pageRefs={pageRefs}
               imageRefs={imageRefs}
               isExtracting={isExtracting}
               previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
+              citationFocus={citationFocus}
               onSelectionSnapshotChange={handleSelectionSnapshotChange}
               onSelectionAddClick={handleSelectionAddClick}
               onClearSelection={() => {
@@ -1058,6 +1093,7 @@ const App: React.FC = () => {
             onAgUiEvent={handleAgUiEvent}
             onAppendTokenConsumed={handleAppendTokenConsumed}
             onDocumentResolved={setAgentDocumentId}
+            onCitationClick={handleAgentCitationClick}
           />
         )}
 

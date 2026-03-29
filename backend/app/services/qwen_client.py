@@ -13,6 +13,7 @@ import requests
 
 from ..config import get_settings
 from ..provider_schema import validate_provider_schema
+from .assets import AssetResolver
 
 
 text_logger = logging.getLogger("agent.qwen")
@@ -1424,9 +1425,9 @@ class QwenEmbeddingClient:
         self.api_key = settings.alibaba_api_key
         self.model = settings.alibaba_model_embedding
         self.dimensions = settings.alibaba_embedding_dimensions
-        if "embedding" not in self.model.lower():
-            raise RuntimeError("ALIBABA_MODEL_EMBEDDING must contain 'embedding'")
         self._is_multimodal_native = self._is_multimodal_embedding_model(self.model)
+        if not self._is_multimodal_native:
+            raise RuntimeError("ALIBABA_MODEL_EMBEDDING must be a multimodal model")
 
     @staticmethod
     def _is_multimodal_embedding_model(model_name: str) -> bool:
@@ -1445,19 +1446,8 @@ class QwenEmbeddingClient:
         value = image_ref.strip()
         if not value:
             return value
-        if value.startswith(("http://", "https://", "data:image/")):
-            return value
-
-        backend_root = Path(__file__).resolve().parents[2]
-        candidate = (backend_root / value.lstrip("/\\")).resolve()
-        if not candidate.exists() or not candidate.is_file():
-            return value
-
-        raw = candidate.read_bytes()
-        mime_type, _ = mimetypes.guess_type(candidate.name)
-        mime = mime_type or "image/png"
-        b64 = base64.b64encode(raw).decode("ascii")
-        return f"data:{mime};base64,{b64}"
+        resolver = AssetResolver()
+        return resolver.resolve_for_model(value)
 
     def _normalize_embedding_input(self, item: Any) -> dict[str, str] | None:
         if isinstance(item, dict):

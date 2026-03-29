@@ -31,6 +31,15 @@ class _FakeEngine:
         return _FakeConn(self._rows)
 
 
+class _SequencedEngine:
+    def __init__(self, responses: list[list[dict[str, Any]]]) -> None:
+        self._responses = list(responses)
+
+    def connect(self) -> _FakeConn:
+        rows = self._responses.pop(0) if self._responses else []
+        return _FakeConn(rows)
+
+
 def test_search_chunks_keeps_image_lane_when_text_hits_dominate(monkeypatch: Any) -> None:
     from app.services.kb.rag_service import RAGService
 
@@ -264,3 +273,383 @@ def test_search_page_bundles_groups_text_and_image_on_same_page(monkeypatch: Any
     assert [item["chunk_id"] for item in bundles[0]["text_chunks"]] == [101, 102]
     assert bundles[0]["primary_image"]["chunk_id"] == 202
     assert bundles[0]["source_refs"] == ["chunk:101", "chunk:102", "chunk:202"]
+
+
+def test_search_page_bundles_preserves_page_image_and_related_layout_images(monkeypatch: Any) -> None:
+    from app.services.kb.rag_service import RAGService
+
+    svc = RAGService()
+    monkeypatch.setattr(svc, "_embedding", SimpleNamespace(model="fake-embedding", embed=lambda _q: [[0.1, 0.2]]))
+
+    fake_rows = [
+        {
+            "chunk_id": 401,
+            "distance": 0.10,
+            "chunk_type": "layout_text",
+            "content": "question stem near figure",
+            "content_hash": "layout-text-401",
+            "metadata_json": {
+                "modality": "text",
+                "layout_unit_key": "page:3/block:0",
+                "parent_unit_key": "page:3",
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 3,
+            "page_end": 3,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper-a.pdf",
+            "file_preview_path": "uploads/2/paper-a.page1.png",
+            "file_storage_path": "uploads/2/paper-a.pdf",
+        },
+        {
+            "chunk_id": 402,
+            "distance": 0.11,
+            "chunk_type": "layout_image",
+            "content": "diagram",
+            "content_hash": "layout-image-402",
+            "metadata_json": {
+                "modality": "image",
+                "asset_ref": "uploads/2/paper-a.page3.blocks/block0001.image.png",
+                "layout_unit_key": "page:3/block:1",
+                "parent_unit_key": "page:3",
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 3,
+            "page_end": 3,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper-a.pdf",
+            "file_preview_path": "uploads/2/paper-a.page1.png",
+            "file_storage_path": "uploads/2/paper-a.pdf",
+        },
+        {
+            "chunk_id": 202,
+            "distance": 0.13,
+            "chunk_type": "page_image",
+            "content": "[image page 3]",
+            "content_hash": "image-202",
+            "metadata_json": {"modality": "image", "asset_rel_path": "uploads/2/paper-a.page3.png"},
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 3,
+            "page_end": 3,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper-a.pdf",
+            "file_preview_path": "uploads/2/paper-a.page1.png",
+            "file_storage_path": "uploads/2/paper-a.pdf",
+        },
+    ]
+    monkeypatch.setattr(svc, "_engine", _FakeEngine(fake_rows))
+
+    bundles = svc.search_page_bundles(
+        tenant_id=2,
+        user_id=2,
+        workroom_id=12,
+        query_text="figure near question stem",
+        limit=1,
+        source_file_ids=[1056],
+    )
+
+    assert len(bundles) == 1
+    assert bundles[0]["primary_image"]["chunk_id"] == 202
+    assert [item["chunk_id"] for item in bundles[0]["text_chunks"]] == [401]
+    assert [item["chunk_id"] for item in bundles[0]["related_images"]] == [402]
+
+
+def test_search_units_keeps_unit_candidates_from_sql(monkeypatch: Any) -> None:
+    from app.services.kb.rag_service import RAGService
+
+    svc = RAGService()
+    monkeypatch.setattr(svc, "_embedding", SimpleNamespace(model="fake-embedding", embed=lambda _q: [[0.1, 0.2]]))
+
+    fake_rows = [
+        {
+            "unit_id": 901,
+            "unit_key": "page:2",
+            "unit_type": "page",
+            "page_no_start": 2,
+            "page_no_end": 2,
+            "title": "paper.pdf",
+            "text_content": "某时刻测得的视风风速对应的向量与船速对应的向量如图2",
+            "primary_image_path": "uploads/2/paper.page2.png",
+            "metadata_json": {"layout_unit_key": "page:2"},
+            "embed_kind": "text",
+            "distance": 0.21,
+            "source_id": 44,
+            "file_id": 1077,
+            "document_id": None,
+            "source_type": "article",
+        },
+        {
+            "unit_id": 901,
+            "unit_key": "page:2",
+            "unit_type": "page",
+            "page_no_start": 2,
+            "page_no_end": 2,
+            "title": "paper.pdf",
+            "text_content": "某时刻测得的视风风速对应的向量与船速对应的向量如图2",
+            "primary_image_path": "uploads/2/paper.page2.png",
+            "metadata_json": {"layout_unit_key": "page:2"},
+            "embed_kind": "image",
+            "distance": 0.24,
+            "source_id": 44,
+            "file_id": 1077,
+            "document_id": None,
+            "source_type": "article",
+        },
+    ]
+    monkeypatch.setattr(svc, "_engine", _FakeEngine(fake_rows))
+
+    rows = svc.search_units(
+        tenant_id=2,
+        user_id=2,
+        workroom_id=30,
+        query_text="第六题 视风风速 图例 坐标",
+        limit=5,
+        source_file_ids=[1077],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["unit_id"] == 901
+    assert rows[0]["matched_embed_kind"] == "text"
+
+
+def test_search_semantic_groups_returns_group_and_member_context(monkeypatch: Any) -> None:
+    from app.services.kb.rag_service import RAGService
+
+    svc = RAGService()
+    monkeypatch.setattr(svc, "_embedding", SimpleNamespace(model="fake-embedding", embed=lambda _q: [[0.1, 0.2]]))
+
+    group_rows = [
+        {
+            "group_id": 901,
+            "group_key": "group:1",
+            "group_type": "mixed_region",
+            "page_no_start": 1,
+            "page_no_end": 2,
+            "title": "paper.pdf",
+            "text_content": "question stem plus nearby figure and options",
+            "primary_image_path": "uploads/2/paper.page2.blocks/block0002.image.png",
+            "metadata_json": {"dominant_modality": "mixed"},
+            "embed_kind": "text",
+            "distance": 0.11,
+            "source_id": 700,
+            "file_id": 1056,
+            "document_id": None,
+            "source_type": "kb",
+        }
+    ]
+    member_rows = [
+        {
+            "group_id": 901,
+            "member_role": "body",
+            "member_order": 0,
+            "chunk_id": 401,
+            "chunk_type": "layout_text",
+            "content": "question stem",
+            "content_hash": "layout-text-401",
+            "metadata_json": {
+                "modality": "text",
+                "layout_unit_key": "page:1/block:13",
+                "parent_unit_key": "page:1",
+                "asset_ref": "uploads/2/paper.page1.blocks/block0013.text.png",
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 1,
+            "page_end": 1,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+        {
+            "group_id": 901,
+            "member_role": "figure",
+            "member_order": 1,
+            "chunk_id": 402,
+            "chunk_type": "layout_image",
+            "content": "[layout image page 2]",
+            "content_hash": "layout-image-402",
+            "metadata_json": {
+                "modality": "image",
+                "layout_unit_key": "page:2/block:3",
+                "parent_unit_key": "page:2",
+                "asset_ref": "uploads/2/paper.page2.blocks/block0002.image.png",
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 2,
+            "page_end": 2,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+    ]
+    monkeypatch.setattr(svc, "_engine", _SequencedEngine([group_rows, member_rows]))
+
+    rows = svc.search_semantic_groups(
+        tenant_id=2,
+        user_id=2,
+        workroom_id=30,
+        query_text="question stem with figure",
+        limit=5,
+        source_file_ids=[1056],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["group_id"] == 901
+    assert rows[0]["group_type"] == "mixed_region"
+    assert [item["chunk_id"] for item in rows[0]["members"]] == [401, 402]
+    assert rows[0]["members"][1]["member_role"] == "figure"
+
+
+def test_search_semantic_groups_preserves_vector_distance_order(monkeypatch: Any) -> None:
+    from app.services.kb.rag_service import RAGService
+
+    svc = RAGService()
+    monkeypatch.setattr(svc, "_embedding", SimpleNamespace(model="fake-embedding", embed=lambda _q: [[0.1, 0.2]]))
+
+    group_rows = [
+        {
+            "group_id": 21,
+            "group_key": "group:21",
+            "group_type": "mixed_region",
+            "page_no_start": 7,
+            "page_no_end": 7,
+            "title": "paper.pdf",
+            "text_content": "answer region",
+            "primary_image_path": "uploads/2/paper.page7.blocks/block0000.image.png",
+            "metadata_json": {"dominant_modality": "mixed"},
+            "embed_kind": "text",
+            "distance": 0.36,
+            "source_id": 700,
+            "file_id": 1056,
+            "document_id": None,
+            "source_type": "kb",
+        },
+        {
+            "group_id": 15,
+            "group_key": "group:15",
+            "group_type": "mixed_region",
+            "page_no_start": 2,
+            "page_no_end": 2,
+            "title": "paper.pdf",
+            "text_content": "question region with figure and table",
+            "primary_image_path": "uploads/2/paper.page2.blocks/block0003.image.png",
+            "metadata_json": {"dominant_modality": "mixed"},
+            "embed_kind": "text",
+            "distance": 0.38,
+            "source_id": 700,
+            "file_id": 1056,
+            "document_id": None,
+            "source_type": "kb",
+        },
+    ]
+    member_rows = [
+        {
+            "group_id": 21,
+            "member_role": "figure",
+            "member_order": 0,
+            "chunk_id": 1267,
+            "chunk_type": "layout_image",
+            "content": "[layout image page 7]",
+            "content_hash": "layout-image-1267",
+            "metadata_json": {
+                "modality": "image",
+                "bbox_norm": {"x1": 0.08, "y1": 0.05, "x2": 0.30, "y2": 0.08},
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 7,
+            "page_end": 7,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+        {
+            "group_id": 21,
+            "member_role": "body",
+            "member_order": 1,
+            "chunk_id": 1268,
+            "chunk_type": "layout_text",
+            "content": "answer text",
+            "content_hash": "layout-text-1268",
+            "metadata_json": {"modality": "text"},
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 7,
+            "page_end": 7,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+        {
+            "group_id": 15,
+            "member_role": "figure",
+            "member_order": 0,
+            "chunk_id": 1217,
+            "chunk_type": "layout_image",
+            "content": "[layout image page 2]",
+            "content_hash": "layout-image-1217",
+            "metadata_json": {
+                "modality": "image",
+                "bbox_norm": {"x1": 0.08, "y1": 0.33, "x2": 0.30, "y2": 0.47},
+            },
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 2,
+            "page_end": 2,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+        {
+            "group_id": 15,
+            "member_role": "body",
+            "member_order": 1,
+            "chunk_id": 1215,
+            "chunk_type": "layout_text",
+            "content": "question text",
+            "content_hash": "layout-text-1215",
+            "metadata_json": {"modality": "text"},
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 2,
+            "page_end": 2,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+        {
+            "group_id": 15,
+            "member_role": "table",
+            "member_order": 2,
+            "chunk_id": 1216,
+            "chunk_type": "layout_table",
+            "content": "<table>...</table>",
+            "content_hash": "layout-table-1216",
+            "metadata_json": {"modality": "text"},
+            "file_id": 1056,
+            "document_id": None,
+            "page_start": 2,
+            "page_end": 2,
+            "source_id": 700,
+            "source_type": "kb",
+            "title": "paper.pdf",
+        },
+    ]
+    monkeypatch.setattr(svc, "_engine", _SequencedEngine([group_rows, member_rows]))
+    rows = svc.search_semantic_groups(
+        tenant_id=2,
+        user_id=2,
+        workroom_id=30,
+        query_text="question with figure",
+        limit=2,
+        source_file_ids=[1056],
+    )
+
+    assert [row["group_id"] for row in rows] == [21, 15]

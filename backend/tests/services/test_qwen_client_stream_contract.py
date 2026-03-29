@@ -132,7 +132,7 @@ def test_qwen_embedding_client_does_not_expose_chat_methods(monkeypatch) -> None
     from app.services.qwen_client import QwenEmbeddingClient
 
     monkeypatch.setenv("ALIBABA_API_KEY", "test-key")
-    monkeypatch.setenv("ALIBABA_MODEL_EMBEDDING", "text-embedding-v4")
+    monkeypatch.setenv("ALIBABA_MODEL_EMBEDDING", "tongyi-embedding-vision-flash")
     config_module.get_settings.cache_clear()
     try:
         client = QwenEmbeddingClient()

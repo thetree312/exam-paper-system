@@ -514,6 +514,7 @@ class AgentService:
         session_id: int,
         role: str,
         content: str,
+        metadata_json: Optional[dict[str, Any]] = None,
         token_usage: Optional[int] = None,
     ) -> AgentMessage:
         message = AgentMessage(
@@ -521,6 +522,7 @@ class AgentService:
             session_id=session_id,
             role=role,
             content=content,
+            metadata_json=metadata_json,
             token_usage=token_usage,
         )
         self.db.add(message)
@@ -715,12 +717,40 @@ class AgentService:
         session.updated_at = datetime.utcnow()
         self.db.commit()
 
+    def _normalize_message_records(
+        self,
+        messages: List[Tuple[str, str] | dict[str, Any]],
+    ) -> List[dict[str, Any]]:
+        normalized: List[dict[str, Any]] = []
+        for item in messages:
+            if isinstance(item, dict):
+                role = str(item.get("role") or "").strip()
+                content = str(item.get("content") or "")
+                metadata_json = item.get("metadata_json")
+                if not isinstance(metadata_json, dict):
+                    metadata_json = None
+            else:
+                role, content = item
+                role = str(role or "").strip()
+                content = str(content or "")
+                metadata_json = None
+            if not role:
+                continue
+            normalized.append(
+                {
+                    "role": role,
+                    "content": content,
+                    "metadata_json": metadata_json,
+                }
+            )
+        return normalized
+
     def append_messages(
         self,
         *,
         tenant_id: int,
         session_id: int,
-        messages: List[Tuple[str, str]],
+        messages: List[Tuple[str, str] | dict[str, Any]],
     ) -> None:
         """Append messages to a session without deleting existing history."""
 
@@ -740,22 +770,34 @@ class AgentService:
         if session is None:
             raise HTTPException(status_code=404, detail="Agent 会话不存在")
 
-        for role, content in messages:
+        records = self._normalize_message_records(messages)
+
+        for item in records:
+            role = str(item.get("role") or "").strip()
+            content = str(item.get("content") or "")
+            metadata_json = item.get("metadata_json") if isinstance(item.get("metadata_json"), dict) else None
             msg = AgentMessage(
                 tenant_id=tenant_id,
                 session_id=session_id,
                 role=role,
                 content=content,
+                metadata_json=metadata_json,
                 token_usage=None,
             )
             self.db.add(msg)
 
-        session.message_count = int(session.message_count or 0) + len(messages)
-        last_content = messages[-1][1] if messages else None
+        session.message_count = int(session.message_count or 0) + len(records)
+        last_content = (
+            str(records[-1].get("content") or "")
+            if records
+            else None
+        )
         if last_content is not None:
             session.last_message_preview = (last_content or "")[:500]
         if not session.title:
-            for role, content in messages:
+            for item in records:
+                role = str(item.get("role") or "")
+                content = str(item.get("content") or "")
                 if role == "user" and content:
                     session.title = content.strip()[:80]
                     break

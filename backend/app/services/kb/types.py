@@ -40,3 +40,25 @@ class KBUnitRow:
     token_count: int
     metadata_json: dict[str, Any] = field(default_factory=dict)
     content_hash: str = ""
+
+
+@dataclass(slots=True)
+class KBSemanticGroupRow:
+    group_key: str
+    group_type: str
+    page_no_start: int | None
+    page_no_end: int | None
+    title: str | None
+    text_content: str | None
+    primary_image_path: str | None
+    token_count: int
+    metadata_json: dict[str, Any] = field(default_factory=dict)
+    content_hash: str = ""
+
+
+@dataclass(slots=True)
+class KBSemanticGroupMemberRow:
+    group_key: str
+    chunk_content_hash: str
+    member_role: str
+    member_order: int

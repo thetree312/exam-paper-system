@@ -104,3 +104,21 @@
 - 任意会话都能按需引用共享题卡，并保留图片/批改/作答上下文；
 - 用户无需额外点击即可通过自然语言触发 skill，体验等同“AI IDE”；
 - Supervisor/solver 能继续感知图片题并调度视觉代理，避免能力回退。
+## 2026-03-28锛歀ayout KB Backfill
+
+鏂板鍥炲～鑴氭湰锛?
+
+- `python scripts/backfill_page_layout_cache.py --tenant 2`
+  - 鎸夌幇鏈?preview 椤靛浘鍥炲～ `file_page_layout_cache`
+  - 宸插畬鎴愮殑椤典細鎸夌紦瀛樺敮涓€閿烦杩囷紝鍏锋湁骞傜瓑鎬?
+- `python scripts/backfill_kb_layout_blocks.py --tenant 2`
+  - 瀵瑰凡鏈夐〉绾?layout cache 鐨勬枃浠堕噸璧?KB ingest锛屽啓鍏?layout-aware chunks/units
+  - 榛樿鍙鐞?`workroom_id IS NULL` 鐨勬櫘閫?KB source
+  - 濡傛灉鏈€鏂?source 宸叉槸 `ready`锛屽垯鐩存帴璺宠繃锛岄伩鍏嶉噸澶嶇墿鍖?
+
+寤鸿鎵ц椤哄簭锛?
+
+1. 鍏堣窇 `backfill_page_layout_cache.py`
+2. 鍐嶈窇 `backfill_kb_layout_blocks.py`
+
+杩欎袱涓剼鏈兘鏄悓姝ュ埗寮忚剼鏈紝涓嶄緷璧?Celery worker锛岄€傚悎鏈湴缁存姢鍜屾墜鍔ㄥ洖濉€?

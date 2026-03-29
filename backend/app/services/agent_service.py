@@ -311,8 +311,9 @@ class AgentService:
         *,
         tenant_id: int,
         user_id: int,
-        document_id: int,
+        document_id: Optional[int],
         view_id: str,
+        workroom_id: Optional[int] = None,
         session_id: Optional[int] = None,
     ) -> AgentSession:
         if session_id:
@@ -336,6 +337,7 @@ class AgentService:
             tenant_id=tenant_id,
             user_id=user_id,
             document_id=document_id,
+            workroom_id=workroom_id,
             view_id=view_id,
             status="active",
         )
@@ -495,6 +497,7 @@ class AgentService:
         session_id: int,
         role: str,
         content: str,
+        metadata_json: Optional[dict[str, Any]] = None,
         token_usage: Optional[int] = None,
     ) -> AgentMessage:
         message = AgentMessage(
@@ -502,6 +505,7 @@ class AgentService:
             session_id=session_id,
             role=role,
             content=content,
+            metadata_json=metadata_json,
             token_usage=token_usage,
         )
         self.db.add(message)
@@ -740,6 +744,87 @@ class AgentService:
 
         session.updated_at = datetime.utcnow()
         self.db.commit()
+
+    def append_messages(
+        self,
+        *,
+        tenant_id: int,
+        session_id: int,
+        messages: List[Tuple[str, str] | dict[str, Any]],
+    ) -> None:
+        """Append visible conversation messages to a session."""
+
+        session = (
+            self.db.query(AgentSession)
+            .filter(
+                AgentSession.id == session_id,
+                AgentSession.tenant_id == tenant_id,
+                AgentSession.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .first()
+        )
+        if session is None:
+            raise HTTPException(status_code=404, detail="Agent session not found")
+
+        records = self._normalize_message_records(messages)
+        appended_count = 0
+        last_preview: Optional[str] = None
+
+        for item in records:
+            role = str(item.get("role") or "").strip()
+            content = str(item.get("content") or "")
+            metadata_json = item.get("metadata_json")
+            self.db.add(
+                AgentMessage(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    metadata_json=metadata_json,
+                    token_usage=None,
+                )
+            )
+            appended_count += 1
+            last_preview = content[:500]
+            if not session.title and role == "user" and content.strip():
+                session.title = content.strip()[:80]
+
+        if appended_count <= 0:
+            return
+
+        session.message_count = int(session.message_count or 0) + appended_count
+        session.last_message_preview = last_preview
+        session.updated_at = datetime.utcnow()
+        self.db.commit()
+
+    def _normalize_message_records(
+        self,
+        messages: List[Tuple[str, str] | dict[str, Any]],
+    ) -> List[dict[str, Any]]:
+        normalized: List[dict[str, Any]] = []
+        for item in messages:
+            if isinstance(item, dict):
+                role = str(item.get("role") or "").strip()
+                content = str(item.get("content") or "")
+                metadata_json = item.get("metadata_json")
+                if not isinstance(metadata_json, dict):
+                    metadata_json = None
+            else:
+                role, content = item
+                role = str(role or "").strip()
+                content = str(content or "")
+                metadata_json = None
+            if not role:
+                continue
+            normalized.append(
+                {
+                    "role": role,
+                    "content": content,
+                    "metadata_json": metadata_json,
+                }
+            )
+        return normalized
 
     # ===== Question sync =====
     def sync_question(
