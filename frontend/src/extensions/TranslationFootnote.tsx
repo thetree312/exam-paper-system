@@ -5,6 +5,8 @@ import type { NodeViewProps } from '@tiptap/react'
 import { createPortal } from 'react-dom'
 
 import type { TranslationWordSense } from '../types'
+import Icon from '../components/Icon'
+
 
 interface FootnoteAttrs {
   originalText?: string
@@ -184,7 +186,7 @@ const TranslationFootnoteComponent: React.FC<NodeViewProps> = ({ node, editor, g
               </div>
               <div className="translation-footnote-actions">
                 <button type="button" className="translation-footnote-close" onClick={handleClose} title="关闭释义卡片">
-                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  <Icon name={"close"} className="text-[14px]" />
                 </button>
                 <button
                   type="button"
@@ -192,7 +194,7 @@ const TranslationFootnoteComponent: React.FC<NodeViewProps> = ({ node, editor, g
                   onClick={handleRemove}
                   title="删除释义注脚"
                 >
-                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  <Icon name={"delete"} className="text-[16px]" />
                 </button>
               </div>
             </div>

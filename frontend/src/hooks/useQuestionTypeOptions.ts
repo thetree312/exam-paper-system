@@ -49,7 +49,7 @@ export function useQuestionTypeOptions({
       setIsLoading(false)
       return
     }
-    if (!backendBaseUrl || !tenantId) {
+    if (!backendBaseUrl || tenantId == null) {
       setFetchedOptions([])
       setError(null)
       setIsLoading(false)
@@ -94,7 +94,7 @@ export function useQuestionTypeOptions({
     async (name: string) => {
       const trimmed = (name ?? '').trim()
       if (!trimmed) return ''
-      if (!backendBaseUrl || !tenantId) return trimmed
+      if (!backendBaseUrl || tenantId == null) return trimmed
 
       try {
         const created = await createQuestionType(backendBaseUrl, tenantId, trimmed)

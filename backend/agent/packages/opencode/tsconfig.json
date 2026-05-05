@@ -1,0 +1,34 @@
+﻿{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "rootDir": ".",
+    "noUncheckedIndexedAccess": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "customConditions": ["node"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@opencode-ai/shared/*": ["../shared/src/*"],
+      "@opencode-ai/plugin": ["../plugin/src/index.ts"],
+      "@opencode-ai/plugin/*": ["../plugin/src/*"],
+      "@opencode-ai/sdk": ["../sdk/src/index.ts"],
+      "@opencode-ai/sdk/*": ["../sdk/src/*"]
+    },
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "transform": "@effect/language-service/transform",
+        "namespaceImportPackages": ["effect", "@effect/*"]
+      }
+    ]
+  },
+  "include": ["src/agent/**/*.ts", "src/**/*.d.ts"]
+}
+

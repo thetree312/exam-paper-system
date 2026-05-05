@@ -7,7 +7,6 @@ import type {
   AgUiQuestionReplaceEvent,
   GradeRunRequest,
   GradingJudgement,
-  OcrResult,
   SelectionBox,
   UserInfo,
   RegionPayload,
@@ -15,7 +14,14 @@ import type {
   StatusMessageSetter,
 } from '../types'
 import { useAppStore } from '../store/appStore'
-import { requestGrading, requestSplitQuestions, deleteQuestion as deleteQuestionApi } from '../services/agentApi'
+import { requestGrading, requestSplitQuestions } from '../services/agentApi'
+import { submitProblemCardAnswer } from '../services/problemCardsApi'
+import {
+  deleteStudioQuestionCard,
+  recognizeStudioSelection,
+  updateStudioQuestionCard,
+} from '../services/studioApi'
+import { createTextMathDocument, mathContentToPromptText, type MathContentDocument } from '../lib/mathContent'
 
 type SelectionSnapshot = {
   selection: SelectionBox | null
@@ -25,6 +31,14 @@ type SelectionSnapshot = {
 }
 
 type MaybeWrappedAgUiEvent = AgUiEvent | { type?: string; event?: AgUiEvent }
+type GradingDisplayResult = {
+  judgement: GradingJudgement
+  predictedAnswer?: string | null
+  reasoning?: string | null
+  confidence?: number | null
+  rawResponse?: string | null
+  error?: string | null
+}
 
 interface UseOcrManagerReturn {
   ocrItems: AggregatedOcrItem[]
@@ -38,17 +52,18 @@ interface UseOcrManagerReturn {
   selectionSnapshotRef: React.MutableRefObject<SelectionSnapshot | null>
   handleSelectionSnapshotChange: (snapshot: SelectionSnapshot) => void
   handleAddToEditor: (
-    sessionId: number | null,
+    sessionId: string | null,
     activeFile: any,
     snapshot: SelectionSnapshot | null,
-  ) => Promise<void>
+  ) => Promise<string | null>
   handleOcrItemUpdate: (id: string, updater: (item: AggregatedOcrItem) => AggregatedOcrItem) => void
   handleOcrItemDelete: (id: string) => void
-  handleAnswerChange: (id: string, value: string) => void
+  handleAnswerChange: (id: string, value: MathContentDocument) => void
   handleSplitOcrItem: (target: AggregatedOcrItem, index: number, user: UserInfo | null) => Promise<void>
   handleSubmitGrading: (
     currentFile: any,
-    agentDocumentId: number | null,
+    studioDocumentId: string | null,
+    sourceDocumentId: string | null,
     user: UserInfo | null,
   ) => Promise<void>
   handleAgUiEvent: (incoming: MaybeWrappedAgUiEvent) => void
@@ -58,12 +73,11 @@ export const useOcrManager = (
   backendBaseUrl: string,
   onStatusMessage: StatusMessageSetter,
   onToast: (message: string, type: 'info' | 'success' | 'error') => void,
-  agentDocumentId: number | null,
+  studioDocumentId: string | null,
 ): UseOcrManagerReturn => {
   const { t } = useTranslation('common')
   const storeOcrItems = useAppStore((state) => state.ocrItems)
   const setStoreOcrItems = useAppStore((state) => state.setOcrItems)
-  const currentUser = useAppStore((state) => state.user)
   const workroom = useAppStore((state) => state.workroom)
 
   const [isExtracting, setIsExtracting] = useState(false)
@@ -82,44 +96,33 @@ export const useOcrManager = (
   }, [])
 
   const handleAddToEditor = useCallback(
-    async (sessionId: number | null, activeFile: any, snapshot: SelectionSnapshot | null) => {
+    async (_sessionId: string | null, activeFile: any, snapshot: SelectionSnapshot | null) => {
       if (!snapshot || !snapshot.selection || snapshot.selection.segments.length === 0) {
         onStatusMessage('selection_missing')
-        return
+        return null
       }
       const { selection } = snapshot
 
       // 根据页号选出对应的 sessionId（图片多页情况下每页可能来源不同）
-      const uniqueSessionIds = Array.from(
-        new Set(
-          selection.segments
-            .map((seg) => activeFile?.pageSessionIds?.[seg.page - 1] ?? activeFile?.sessionId ?? null)
-            .filter((id): id is number => typeof id === 'number'),
-        ),
-      )
-
-      if (uniqueSessionIds.length === 0) {
+      const sourceDocumentID = typeof activeFile?.fileId === 'string' ? activeFile.fileId : null
+      if (!sourceDocumentID || !workroom?.id) {
         onStatusMessage('session_missing')
-        return
+        return null
       }
-
-      if (uniqueSessionIds.length > 1) {
-        onStatusMessage('selection_cross_upload')
-        return
-      }
-
-      const resolvedSessionId = uniqueSessionIds[0]
 
       const regions = snapshot.buildRegionsPayload()
       if (!regions || regions.length === 0) {
         onStatusMessage('selection_invalid')
-        return
+        return null
       }
 
-      const legends = snapshot.buildLegendsPayload()
+      const legends = snapshot.buildLegendsPayload() ?? undefined
 
       const payload = {
-        session_id: resolvedSessionId,
+        workroomID: String(workroom.id),
+        sourceDocumentID,
+        studioDocumentID: studioDocumentId ?? undefined,
+        title: activeFile?.name ?? null,
         regions,
         legends,
       }
@@ -129,88 +132,52 @@ export const useOcrManager = (
       console.log('[ocr] request', payload)
 
       try {
-        const [ocrResp, legendResp] = await Promise.all([
-          fetch(`${backendBaseUrl}/api/ocr/extract`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }),
-          legends && legends.length > 0
-            ? fetch(`${backendBaseUrl}/api/legend/extract`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: resolvedSessionId, legends }),
-              })
-            : Promise.resolve(null as any),
-        ])
-
-        if (!ocrResp.ok) throw new Error(await ocrResp.text())
-        const data = (await ocrResp.json()) as { items: OcrResult[] }
-
-        let legendImages: string[] = []
-        if (legendResp && legendResp.ok) {
-          const legendData = (await legendResp.json()) as { images: string[] }
-          legendImages = legendData.images ?? []
+        const recognized = await recognizeStudioSelection(backendBaseUrl, payload)
+        const card = recognized.questionCard
+        const enriched: AggregatedOcrItem = {
+          region_index: card.sequenceIndex,
+          text: card.text,
+          id: card.id,
+          sessionId: sourceDocumentID,
+          fileId: sourceDocumentID,
+          fileName: activeFile.name,
+          page: card.page ?? selection.segments[0]?.page ?? 1,
+          createdAt: new Date(card.createdAt).getTime(),
+          legendImages: card.legendImages ?? [],
+          originalText: card.originalText ?? card.text,
+          answerContent: card.answerContent ?? createTextMathDocument(card.answerText ?? ''),
+          answerText: card.answerText ?? '',
+          canonicalAnswer: card.canonicalAnswer ?? '',
+          documentContext: {
+            studioDocumentID: recognized.studioDocument.id,
+            sourceDocumentID: sourceDocumentID,
+          },
+          questionMeta: {
+            questionId: undefined,
+            sequenceIndex: card.sequenceIndex,
+            groupId: card.sequenceIndex,
+          },
         }
 
-        if (!sessionId || !activeFile) {
-          onStatusMessage('ocr_done')
-          return
-        }
-
-        const now = Date.now()
-        let enriched: AggregatedOcrItem[] = []
-        if (selection.segments.length > 1) {
-          const combinedText = data.items.map((item) => item.text).join('\n\n').trim()
-          if (combinedText.length > 0) {
-            const firstSegment = selection.segments[0]
-            enriched = [
-              {
-                region_index: 0,
-                text: combinedText,
-                id: `${sessionId}-${now}`,
-                sessionId,
-                fileId: activeFile.fileId,
-                fileName: activeFile.name,
-                page: firstSegment?.page ?? 1,
-                createdAt: now,
-                legendImages,
-                originalText: combinedText,
-                answerText: '',
-              },
-            ]
-          }
-        } else {
-          enriched = data.items.map((item, idx) => {
-            const segment = selection.segments[idx] ?? selection.segments[selection.segments.length - 1]
-            return {
-              ...item,
-              id: `${sessionId}-${now}-${idx}`,
-              sessionId,
-              fileId: activeFile.fileId,
-              fileName: activeFile.name,
-              page: segment?.page ?? (activeFile.previewPages.length ? idx + 1 : 1),
-              createdAt: now + idx,
-              legendImages,
-              originalText: item.text,
-              answerText: '',
-            }
-          })
-        }
-
-        setStoreOcrItems((prev) => [...prev, ...enriched])
+        setStoreOcrItems((prev) => [...prev, enriched])
         onStatusMessage('ocr_done')
         snapshot.clearSelection?.()
         selectionSnapshotRef.current = null
-        console.log('[ocr] success items', data.items.length)
+        console.log('[ocr] success card', card.id)
+        return recognized.studioDocument.id
       } catch (err) {
         console.error('[ocr] failed', err)
         onStatusMessage('ocr_failed')
+        onToast(
+          err instanceof Error && err.message ? err.message : t('app.status.ocr_failed'),
+          'error',
+        )
+        return null
       } finally {
         setIsExtracting(false)
       }
     },
-    [backendBaseUrl, onStatusMessage],
+    [backendBaseUrl, onStatusMessage, setStoreOcrItems, studioDocumentId, workroom?.id],
   )
 
   const handleOcrItemUpdate = useCallback(
@@ -234,45 +201,35 @@ export const useOcrManager = (
       const items = ocrItemsRef.current
       const target = items.find((item) => item.id === id)
 
-      // 如果没有绑定后端题目，或当前没有 agentDocumentId，则仅本地删除
-      const questionId = target?.questionMeta?.questionId
-      if (!target || !questionId || !agentDocumentId) {
-        setStoreOcrItems((prev) => prev.filter((item) => item.id !== id))
-        return
-      }
-
-      const tenantId = currentUser?.tenant_id
-      if (!tenantId) {
-        console.warn('[agent.delete_question] missing tenantId, fallback to local delete')
+      if (!target || !workroom?.id) {
         setStoreOcrItems((prev) => prev.filter((item) => item.id !== id))
         return
       }
 
       try {
-        await deleteQuestionApi(backendBaseUrl, {
-          tenantId,
-          // agentDocumentId 已由 useAgentSync 管理，与当前题卡对应
-          documentId: agentDocumentId,
-          questionId,
+        await deleteStudioQuestionCard(backendBaseUrl, {
+          workroomID: String(workroom.id),
+          cardID: id,
         })
       } catch (err) {
-        console.error('[agent.delete_question] failed', err)
-        // 若后端删除失败，则不移除前端题卡，避免与快照不一致
+        console.error('[studio.delete_question_card] failed', err)
         return
       }
 
       setStoreOcrItems((prev) => prev.filter((item) => item.id !== id))
     },
-    [agentDocumentId, backendBaseUrl, currentUser, setStoreOcrItems],
+    [backendBaseUrl, setStoreOcrItems, workroom?.id],
   )
 
-  const handleAnswerChange = useCallback((id: string, value: string) => {
+  const handleAnswerChange = useCallback((id: string, value: MathContentDocument) => {
+    const answerText = mathContentToPromptText(value)
     setStoreOcrItems((prev) =>
       prev.map((item) =>
         item.id === id
           ? {
               ...item,
-              answerText: value,
+              answerContent: value,
+              answerText,
             }
           : item,
       ),
@@ -282,6 +239,7 @@ export const useOcrManager = (
   const handleSplitOcrItem = useCallback(
     async (target: AggregatedOcrItem, _index: number, user: UserInfo | null) => {
       if (!user) return
+      if (!workroom?.id) return
       if (splittingItemId) {
         onToast(t('app.toast.split_in_progress'), 'info')
         return
@@ -296,7 +254,8 @@ export const useOcrManager = (
         const resp = await requestSplitQuestions(backendBaseUrl, {
           tenantId: user.tenant_id,
           userId: user.id,
-          documentId: agentDocumentId ?? undefined,
+          workroomId: workroom.id,
+          documentId: target.fileId ?? undefined,
           text: sourceText,
           maxQuestions: 20,
         })
@@ -326,7 +285,10 @@ export const useOcrManager = (
               text: q.text,
               originalText: q.text,
               createdAt: baseCreatedAt + i,
+              answerContent: createTextMathDocument(''),
               answerText: '',
+              canonicalAnswer: '',
+              documentContext: target.documentContext ?? null,
               grading: undefined,
               questionMeta: {
                 questionId: undefined,
@@ -348,12 +310,25 @@ export const useOcrManager = (
         setSplittingItemId(null)
       }
     },
-    [agentDocumentId, backendBaseUrl, onStatusMessage, onToast, splittingItemId],
+    [backendBaseUrl, onStatusMessage, onToast, splittingItemId, t],
   )
 
   const handleSubmitGrading = useCallback(
-    async (currentFile: any, agentDocumentId: number | null, user: UserInfo | null) => {
+    async (
+      currentFile: any,
+      studioDocumentId: string | null,
+      sourceDocumentId: string | null,
+      user: UserInfo | null,
+    ) => {
       if (!user) return
+      if (!workroom?.id) {
+        onStatusMessage('grading_failed')
+        return
+      }
+      if (!studioDocumentId) {
+        onStatusMessage('grading_failed')
+        return
+      }
       if (!ocrItemsRef.current.length) {
         onStatusMessage('grading_none')
         return
@@ -369,23 +344,103 @@ export const useOcrManager = (
         })),
       )
       try {
-        const payload: GradeRunRequest = {
-          tenantId: user.tenant_id,
-          userId: user.id,
-          workroomId: workroom?.id ?? 0,
-          documentId: agentDocumentId ?? undefined,
-          title: currentFile?.name ?? undefined,
-          questions: ocrItemsRef.current.map((item, idx) => ({
-            sequenceIndex: idx,
-            content: item.text,
-            userAnswer: item.answerText ?? '',
-            legendImages: item.legendImages ?? [],
-            page: item.page ?? null,
-            fileName: item.fileName,
-          })),
+        const items = ocrItemsRef.current
+        let resultMap = new Map<number, GradingDisplayResult>()
+        const problemCardItems = items.filter(
+          (item): item is AggregatedOcrItem & { documentContext: { studioDocumentID: string; sourceDocumentID?: string | null } } =>
+            item.documentContext?.studioDocumentID === studioDocumentId &&
+            typeof item.id === 'string' &&
+            item.id.trim().length > 0,
+        )
+        const problemCardIndexSet = new Set(problemCardItems.map((item) => item.id))
+
+        if (problemCardItems.length > 0) {
+          const results = await Promise.all(
+            problemCardItems.map(async (item) => {
+              const idx = items.findIndex((candidate) => candidate.id === item.id)
+              const userAnswer = mathContentToPromptText(
+                item.answerContent ?? createTextMathDocument(item.answerText ?? ''),
+              ).trim()
+              if (!userAnswer) {
+                return [idx, { judgement: 'skipped', reasoning: '学生未作答' } satisfies GradingDisplayResult] as const
+              }
+              await updateStudioQuestionCard(backendBaseUrl, {
+                workroomID: String(workroom.id),
+                cardID: item.id,
+                text: item.text,
+                answerContent: item.answerContent,
+                answerText: item.answerText,
+                legendImages: item.legendImages ?? [],
+              })
+              const learning = await submitProblemCardAnswer(backendBaseUrl, {
+                workroomID: String(workroom.id),
+                problemCardID: item.id,
+                userAnswer,
+                inputSource: 'text',
+              })
+              const latest = learning.latestGradingRecord
+              return [
+                idx,
+                {
+                  judgement:
+                    latest?.is_correct === true
+                      ? 'correct'
+                      : latest?.is_correct === false
+                        ? 'incorrect'
+                        : 'uncertain',
+                  predictedAnswer: null,
+                  reasoning: latest?.diagnosis ?? null,
+                  confidence: null,
+                } satisfies GradingDisplayResult,
+              ] as const
+            }),
+          )
+          resultMap = new Map<number, GradingDisplayResult>(results)
         }
-        const resp = await requestGrading(backendBaseUrl, payload)
-        const resultMap = new Map(resp.results.map((r) => [r.sequence_index, r]))
+
+        const legacyQuestions = items
+          .map((item, idx) => ({ item, idx }))
+          .filter(({ item }) => !problemCardIndexSet.has(item.id))
+
+        if (legacyQuestions.length > 0) {
+          const payload: GradeRunRequest = {
+            tenantId: user.tenant_id,
+            userId: user.id,
+            workroomId: workroom.id,
+            studioDocumentId,
+            sourceDocumentId: sourceDocumentId ?? undefined,
+            title: currentFile?.name ?? undefined,
+            questions: legacyQuestions.map(({ item, idx }) => ({
+              sequenceIndex: idx,
+              content: item.text,
+              userAnswer: mathContentToPromptText(item.answerContent ?? createTextMathDocument(item.answerText ?? '')),
+              canonicalAnswer: item.canonicalAnswer ?? null,
+              legendImages: item.legendImages ?? [],
+              page: item.page ?? null,
+              fileName: item.fileName,
+            })),
+          }
+          const resp = await requestGrading(backendBaseUrl, payload)
+          const nextMap = new Map<number, GradingDisplayResult>(resultMap)
+          for (const r of resp.results) {
+            const sequence =
+              typeof r.sequence_index === 'number'
+                ? r.sequence_index
+                : typeof r.sequenceIndex === 'number'
+                  ? r.sequenceIndex
+                  : null
+            if (sequence == null) continue
+            nextMap.set(sequence, {
+              judgement: r.judgement,
+              predictedAnswer: r.predicted_answer ?? r.predictedAnswer ?? undefined,
+              reasoning: r.reasoning ?? undefined,
+              confidence: r.confidence ?? null,
+              rawResponse: r.raw_response ?? r.rawResponse ?? undefined,
+              error: r.error ?? undefined,
+            })
+          }
+          resultMap = nextMap
+        }
         setStoreOcrItems((prev) =>
           prev.map((item, idx) => {
             const result = resultMap.get(idx)
@@ -403,10 +458,10 @@ export const useOcrManager = (
               ...item,
               grading: {
                 status: judgement,
-                predictedAnswer: result.predicted_answer ?? undefined,
+                predictedAnswer: result.predictedAnswer ?? undefined,
                 reasoning: result.reasoning ?? undefined,
                 confidence: result.confidence ?? null,
-                rawResponse: result.raw_response ?? undefined,
+                rawResponse: result.rawResponse ?? undefined,
                 error: result.error ?? undefined,
               },
             }
@@ -427,7 +482,7 @@ export const useOcrManager = (
         setIsGrading(false)
       }
     },
-    [backendBaseUrl, onStatusMessage, workroom?.id],
+    [backendBaseUrl, onStatusMessage, setStoreOcrItems, workroom?.id],
   )
 
   const handleAgUiEvent = useCallback(
@@ -491,6 +546,7 @@ export const useOcrManager = (
             versions: payloadVersions,
             activeVersionIndex: nextVersionIndex,
             solution: event.payload.solution ?? item.solution ?? null,
+            answerContent: shouldResetAnswer ? createTextMathDocument('') : item.answerContent,
             answerText: shouldResetAnswer ? '' : item.answerText,
             grading: shouldResetAnswer ? undefined : item.grading,
             questionMeta: {
@@ -550,13 +606,16 @@ export const useOcrManager = (
             region_index: insertIndex,
             text: event.payload.content,
             originalText: event.payload.content,
-            sessionId: baseItem?.sessionId ?? 0,
-            fileId: baseItem?.fileId ?? 0,
+            sessionId: baseItem?.sessionId ?? `generated-session-${createdAt}`,
+            fileId: baseItem?.fileId ?? `generated-file-${createdAt}`,
             fileName: baseItem?.fileName ?? '生成题目',
             page: baseItem?.page ?? 1,
             createdAt,
             legendImages: event.payload.legendImages ?? [],
+            answerContent: createTextMathDocument(''),
             answerText: '',
+            canonicalAnswer: '',
+            documentContext: baseItem?.documentContext ?? null,
             questionMeta: {
               questionId: questionId,
               sequenceIndex: sequenceIndex,

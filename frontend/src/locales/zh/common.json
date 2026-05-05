@@ -49,6 +49,7 @@
     },
     "buttons": {
       "export": "导出",
+      "ai_model_settings": "设置",
       "logout": "退出登录",
       "login": "登录",
       "register": "注册并登录"
@@ -81,9 +82,13 @@
       "loading": "处理中..."
     },
     "footnote": "已为后续微信 / Google 登录预留账号绑定结构，当前仅支持邮箱密码。",
-    "error": {
-      "generic": "登录/注册失败，请检查邮箱和密码"
-    },
+      "error": {
+        "generic": "登录/注册失败，请检查邮箱和密码",
+        "invalid_credentials": "当前邮箱尚未注册，或密码不正确。若第一次使用，请切换到“注册”。",
+        "email_registered": "该邮箱已注册，请直接登录。",
+        "register_disabled": "当前本地开发环境不开放注册，请使用云端已有账号登录。",
+        "account_disabled": "该账号当前不可用，请联系管理员。"
+      },
     "validation": {
       "email_required": "邮箱不能为空",
       "email_too_long": "邮箱长度不能超过 254 个字符",
@@ -169,7 +174,10 @@
     },
     "collapsed": {
       "expand": "展开预览面板",
-      "favorites": "我的收藏"
+      "collapse": "收起预览面板",
+      "workroom_files": "Workroom 文件",
+      "favorites": "我的收藏",
+      "workspace": "返回 Workspace"
     }
   },
   "selection": {
@@ -233,6 +241,242 @@
     "loading_word": "正在翻译词汇",
     "loading_sentence": "正在翻译句子"
   },
+  "settings_modal": {
+    "title": "设置",
+    "subtitle": "在一个地方管理通用、账号和 AI 设置。",
+    "unsaved_confirm": "当前有未保存的修改，确认关闭吗？",
+    "loading": "正在加载当前设置...",
+    "save_success": "设置已保存",
+    "footer_hint": "修改后保存，新的能力绑定会按当前设置生效。",
+    "unconfigured": "未配置",
+    "enabled": "启用",
+    "disabled": "停用",
+    "sections": {
+      "provider_accounts": "账号凭证",
+      "provider_accounts_desc": "先配置你在不同模型平台上的调用凭证。",
+      "capability_binding": "能力绑定",
+      "capability_binding_desc": "产品里的每个 AI 能力都从上面的账号池选择账号与模型。"
+    },
+    "nav": {
+      "general": "通用",
+      "account": "账号",
+      "ai": "AI 设置",
+      "open_source_license": "开源声明"
+    },
+    "menu": {
+      "settings_center": "设置中心",
+      "profile": "个人资料",
+      "security": "安全设置",
+      "api_key": "账号凭证",
+      "custom_model": "自定义模型",
+      "experimental_features": "实验功能",
+      "usage": "用量统计",
+      "language": "语言设置",
+      "billing": "账单支付",
+      "appearance": "界面外观",
+      "open_source_license": "开源声明"
+    },
+    "menu_group": {
+      "settings": "设置",
+      "model_service": "模型与服务",
+      "preference": "偏好设置",
+      "security_privacy": "安全与隐私",
+      "developer": "开发者"
+    },
+    "provider_runtime": {
+      "test_connection": "测试连接",
+      "testing_connection": "测试中…",
+      "sync_models": "同步模型目录",
+      "syncing_models": "同步中…",
+      "last_sync": "最近同步",
+      "connection_success": "连接成功（{{latency}}ms）",
+      "connection_failed": "连接失败：{{error}}",
+      "sync_success": "模型目录已同步：{{count}} 个模型"
+    },
+    "time_ago": {
+      "seconds": "{{value}} 秒前",
+      "minutes": "{{value}} 分钟前",
+      "hours": "{{value}} 小时前",
+      "days": "{{value}} 天前"
+    },
+    "summary": {
+      "account": "账号",
+      "model": "模型"
+    },
+    "general": {
+      "hero_title": "通用偏好",
+      "hero_desc": "管理整个产品的基础显示偏好。",
+      "language_title": "语言设置",
+      "language_desc": "切换整个产品界面的显示语言。"
+    },
+    "account": {
+      "hero_title": "账号信息",
+      "hero_desc": "查看当前登录账号，并处理本地会话相关操作。",
+      "user_id": "用户 ID",
+      "tenant_id": "租户 ID",
+      "security_title": "账号操作",
+      "security_desc": "你可以在这里退出当前设备上的登录状态。",
+      "session_title": "当前状态",
+      "session_value": "已登录"
+    },
+    "ai_summary": {
+      "hero_title": "先配置平台凭证，再把能力绑定到具体账号和模型。",
+      "hero_desc": "Agent、拆题、批改、OCR 等能力都共用同一个账号池，但每个能力都可以独立选择不同的平台账号和模型。",
+      "provider_accounts": "账号凭证",
+      "provider_accounts_desc": "已录入的平台凭证数量",
+      "enabled_capabilities": "已绑定能力",
+      "enabled_capabilities_desc": "当前已经指定账号和模型的 AI 能力"
+    },
+    "experimental": {
+      "hero_desc": "探索预览中的新功能，开启后可能影响稳定性。",
+      "hero_warning": "实验功能可能随版本变化或被移除。",
+      "math_input_title": "数理化输入",
+      "math_input_desc": "控制是否开放基于模型的数理化输入实验能力。",
+      "math_input_hint": "开启后，输入框可将数理化自然语言片段实时转换为可渲染的 LaTeX 表达。"
+    },
+    "appearance": {
+      "desc": "设置编辑器保存策略。",
+      "manual": "手动保存",
+      "auto_delay": "延时自动保存"
+    },
+    "provider": {
+      "connected_platforms": "已连接平台",
+      "security_local_only": "凭证安全存储在本地，仅在本机使用。",
+      "last_sync": "最近同步",
+      "last_test": "最近测试",
+      "hide_model_catalog": "收起模型目录",
+      "show_model_catalog": "查看模型目录",
+      "model_catalog": "模型目录",
+      "catalog_source": "来源",
+      "catalog_source_synced": "实时同步",
+      "catalog_source_official": "官方目录",
+      "visible_models": "可见模型",
+      "items_suffix": "个",
+      "adapter_mode": "接入方式",
+      "adapter_official": "官方 adapter",
+      "synced": "已同步",
+      "not_synced": "未同步",
+      "empty_model_catalog": "暂无模型，点击“同步模型目录”拉取。",
+      "security_notes_title": "连接与安全说明",
+      "security_note_1": "密钥不会上传到外部账户中心。",
+      "security_note_2": "建议优先使用本地 provider 配置。",
+      "security_note_3": "修改后需点击“保存设置”才会对普通字段生效。",
+      "error_save_before_test": "请先保存该账号后再测试连接。",
+      "error_test_failed": "测试连接失败",
+      "error_save_before_sync": "请先保存该账号后再同步模型目录。",
+      "error_sync_failed": "同步模型目录失败"
+    },
+    "capability_group": {
+      "question": "题卡处理",
+      "learning": "学习生成",
+      "translation": "翻译",
+      "ocr": "OCR 与解析"
+    },
+    "capability_label": {
+      "question_split": "智能拆题",
+      "question_grading": "智能批改",
+      "flashcard_generation": "闪卡生成",
+      "flashcard_long_outline": "长文闪卡提纲",
+      "mindmap_outline_generation": "脑图提纲",
+      "mindmap_generation": "脑图生成",
+      "translation_math": "数理化翻译",
+      "translation_word": "单词翻译",
+      "translation_sentence": "句子翻译",
+      "studio_selection_ocr": "框选 OCR",
+      "document_layout_ocr": "全文 OCR / Layout"
+    },
+    "custom_model": {
+      "desc": "为不同能力绑定默认账号与模型，Agent 配置支持多平台、多模型回退。",
+      "catalog_hint": "模型可用性取决于本地 models catalog 与已配置账号。",
+      "col_capability": "功能项",
+      "col_account": "当前账号",
+      "col_model": "当前模型",
+      "col_action": "操作",
+      "agent_config_title": "Agent 配置",
+      "agent_config_desc": "Agent 可按优先级使用多个平台与模型，失败时自动回退。",
+      "col_priority": "优先级",
+      "add_model": "+ 添加模型",
+      "auto_fallback": "失败后自动回退到下一模型",
+      "final_order": "最终生效顺序："
+    },
+    "fields": {
+      "provider": "模型提供商",
+      "api_key": "API Key",
+      "base_url": "服务地址 / Base URL",
+      "account": "选择账号",
+      "model_id": "模型 ID",
+      "operation_type": "能力类型",
+      "status": "状态",
+      "base_url_override": "覆盖地址（高级）",
+      "notes": "备注"
+    },
+    "placeholders": {
+      "api_key": "输入该账号的 API Key",
+      "keep_existing_key": "留空不会清空，仍保留当前已保存密钥",
+      "base_url": "例如：https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "base_url_override": "仅在该能力需要单独 endpoint 时填写",
+      "model_id": "例如：qwen-max / glm-4.5 / glm-ocr",
+      "notes": "补充说明该能力为何使用这个账号或模型"
+    },
+    "api_key_state": {
+      "saved": "当前已保存密钥：{{masked}}。不输入新值就不会覆盖。",
+      "will_override": "检测到新密钥。保存设置后会覆盖当前已保存密钥。",
+      "missing": "当前未保存密钥。请填写后再保存，否则该账号不可用。"
+    },
+    "operation": {
+      "chat_completion": "聊天 / JSON 生成",
+      "ocr_layout": "OCR / Layout 解析"
+    },
+    "actions": {
+      "save": "保存设置",
+      "saving": "保存中...",
+      "cancel": "取消",
+      "delete": "删除",
+      "add_account": "新增账号",
+      "edit": "编辑",
+      "editing": "编辑中",
+      "edit_binding": "修改绑定",
+      "apply_binding": "应用绑定",
+      "complete": "完成",
+      "show_api_key": "显示密码",
+      "hide_api_key": "隐藏密码"
+    },
+    "provider_detail_title": "账号详情",
+    "provider_complete_hint": "填完后点完成，再用右下角保存设置提交。",
+    "provider_status": {
+      "editing": "编辑中",
+      "completed": "已完成",
+      "pending": "待完善"
+    },
+    "connected": "已配置",
+    "disconnected": "未配置",
+    "select_capability_hint": "从左侧选择一个能力，然后为它指定账号和模型。",
+    "empty_provider_pool": "还没有任何账号凭证，请先新增一个。",
+    "placeholder": {
+      "title": "Development in Progress",
+      "desc": "该模块暂未开放配置"
+    },
+    "license": {
+      "hero_title": "开源声明",
+      "hero_desc": "本产品使用了若干第三方开源软件，下面列出主要内容。",
+      "list_title": "第三方软件清单",
+      "view_license": "查看许可",
+      "full_notice_title": "完整许可文本",
+      "full_notice_action": "查看完整许可",
+      "note_1": "完整许可文本可在应用安装目录或项目仓库中查看",
+      "note_2": "第三方模型服务遵循各平台自身条款",
+      "col_project": "项目",
+      "col_license": "许可证",
+      "col_action": "操作",
+      "item_opencode_name": "OpenCode",
+      "item_dompurify_name": "DOMPurify",
+      "item_pdfjs_name": "pdfjs-dist",
+      "item_tiptap_name": "Tiptap",
+      "item_react_name": "React / React DOM",
+      "item_typescript_name": "TypeScript",
+      "full_notice_desc": "完整清单和许可文本请参考随附的第三方软件说明。"
+    }
+  },
   "validation": {
     "file_type": "不支持的文件类型，仅支持图片、PDF 和 Word 文档",
     "file_too_large": "文件大小不能超过 {{size}}MB",
@@ -242,6 +486,36 @@
     "label": "语言",
     "zh": "中文",
     "en": "English"
+  },
+  "favorites": {
+    "title": "我的收藏",
+    "subtitle": "管理你收藏过的题目，方便复习、整理和导出试卷。",
+    "search_placeholder": "按关键词或题号搜索…",
+    "refresh": "刷新",
+    "loading": "加载收藏中…",
+    "empty_title": "还没有收藏题目",
+    "empty_desc": "先把你喜欢的题目收藏起来。",
+    "empty_desc_search": "没有找到匹配的题目",
+    "back": "返回编辑区",
+    "page_label": "第 {{page}} 页",
+    "sequence_label": "题号 #{{index}}",
+    "toolbar": {
+      "add": "添加到编辑器",
+      "remove": "取消收藏"
+    },
+    "meta": {
+      "added": "添加于 {{date}}"
+    },
+    "toast": {
+      "load_failed": "加载收藏失败",
+      "added": "已收藏",
+      "add_failed": "收藏失败",
+      "local_limit_exceeded": "收藏已达本地上限（10,000）。请先导出为 JSON 并清理后再继续收藏。",
+      "already_added": "该题目已收藏",
+      "operation_failed": "操作失败",
+      "removed": "已取消收藏",
+      "remove_failed": "取消收藏失败"
+    }
   },
   "favorite_config": {
     "title": "配置收藏",
@@ -262,6 +536,46 @@
     "errors": {
       "load_failed": "加载数据失败",
       "operation_failed": "操作失败"
+    }
+  },
+  "workspace_page": {
+    "header": {
+      "title": "工作区",
+      "search_placeholder": "搜索文件夹、主题或工作区..."
+    },
+    "knowledge_base": {
+      "title": "知识库",
+      "subtitle": "按创建时间线组织。"
+    },
+    "actions": {
+      "new_workspace": "新建工作区",
+      "delete_workspace": "删除工作区"
+    },
+    "timeline": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "earlier": "更早"
+    },
+    "empty": {
+      "title": "还没有工作区",
+      "description": "创建你的第一个主题工作区，然后进入其 workroom 上传文档并开始学习。",
+      "create_button": "创建工作区"
+    },
+    "workspace": {
+      "open_hint": "打开 workroom 继续"
+    },
+    "saved_questions": {
+      "title": "已保存题目",
+      "workspace_badge": "工作区",
+      "topic_badge": "主题",
+      "default_topic": "进入该工作区可打开 workroom、上传文档，并继续整理题目文档、闪卡、思维导图和笔记。",
+      "workspace_id": "工作区 #{{id}}"
+    },
+    "delete_modal": {
+      "title": "确认永久删除",
+      "description": "将永久删除「{{name}}」及其绑定数据，删除后不可恢复。是否继续？",
+      "cancel": "取消",
+      "confirm": "确认删除"
     }
   },
   "export": {
@@ -285,6 +599,10 @@
     "text_button": "文本",
     "flashcard_button": "闪卡",
     "mindmap_button": "思维导图",
+    "toolbar": {
+      "mode_follow_preview": "跟随预览文档",
+      "mode_keep_workset": "保持当前工作集"
+    },
     "answer_mode_button": "答题模式",
     "copilot_button": "Ordis 对话",
     "workspace_title": "内容工作区",
@@ -332,7 +650,23 @@
   },
   "file_tabs": {
     "close_label": "关闭标签",
-    "collapse_label": "收起"
+    "collapse_label": "收起",
+    "toggle_preview": "显示预览",
+    "toggle_workroom_files": "显示 Workroom 文件"
+  },
+  "workroom_tree": {
+    "title": "Workroom 文件",
+    "toggle_preview": "显示预览",
+    "untitled": "未命名学习空间",
+    "loading": "加载 Workroom 文件...",
+    "load_timeout": "加载超时，请重试（文件较多时首次加载可能较慢）",
+    "empty": "当前 Workroom 为空"
+  },
+  "favorite_button": {
+    "aria": {
+      "add": "添加到收藏",
+      "remove": "取消收藏"
+    }
   },
   "mindmap": {
     "generating": "生成中...",

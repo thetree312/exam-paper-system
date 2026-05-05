@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
+import Icon from './Icon'
+
 
 interface WorkroomSourceTimelineProps {
   workspaceName?: string | null
@@ -61,7 +63,7 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
             onClick={onUploadClick}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
           >
-            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+            <Icon name={"upload_file"} className="text-[18px]" />
             Upload
           </button>
         </div>
@@ -82,7 +84,7 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
         {items.length === 0 ? (
           <div className="relative z-10 mt-16 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm">
-              <span className="material-symbols-outlined text-4xl text-slate-300">folder_open</span>
+              <Icon name={"folder_open"} className="text-4xl text-slate-300" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900">No source files yet</h3>
             <p className="mt-2 text-sm leading-6 text-slate-500">

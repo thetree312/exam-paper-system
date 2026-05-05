@@ -78,7 +78,7 @@ export const usePreviewPane = (): UsePreviewPaneReturn => {
       return { width: '100%', minWidth: 0 }
     }
     if (isPreviewCollapsed) {
-      return { width: 64, minWidth: 64 }
+      return { width: 44, minWidth: 44 }
     }
     return { width: leftWidth, minWidth: 320 }
   }, [isMobileOrTablet, isPreviewCollapsed, leftWidth])

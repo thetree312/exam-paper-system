@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 
 import type { MindMapNavigateTarget, MindMapSourceRef, UserInfo } from '../../types'
 import { fetchWorkroomArtifact, upsertWorkroomArtifact } from '../../services/workroomApi'
-import { useAppStore } from '../../store/appStore'
 import { generateMindMap, getCurrentMindMap, saveMindMap } from './api/mindmapApi'
 import MindMapNodeEditor from './components/MindMapNodeEditor'
 import MindMapContextActions from './components/MindMapContextActions'
@@ -23,10 +22,10 @@ import {
 
 interface MindMapPanelProps {
   backendBaseUrl: string
-  documentId: number | null
-  fileId: number | null
+  documentId: string | null
+  fileId: string | null
   user: UserInfo | null
-  workroomId?: number | null
+  workroomId?: string | null
   onBack?: () => void
   onNavigateToQuestion?: (target: MindMapNavigateTarget) => void
 }
@@ -77,8 +76,8 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
 
   const source: MindMapSourceRef | null = React.useMemo(() => {
     if (!user) return null
-    if (mode === 'document' && documentId) return { sourceType: 'exam_document', sourceId: documentId, kind: 'knowledge' }
-    if (mode === 'file' && fileId) return { sourceType: 'uploaded_file', sourceId: fileId, sourceIds: [], kind: 'knowledge' }
+    if (mode === 'document' && documentId) return { sourceType: 'studio_document', sourceId: documentId, kind: 'knowledge' }
+    if (mode === 'file' && fileId) return { sourceType: 'document', sourceId: fileId, sourceIds: [], kind: 'knowledge' }
     return null
   }, [user, mode, documentId, fileId])
 
@@ -104,7 +103,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
   }, [source])
   const sourceSignature = React.useMemo(() => {
     if (!source) return null
-    const ids = source.sourceIds && source.sourceIds.length > 0 ? [...source.sourceIds].sort((a, b) => a - b) : []
+    const ids = source.sourceIds && source.sourceIds.length > 0 ? [...source.sourceIds].sort() : []
     return ids.length > 1 ? `${source.sourceType}:${ids.join(',')}` : null
   }, [source])
   const panelStateKey = React.useMemo(() => {
@@ -268,13 +267,15 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         const artifactLayoutMode = payload.layoutMode
         const artifactMindmapMode = payload.mindmapMode
         const artifactSourceIds = Array.isArray(payload.sourceIds)
-          ? payload.sourceIds.map((value: unknown) => Number(value)).filter((value: number) => Number.isFinite(value) && value > 0)
+          ? payload.sourceIds
+              .map((value: unknown) => String(value ?? '').trim())
+              .filter((value: string) => Boolean(value))
           : []
         const artifactSourceSignature =
           typeof payload.sourceSignature === 'string' && payload.sourceSignature.trim()
             ? payload.sourceSignature.trim()
             : artifactSourceIds.length > 1
-              ? `${artifactSourceType}:${[...artifactSourceIds].sort((a, b) => a - b).join(',')}`
+              ? `${artifactSourceType}:${[...artifactSourceIds].sort().join(',')}`
               : null
         if (artifactSourceType !== source.sourceType || artifactSourceId !== source.sourceId) return
         if ((artifactSourceSignature ?? null) !== (sourceSignature ?? null)) return

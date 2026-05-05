@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { useFileUpload, useOcrManager } from '../hooks'
 import { getQuestion } from '../services/questionApi'
-import type { AggregatedOcrItem } from '../types'
+import { createTextMathDocument } from '../lib/mathContent'
+import type { AggregatedOcrItem, StudioWorkspaceTab } from '../types'
 import { EditorWorkspaceShell } from './EditorWorkspaceShell'
 import { FavoritesPage } from './FavoritesPage'
 
@@ -21,16 +22,19 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
   const user = useAppStore((state) => state.user)
   const appView = useAppStore((state) => state.appView)
   const setAppView = useAppStore((state) => state.setAppView)
-  const studioView = useAppStore((state) => state.studioView)
-  const setStudioView = useAppStore((state) => state.setStudioView)
   const isAnswerMode = useAppStore((state) => state.isAnswerMode)
   const setIsAnswerMode = useAppStore((state) => state.setIsAnswerMode)
   const isAgentDrawerOpen = useAppStore((state) => state.isAgentDrawerOpen)
   const setIsAgentDrawerOpen = useAppStore((state) => state.setIsAgentDrawerOpen)
-  const agentDocumentId = useAppStore((state) => state.agentDocumentId)
-  const setAgentDocumentId = useAppStore((state) => state.setAgentDocumentId)
-
+  const studioDocumentId = useAppStore((state) => state.studioDocumentId)
+  const setStudioDocumentId = useAppStore((state) => state.setStudioDocumentId)
+  const setOcrItems = useAppStore((state) => state.setOcrItems)
   const { t } = useTranslation('common')
+  const [studioTabs, setStudioTabs] = React.useState<StudioWorkspaceTab[]>([
+    { id: 'editor-main', kind: 'editor' as const, title: '题卡', closable: false },
+  ])
+  const [activeStudioTabId, setActiveStudioTabId] = React.useState('editor-main')
+  const [historyTabIds, setHistoryTabIds] = React.useState(['editor-main'])
 
   const {
     fileTabs: _fileTabs,
@@ -49,7 +53,7 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
     handleAnswerChange,
     handleSplitOcrItem,
     handleSubmitGrading,
-  } = useOcrManager(backendBaseUrl, onStatusMessage, onToast, agentDocumentId)
+  } = useOcrManager(backendBaseUrl, onStatusMessage, onToast, studioDocumentId)
 
   const handleAddFavoriteToEditor = React.useCallback(
     async (questionId: number) => {
@@ -61,13 +65,12 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
       try {
         onToast(t('app.toast.favorite_loading'), 'info')
         const question = await getQuestion(questionId, user.tenant_id, backendBaseUrl)
-
         const newItem: AggregatedOcrItem = {
           id: `favorite-${questionId}-${Date.now()}`,
           region_index: ocrItems.length,
           text: question.content,
-          sessionId: 0,
-          fileId: 0,
+          sessionId: `favorite-${questionId}`,
+          fileId: `favorite-${questionId}`,
           fileName: 'Favorite Question',
           page: question.page || 1,
           createdAt: Date.now(),
@@ -77,10 +80,11 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
             questionId,
           },
           originalText: question.content,
+          answerContent: createTextMathDocument(''),
           answerText: '',
         }
 
-        handleOcrItemUpdate(newItem.id, () => newItem)
+        setOcrItems((prev) => [...prev, newItem])
         setAppView('editor')
         onToast(t('app.toast.favorite_success'), 'success')
       } catch (err) {
@@ -89,7 +93,7 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
         onToast(t('app.toast.favorite_failed', { error: errorMsg }), 'error')
       }
     },
-    [user, backendBaseUrl, ocrItems.length, onToast, handleOcrItemUpdate, setAppView, t],
+    [backendBaseUrl, ocrItems.length, onToast, setAppView, setOcrItems, t, user],
   )
 
   if (!user) {
@@ -110,32 +114,76 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
     )
   }
 
+  const openStudioTab = (kind: 'editor' | 'mindmap' | 'flashcard' | 'preview') => {
+    if (kind === 'preview') return
+    const tabId = kind === 'editor' ? 'editor-main' : kind
+    setStudioTabs((prev) => {
+      if (prev.some((tab) => tab.id === tabId)) return prev
+      return [
+        ...prev,
+        { id: tabId, kind, title: kind === 'mindmap' ? '思维导图' : kind === 'flashcard' ? '闪卡' : '题卡', closable: kind !== 'editor' },
+      ]
+    })
+    setActiveStudioTabId(tabId)
+    setHistoryTabIds((prev) => [...prev.filter((id) => id !== tabId), tabId])
+  }
+
+  const activateStudioTab = (tabId: string) => {
+    setActiveStudioTabId(tabId)
+    setHistoryTabIds((prev) => [...prev.filter((id) => id !== tabId), tabId])
+  }
+
+  const closeStudioTab = (tabId: string) => {
+    if (tabId === 'editor-main') return
+    setStudioTabs((prev) => prev.filter((tab) => tab.id !== tabId))
+    setHistoryTabIds((prev) => prev.filter((id) => id !== tabId))
+    if (activeStudioTabId === tabId) {
+      const fallback = [...historyTabIds].filter((id) => id !== tabId).reverse()[0] ?? 'editor-main'
+      setActiveStudioTabId(fallback)
+    }
+  }
+
   return (
     <EditorWorkspaceShell
       backendBaseUrl={backendBaseUrl}
       user={user}
-      studioView={studioView}
-      onStudioViewChange={setStudioView}
+      studioTabs={studioTabs}
+      activeStudioTabId={activeStudioTabId}
+      onOpenStudioTab={openStudioTab}
+      onActivateStudioTab={activateStudioTab}
+      onCloseStudioTab={closeStudioTab}
+      onReorderStudioTabs={() => {}}
+      onUpdateStudioPreviewContent={() => {}}
+      onSaveStudioPreviewTab={async () => false}
+      studioDataSourceMode={'keep_workset'}
+      onStudioDataSourceModeChange={() => {}}
       isAnswerMode={isAnswerMode}
       onToggleAnswerMode={() => setIsAnswerMode(!isAnswerMode)}
-      isAgentDrawerOpen={isAgentDrawerOpen}
       onOpenAgentDrawer={() => setIsAgentDrawerOpen(!isAgentDrawerOpen)}
       currentFile={currentFile}
-      sessionId={sessionId}
+      sessionId={sessionId != null ? String(sessionId) : null}
       ocrItems={ocrItems}
-      agentDocumentId={agentDocumentId}
-      onDocumentChange={setAgentDocumentId}
+      studioDocumentId={studioDocumentId}
+      sourceDocumentId={currentFile?.fileId != null ? String(currentFile.fileId) : null}
+      onDocumentChange={(id) => setStudioDocumentId(id != null ? String(id) : null)}
       onUpdateItem={handleOcrItemUpdate}
       onDeleteItem={handleOcrItemDelete}
       onSendToAgent={() => {}}
       onAnswerChange={handleAnswerChange}
-      onSubmitGrading={() => handleSubmitGrading(currentFile, agentDocumentId, user)}
+      onSubmitGrading={() =>
+        handleSubmitGrading(
+          currentFile,
+          studioDocumentId,
+          currentFile?.fileId != null ? String(currentFile.fileId) : null,
+          user,
+        )
+      }
       isGrading={isGrading}
       onSplitItem={(item, idx) => handleSplitOcrItem(item, idx, user)}
       splittingItemId={splittingItemId}
       previewScrollRef={previewScrollRef}
       onToast={onToast}
-      onRunGlmOcr={async () => agentDocumentId}
+      onRunGlmOcr={async () => studioDocumentId}
     />
   )
 }

@@ -7,6 +7,8 @@ import rehypeKatex from 'rehype-katex'
 import type { FillBlankParsedResult, FillBlankAnswerMap } from './types'
 import { parseFillBlankAnswer, serializeFillBlankAnswer } from './answerState'
 import { useFillBlankNavigation } from './hooks/useFillBlankNavigation'
+import { InlineMathAnswerInput } from '../../math/InlineMathAnswerInput'
+import type { MathContentDocument } from '../../../lib/mathContent'
 
 interface FillBlankRendererProps {
   parsed: FillBlankParsedResult
@@ -14,6 +16,9 @@ interface FillBlankRendererProps {
   onChange: (value: string) => void
   disabled?: boolean
   legendImages?: string[]
+  mathInputEnabled?: boolean
+  backendBaseUrl?: string
+  userId?: string | number
 }
 
 /**
@@ -29,6 +34,9 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
   onChange,
   disabled = false,
   legendImages = [],
+  mathInputEnabled = false,
+  backendBaseUrl,
+  userId,
 }) => {
   const { t } = useTranslation('common')
   const answerMap: FillBlankAnswerMap = useMemo(
@@ -39,8 +47,8 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
   const { register, focusNext, focusPrev } = useFillBlankNavigation(parsed.totalBlanks)
 
   const handleBlankChange = useCallback(
-    (index: number, text: string) => {
-      const nextMap: FillBlankAnswerMap = { ...answerMap, [index]: text }
+    (index: number, content: MathContentDocument) => {
+      const nextMap: FillBlankAnswerMap = { ...answerMap, [index]: content }
       const serialized = serializeFillBlankAnswer(nextMap)
       onChange(serialized)
     },
@@ -48,7 +56,7 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
   )
 
   const handleKeyDown = useCallback(
-    (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    (index: number, e: React.KeyboardEvent<HTMLElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault()
         if (e.shiftKey) {
@@ -169,34 +177,21 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
           return <React.Fragment key={idx}>{children}</React.Fragment>
         }
 
-        const currentValue = answerMap[segment.index] ?? ''
-        const widthCh = Math.max(segment.placeholderLength, currentValue.length, 4)
+        const currentValue = answerMap[segment.index]
 
         return (
-          <input
-            key={idx}
-            ref={register(segment.index)}
-            type="text"
-            value={currentValue}
-            onChange={(e) => handleBlankChange(segment.index, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(segment.index, e)}
-            disabled={disabled}
-            className="inline-block bg-transparent text-sm text-slate-900 text-center transition-all"
-            style={{
-              width: `${widthCh}ch`,
-              minWidth: `${widthCh}ch`,
-              border: 'none',
-              borderBottom: '1.5px solid #64748b',
-              outline: 'none',
-              boxShadow: 'none',
-              borderRadius: 0,
-              padding: '0 2px',
-              margin: '0 4px',
-              verticalAlign: 'text-bottom',
-              lineHeight: 1,
-              height: '1.2em',
-            }}
-          />
+          <span key={idx}>
+            <InlineMathAnswerInput
+              value={currentValue}
+              onChange={(next) => handleBlankChange(segment.index, next)}
+              disabled={disabled}
+              inputRef={register(segment.index)}
+              onInputKeyDown={(e) => handleKeyDown(segment.index, e)}
+              mathInputEnabled={mathInputEnabled}
+              backendBaseUrl={backendBaseUrl}
+              userId={userId}
+            />
+          </span>
         )
       })}
     </div>

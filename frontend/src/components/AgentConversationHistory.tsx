@@ -30,7 +30,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
   // 2）排除已归档会话
   // 3）同一个 sessionId 只保留一条（按原顺序的第一条），避免多次“新会话”指向同一会话时出现重复
   const visibleConversations: AgentConversationMeta[] = []
-  const seenSessionIds = new Set<number>()
+  const seenSessionIds = new Set<string>()
   for (const conv of conversations) {
     if (conv.sessionId == null || conv.archived) continue
     const sid = conv.sessionId
@@ -54,17 +54,20 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
           {visibleConversations.map((conv) => {
             const isActive = conv.key === activeConversationKey
             return (
-              <button
+              <div
                 key={conv.key}
-                onClick={() => {
-                  onSelectConversation(conv.key)
-                  onClose()
-                }}
                 className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${
                   isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'
                 }`}
               >
-                <div className="flex items-center overflow-hidden flex-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectConversation(conv.key)
+                    onClose()
+                  }}
+                  className="flex items-center overflow-hidden flex-1 text-left min-w-0"
+                >
                   <svg
                     className={`w-3.5 h-3.5 mr-3 flex-shrink-0 ${
                       isActive ? 'text-blue-600' : 'text-neutral-300'
@@ -113,7 +116,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -127,7 +130,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                   </svg>
                 </button>
-              </button>
+              </div>
             )
           })}
         </div>

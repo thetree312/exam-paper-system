@@ -30,8 +30,8 @@ interface AppState {
   setFileTabs: (tabs: UploadedFileTab[] | ((prev: UploadedFileTab[]) => UploadedFileTab[])) => void
   activeTabIndex: number
   setActiveTabIndex: (index: number) => void
-  previewScrollPositions: Record<number, number>
-  setPreviewScrollPositions: (positions: Record<number, number> | ((prev: Record<number, number>) => Record<number, number>)) => void
+  previewScrollPositions: Record<string, number>
+  setPreviewScrollPositions: (positions: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void
 
   // OCR 题目管理
   ocrItems: AggregatedOcrItem[]
@@ -45,9 +45,9 @@ interface AppState {
   activeConversationKey: string | null
   setActiveConversationKey: (key: string | null) => void
 
-  // Agent 文档
-  agentDocumentId: number | null
-  setAgentDocumentId: (id: number | null) => void
+  // 当前题卡工作文档
+  studioDocumentId: string | null
+  setStudioDocumentId: (id: string | null) => void
 
   // UI 状态
   isAgentDrawerOpen: boolean
@@ -72,6 +72,8 @@ interface AppState {
   setIsExportDialogOpen: (open: boolean) => void
   viewportWidth: number
   setViewportWidth: (width: number) => void
+  workroomTreeRevealRequest: { path: string; id: number } | null
+  requestWorkroomTreeReveal: (path: string) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -123,9 +125,9 @@ export const useAppStore = create<AppState>((set) => ({
   activeConversationKey: null,
   setActiveConversationKey: (key) => set({ activeConversationKey: key }),
 
-  // Agent 文档
-  agentDocumentId: null,
-  setAgentDocumentId: (id) => set({ agentDocumentId: id }),
+  // 当前题卡工作文档
+  studioDocumentId: null,
+  setStudioDocumentId: (id) => set({ studioDocumentId: id }),
 
   // UI 状态
   isAgentDrawerOpen: false,
@@ -150,4 +152,12 @@ export const useAppStore = create<AppState>((set) => ({
   setIsExportDialogOpen: (open) => set({ isExportDialogOpen: open }),
   viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1024,
   setViewportWidth: (width) => set({ viewportWidth: width }),
+  workroomTreeRevealRequest: null,
+  requestWorkroomTreeReveal: (path) =>
+    set({
+      workroomTreeRevealRequest: {
+        path,
+        id: Date.now(),
+      },
+    }),
 }))

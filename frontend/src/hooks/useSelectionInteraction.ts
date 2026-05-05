@@ -508,14 +508,6 @@ export const useSelectionInteraction = ({
       acc[item.page] = acc[item.page] ? [...acc[item.page], item] : [item]
       return acc
     }, {})
-    if (selection.legends?.length) {
-      for (const legend of selection.legends) {
-        exclusionsByPage[legend.page] = exclusionsByPage[legend.page]
-          ? [...exclusionsByPage[legend.page], legend]
-          : [legend]
-      }
-    }
-
     const regions: RegionPayload[] = []
 
     // 每页合并为一个大区域，附带 holes

@@ -3,7 +3,7 @@ import type { MindMapSourceType } from '../../../types'
 export type MindMapMode = 'knowledge_structure' | 'exam_review'
 
 export interface MindMapQuestionRef {
-  questionId?: number | null
+  questionId?: string | null
   sequenceIndex?: number | null
   page?: number | null
 }
@@ -46,12 +46,12 @@ export interface MindMapViewState {
 }
 
 export interface MindMapDocumentPayload {
-  id: number
+  id: string
   version: number
   source: {
     type: MindMapSourceType
-    id: number
-    ids?: number[]
+    id: string
+    ids?: string[]
     signature?: string | null
   }
   kind: string

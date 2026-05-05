@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiJson } from '../lib/api'
 import type { AuthMode, UserInfo } from '../types'
 import { useAppStore } from '../store/appStore'
 import {
@@ -86,28 +87,51 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
 
       if (mode === 'register') {
         if (authDisplayName.trim()) {
-          payload.display_name = authDisplayName.trim()
+          payload.displayName = authDisplayName.trim()
         }
       }
 
       try {
         console.log('[auth] request', mode, payload)
-        const resp = await fetch(url, {
+        const data = (await apiJson(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        })
-        if (!resp.ok) {
-          const text = await resp.text()
-          throw new Error(text || '请求失败')
+        })) as {
+          user: {
+            id: string
+            email: string
+            displayName: string
+            tenantID?: number
+          }
+          token: string
+          sessionID: string
         }
-        const data = (await resp.json()) as { user: UserInfo }
-        setStoreUser(data.user)
-        secureSaveUser(data.user)
+        const nextUser: UserInfo = {
+          id: data.user.id,
+          tenant_id: data.user.tenantID ?? 0,
+          email: data.user.email,
+          display_name: data.user.displayName,
+          token: data.token,
+          session_id: data.sessionID,
+        }
+        setStoreUser(nextUser)
+        secureSaveUser(nextUser)
         console.log('[auth] success', data.user)
       } catch (err) {
         console.error('[auth] failed', err)
-        setAuthError(t('auth.error.generic'))
+        const message = err instanceof Error ? err.message : ''
+        if (mode === 'login' && message === 'Invalid email or password') {
+          setAuthError(t('auth.error.invalid_credentials'))
+        } else if (message === 'Registration is disabled in local development. Please use the cloud account system.') {
+          setAuthError(t('auth.error.register_disabled'))
+        } else if (message === 'Account is disabled') {
+          setAuthError(t('auth.error.account_disabled'))
+        } else if (mode === 'register' && message.startsWith('Email already registered')) {
+          setAuthError(t('auth.error.email_registered'))
+        } else {
+          setAuthError(t('auth.error.generic'))
+        }
       } finally {
         setAuthLoading(false)
       }
@@ -116,12 +140,48 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
   )
 
   const handleLogout = useCallback(() => {
-    setStoreUser(null)
-    secureClearUser()
+    const run = async () => {
+      try {
+        await apiJson(`${backendBaseUrl}/api/auth/logout`, {
+          method: 'POST',
+        })
+      } catch {}
+      setStoreUser(null)
+      secureClearUser()
+    }
+    void run()
     setAuthEmail('')
     setAuthPassword('')
     setAuthDisplayName('')
-  }, [setStoreUser])
+  }, [backendBaseUrl, setStoreUser])
+
+  useEffect(() => {
+    const stored = secureLoadUser()
+    if (!stored?.token) return
+
+    void apiJson<{ user: { id: string; email: string; displayName: string; tenantID?: number }; sessionID: string }>(
+      `${backendBaseUrl}/api/auth/me`,
+      {
+        method: 'GET',
+      },
+    )
+        .then((data) => {
+        const nextUser: UserInfo = {
+          id: data.user.id,
+          tenant_id: data.user.tenantID ?? 0,
+          email: data.user.email,
+          display_name: data.user.displayName,
+          token: stored.token,
+          session_id: data.sessionID,
+        }
+        setStoreUser(nextUser)
+        secureSaveUser(nextUser)
+      })
+      .catch(() => {
+        setStoreUser(null)
+        secureClearUser()
+      })
+  }, [backendBaseUrl, setStoreUser])
 
   return {
     user: storeUser,

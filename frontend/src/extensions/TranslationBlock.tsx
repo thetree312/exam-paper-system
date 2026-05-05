@@ -5,6 +5,8 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 
 import type { TranslationScope } from '../types'
+import Icon from '../components/Icon'
+
 
 interface TranslationAttrs {
   scope: TranslationScope
@@ -48,7 +50,7 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
     >
       <div className="translation-block-header">
         <div className="translation-block-label">
-          <span className="material-symbols-outlined text-[14px]">sparkles</span>
+          <Icon name={"sparkles"} className="text-[14px]" />
           {label}
         </div>
         <div className="translation-block-actions">
@@ -59,7 +61,7 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
             aria-label={t('translation_block.speak_title')}
             disabled
           >
-            <span className="material-symbols-outlined text-[16px]">volume_up</span>
+            <Icon name={"volume_up"} className="text-[16px]" />
           </button>
           <button
             type="button"
@@ -68,7 +70,7 @@ const TranslationBlockComponent: React.FC<NodeViewProps> = ({ node, editor, getP
             aria-label={t('translation_block.remove_title')}
             onClick={handleRemove}
           >
-            <span className="material-symbols-outlined text-[18px]">close</span>
+            <Icon name={"close"} className="text-[18px]" />
           </button>
         </div>
       </div>

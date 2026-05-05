@@ -1,8 +1,5 @@
 import type { Tag } from '../types'
-
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-}
+import { apiJson, withJsonBody } from '../lib/api'
 
 /**
  * 获取标签列表
@@ -11,16 +8,12 @@ export async function getTags(
   baseUrl: string,
   tenantId: number,
 ): Promise<Tag[]> {
-  const resp = await fetch(
-    `${baseUrl}/api/tags?tenant_id=${tenantId}`,
+  const data = await apiJson<{ items: Tag[] }>(
+    `${baseUrl}/api/taxonomies/tags?tenant_id=${tenantId}`,
+    {
+      method: 'GET',
+    },
   )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `获取标签列表失败 (${resp.status})`)
-  }
-
-  const data = (await resp.json()) as { items: Tag[] }
   return data.items
 }
 
@@ -32,21 +25,11 @@ export async function createTag(
   tenantId: number,
   name: string,
 ): Promise<Tag> {
-  const body = {
-    tenant_id: tenantId,
-    name,
-  }
-
-  const resp = await fetch(`${baseUrl}/api/tags`, {
+  return apiJson<Tag>(`${baseUrl}/api/taxonomies/tags`, {
     method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
+    ...withJsonBody({
+      tenant_id: tenantId,
+      name,
+    }),
   })
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `创建标签失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as Tag
 }

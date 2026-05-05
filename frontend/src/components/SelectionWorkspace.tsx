@@ -1,15 +1,20 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentCitationFocus,
+  DocumentPreviewAssetRef,
   PageSelectionSegment,
   SelectionBox,
   SelectionExclusion,
   SelectionLegend,
 } from '../types'
+import { documentPreviewAssetKey, fetchDocumentPreviewObjectUrl } from '../services/documentPreviewAsset'
+import Icon from './Icon'
+
 
 interface SelectionWorkspaceProps {
-  previewSources: string[]
+  backendBaseUrl: string
+  previewSources: DocumentPreviewAssetRef[]
   previewType: string | null
   activeStatus: string
   hasActiveFile: boolean
@@ -28,6 +33,75 @@ interface SelectionWorkspaceProps {
   onRemoveExclusion: (id: string) => void
   onToggleLegend: () => void
   onRemoveLegend: (id: string) => void
+}
+
+const AuthenticatedPreviewImage: React.FC<{
+  backendBaseUrl: string
+  asset: DocumentPreviewAssetRef
+  alt: string
+  imageRef?: (node: HTMLImageElement | null) => void
+}> = ({ backendBaseUrl, asset, alt, imageRef }) => {
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    const load = async () => {
+      try {
+        setLoadFailed(false)
+        objectUrl = await fetchDocumentPreviewObjectUrl(backendBaseUrl, asset)
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl)
+          objectUrl = null
+          return
+        }
+        setResolvedSrc(objectUrl)
+      } catch {
+        if (!cancelled) {
+          setResolvedSrc(null)
+          setLoadFailed(true)
+        }
+      }
+    }
+
+    setResolvedSrc(null)
+    void load()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [asset, backendBaseUrl])
+
+  if (loadFailed) {
+    return (
+      <div className="w-full min-h-40 flex items-center justify-center bg-slate-100 text-slate-400">
+        <Icon name={"broken_image"} className="text-[28px]" />
+      </div>
+    )
+  }
+
+  if (!resolvedSrc) {
+    return (
+      <div className="w-full min-h-40 flex items-center justify-center bg-slate-50 text-slate-300">
+        <Icon name={"image"} className="text-[28px] animate-pulse" />
+      </div>
+    )
+  }
+
+  return (
+    <img
+      ref={imageRef}
+      src={resolvedSrc}
+      alt={alt}
+      className="w-full h-auto block select-none"
+      draggable={false}
+    />
+  )
 }
 
 const SelectionToolbar: React.FC<{
@@ -62,7 +136,7 @@ const SelectionToolbar: React.FC<{
           disabled={isExtracting}
           title={t('selection.toolbar.add')}
         >
-          <span className="material-symbols-outlined text-[18px]">note_add</span>
+          <Icon name={"note_add"} className="text-[18px]" />
         </button>
         <button
           type="button"
@@ -70,7 +144,7 @@ const SelectionToolbar: React.FC<{
           onClick={onClearClick}
           title={t('selection.toolbar.clear')}
         >
-          <span className="material-symbols-outlined text-[18px]">close</span>
+          <Icon name={"close"} className="text-[18px]" />
         </button>
         <div className="h-5 w-px bg-slate-700" />
         <button
@@ -81,7 +155,7 @@ const SelectionToolbar: React.FC<{
           onClick={onToggleExclude}
           title={t('selection.toolbar.exclude')}
         >
-          <span className="material-symbols-outlined text-[18px]">do_not_disturb_on</span>
+          <Icon name={"do_not_disturb_on"} className="text-[18px]" />
         </button>
         <button
           type="button"
@@ -91,7 +165,7 @@ const SelectionToolbar: React.FC<{
           onClick={onToggleLegend}
           title={t('selection.toolbar.legend')}
         >
-          <span className="material-symbols-outlined text-[18px]">image</span>
+          <Icon name={"image"} className="text-[18px]" />
         </button>
       </div>
     </div>
@@ -177,6 +251,7 @@ const PendingLegend: React.FC<{ segment: PageSelectionSegment }> = ({ segment })
 )
 
 export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
+  backendBaseUrl,
   previewSources,
   previewType,
   activeStatus,
@@ -213,24 +288,23 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
         const isPageLevelCitation = Boolean(citationOnPage && !citationBBox)
         return (
           <div
-            key={`${src}-${idx}`}
+            key={documentPreviewAssetKey(src)}
             ref={(el) => {
               pageRefs.current[page] = el
             }}
-            className="relative mb-6 last:mb-0"
+            className="relative mb-4 last:mb-0"
           >
             <div className="absolute top-3 left-3 z-10 bg-white/80 backdrop-blur rounded-full px-3 py-1 text-xs font-medium text-slate-700 flex items-center gap-2 shadow">
-              <span className="material-symbols-outlined text-[16px]">description</span>
+              <Icon name={"description"} className="text-[16px]" />
               {t('selection.page_label', { page })}
             </div>
-            <img
-              ref={(el) => {
+            <AuthenticatedPreviewImage
+              backendBaseUrl={backendBaseUrl}
+              imageRef={(el) => {
                 imageRefs.current[page] = el
               }}
-              src={src}
+              asset={src}
               alt={t('selection.preview.alt_page', { page })}
-              className="w-full h-auto block select-none"
-              draggable={false}
             />
             {isPageLevelCitation && citationOnPage && (
               <div
@@ -311,7 +385,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
       if (activeStatus === 'pending' || activeStatus === 'processing') {
         return (
           <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
-            <span className="material-symbols-outlined text-[40px] animate-spin">sync</span>
+            <Icon name={"sync"} className="text-[40px] animate-spin" />
             <p className="text-sm font-medium">{t('selection.preview.loading')}</p>
           </div>
         )
@@ -320,7 +394,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
       if (activeStatus === 'failed') {
         return (
           <div className="flex flex-col items-center justify-center h-[500px] text-red-400 gap-3">
-            <span className="material-symbols-outlined text-[40px]">error</span>
+            <Icon name={"error"} className="text-[40px]" />
             <p className="text-sm font-medium">{t('selection.preview.failed')}</p>
           </div>
         )
@@ -329,7 +403,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
 
     return (
       <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
-        <span className="material-symbols-outlined text-[40px]">upload_file</span>
+        <Icon name={"upload_file"} className="text-[40px]" />
         <p className="text-sm font-medium">
           {previewType === null ? t('selection.preview.unsupported') : t('selection.preview.no_file')}
         </p>

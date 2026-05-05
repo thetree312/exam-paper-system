@@ -14,12 +14,12 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
   const setIsAgentDrawerOpen = useAppStore((state) => state.setIsAgentDrawerOpen)
   const agentDrawerWidth = useAppStore((state) => state.agentDrawerWidth)
   const setAgentDrawerWidth = useAppStore((state) => state.setAgentDrawerWidth)
-  const agentDocumentId = useAppStore((state) => state.agentDocumentId)
-  const setAgentDocumentId = useAppStore((state) => state.setAgentDocumentId)
+  const studioDocumentId = useAppStore((state) => state.studioDocumentId)
+  const setStudioDocumentId = useAppStore((state) => state.setStudioDocumentId)
   const workroom = useAppStore((state) => state.workroom)
 
   const { currentFile } = useFileUpload(backendBaseUrl, user, () => {})
-  const { handleAgUiEvent } = useOcrManager(backendBaseUrl, () => {}, () => {}, agentDocumentId)
+  const { handleAgUiEvent } = useOcrManager(backendBaseUrl, () => {}, () => {}, studioDocumentId)
 
   const [agentAppendToken] = useState<
     | {
@@ -33,6 +33,10 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
     return null
   }
 
+  if (!workroom?.id) {
+    return null
+  }
+
   const agentViewId = React.useMemo(() => {
     if (!currentFile) return null
     return `view-${currentFile.fileId}-${currentFile.sessionId}`
@@ -42,8 +46,8 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
     <AgentChatPanel
       backendBaseUrl={backendBaseUrl}
       user={user}
-      workroomId={workroom?.id ?? 0}
-      documentId={agentDocumentId}
+      workroomId={workroom.id}
+      documentId={studioDocumentId}
       viewId={agentViewId ?? undefined}
       isOpen={isAgentDrawerOpen}
       onClose={() => setIsAgentDrawerOpen(false)}
@@ -51,7 +55,7 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
       onResize={setAgentDrawerWidth}
       appendToken={agentAppendToken}
       onAgUiEvent={handleAgUiEvent}
-      onDocumentResolved={setAgentDocumentId}
+      onDocumentResolved={(id) => setStudioDocumentId(id != null ? String(id) : null)}
     />
   )
 }

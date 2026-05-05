@@ -7,6 +7,7 @@ import rehypeSanitize, {
   defaultSchema as defaultSanitizeSchema,
 } from 'rehype-sanitize'
 import type { Options as RehypeSanitizeOptions } from 'rehype-sanitize'
+import { normalizeMathMarkdown } from '../lib/mathRecovery'
 
 import 'katex/dist/katex.min.css'
 
@@ -18,51 +19,11 @@ interface MarkdownWithMathProps {
   transformMarkdown?: (content: string) => string
 }
 
-const FRACTION_PATTERN = /\\d?frac\s*\{[^{}]+\}\s*\{[^{}]+\}/g
 const CURRENCY_DOLLAR_PATTERN = /\$(?=\s?\d+(?:[,\.]\d+)?(?![\^_\\{]))/g
-
-function wrapBareFractions(text: string): string {
-  if (!text) return text
-  return text.replace(FRACTION_PATTERN, (match) => `${match}`)
-}
 
 function escapeCurrencyDollars(text: string): string {
   if (!text) return text
   return text.replace(CURRENCY_DOLLAR_PATTERN, '\\$')
-}
-
-function normalizeMathMarkdown(raw: string): string {
-  if (!raw) return ''
-
-  let result = ''
-  let cursor = 0
-  const length = raw.length
-
-  while (cursor < length) {
-    if (raw[cursor] === '$') {
-      const isDisplay = raw.startsWith('$$', cursor)
-      const delimiter = isDisplay ? '$$' : '$'
-      const end = raw.indexOf(delimiter, cursor + delimiter.length)
-      if (end === -1) {
-        // 未能找到闭合符号，将剩余内容视为普通文本并兜底处理
-        result += wrapBareFractions(raw.slice(cursor))
-        break
-      }
-      result += raw.slice(cursor, end + delimiter.length)
-      cursor = end + delimiter.length
-      continue
-    }
-
-    const nextDollar = raw.indexOf('$', cursor)
-    if (nextDollar === -1) {
-      result += wrapBareFractions(raw.slice(cursor))
-      break
-    }
-    result += wrapBareFractions(raw.slice(cursor, nextDollar))
-    cursor = nextDollar
-  }
-
-  return result
 }
 
 const sanitizeSchema: RehypeSanitizeOptions = (() => {

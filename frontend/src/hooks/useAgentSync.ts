@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSnapshotResponse, QuestionSyncPayload, QuestionSyncResponse } from '../types'
 import { fetchSnapshot, syncQuestion as syncQuestionApi } from '../services/agentApi'
+import { buildQuestionSyncPayload } from './useAgentSync.helpers'
 
 interface UseAgentSyncOptions {
   backendBaseUrl: string
   tenantId?: number | null
-  userId?: number | null
-  workroomId?: number | null
-  initialDocumentId?: number | null
+  userId?: string | number | null
+  workroomId?: string | number | null
+  initialStudioDocumentId?: string | number | null
+  initialSourceDocumentId?: string | number | null
   debounceMs?: number
 }
 
 interface SyncQuestionInput
-  extends Omit<QuestionSyncPayload, 'tenantId' | 'userId' | 'workroomId' | 'documentId'> {
-  documentId?: number | null
+  extends Omit<QuestionSyncPayload, 'tenantId' | 'userId' | 'workroomId' | 'studioDocumentId'> {
+  studioDocumentId?: string | number | null
 }
 
 export function useAgentSync({
@@ -21,10 +23,12 @@ export function useAgentSync({
   tenantId,
   userId,
   workroomId,
-  initialDocumentId = null,
+  initialStudioDocumentId = null,
+  initialSourceDocumentId = null,
   debounceMs = 800,
 }: UseAgentSyncOptions) {
-  const [documentId, setDocumentId] = useState<number | null>(initialDocumentId)
+  const [studioDocumentId, setStudioDocumentId] = useState<string | number | null>(initialStudioDocumentId)
+  const [sourceDocumentId, setSourceDocumentId] = useState<string | number | null>(initialSourceDocumentId)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,12 +37,20 @@ export function useAgentSync({
   const pendingPayload = useRef<QuestionSyncPayload | null>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId && workroomId), [backendBaseUrl, tenantId, userId, workroomId])
+  const isReady = useMemo(
+    () => Boolean(backendBaseUrl && userId != null && workroomId != null),
+    [backendBaseUrl, userId, workroomId],
+  )
 
   useEffect(() => {
-    if (initialDocumentId === undefined) return
-    setDocumentId(initialDocumentId ?? null)
-  }, [initialDocumentId])
+    if (initialStudioDocumentId === undefined) return
+    setStudioDocumentId(initialStudioDocumentId ?? null)
+  }, [initialStudioDocumentId])
+
+  useEffect(() => {
+    if (initialSourceDocumentId === undefined) return
+    setSourceDocumentId(initialSourceDocumentId ?? null)
+  }, [initialSourceDocumentId])
 
   const runSync = useCallback(
     async (payload: QuestionSyncPayload): Promise<QuestionSyncResponse> => {
@@ -49,8 +61,10 @@ export function useAgentSync({
       setError(null)
       try {
         const resp = await syncQuestionApi(backendBaseUrl, payload)
-        const resolvedDocumentId = (resp as any).studio_document_id ?? (resp as any).document_id ?? null
-        setDocumentId(resolvedDocumentId)
+        const resolvedStudioDocumentId = resp.studio_document_id ?? payload.studioDocumentId ?? null
+        const resolvedSourceDocumentId = resp.source_document_id ?? payload.sourceDocumentId ?? null
+        setStudioDocumentId(resolvedStudioDocumentId)
+        setSourceDocumentId(resolvedSourceDocumentId)
         setLastSavedAt(Date.now())
         return resp
       } catch (err) {
@@ -66,19 +80,22 @@ export function useAgentSync({
 
   const syncImmediate = useCallback(
     async (input: SyncQuestionInput) => {
-      if (!tenantId || !userId) {
-        throw new Error('缺少 tenantId 或 userId，无法同步题目')
+      if (userId == null || workroomId == null) {
+        throw new Error('缺少 userId 或 workroomId，无法同步题目')
       }
-      const payload: QuestionSyncPayload = {
-        tenantId,
-        userId,
-        workroomId: workroomId ?? 0,
-        documentId: input.documentId ?? documentId ?? undefined,
-        ...input,
-      }
+      const payload: QuestionSyncPayload = buildQuestionSyncPayload(
+        {
+          tenantId: tenantId ?? 0,
+          userId,
+          workroomId,
+          fallbackStudioDocumentId: studioDocumentId,
+          fallbackSourceDocumentId: sourceDocumentId,
+        },
+        input,
+      )
       return runSync(payload)
     },
-    [documentId, runSync, tenantId, userId, workroomId],
+    [runSync, sourceDocumentId, studioDocumentId, tenantId, userId, workroomId],
   )
 
   const flushPending = useCallback(async () => {
@@ -90,14 +107,17 @@ export function useAgentSync({
 
   const syncDebounced = useCallback(
     (input: SyncQuestionInput) => {
-      if (!tenantId || !userId) return
-      pendingPayload.current = {
-        tenantId,
-        userId,
-        workroomId: workroomId ?? 0,
-        documentId: input.documentId ?? documentId ?? undefined,
-        ...input,
-      }
+      if (userId == null || workroomId == null) return
+      pendingPayload.current = buildQuestionSyncPayload(
+        {
+          tenantId: tenantId ?? 0,
+          userId,
+          workroomId,
+          fallbackStudioDocumentId: studioDocumentId,
+          fallbackSourceDocumentId: sourceDocumentId,
+        },
+        input,
+      )
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current)
       }
@@ -107,18 +127,24 @@ export function useAgentSync({
         })
       }, debounceMs)
     },
-    [debounceMs, documentId, flushPending, tenantId, userId, workroomId],
+    [debounceMs, flushPending, sourceDocumentId, studioDocumentId, tenantId, userId, workroomId],
   )
 
   const loadSnapshot = useCallback(
-    async (targetDocumentId?: number | null) => {
-      const resolvedId = targetDocumentId ?? documentId
-      if (!resolvedId || !tenantId || !userId || !workroomId) return
+    async (targetStudioDocumentId?: string | number | null) => {
+      const resolvedStudioDocumentId = targetStudioDocumentId ?? studioDocumentId
+      if (!resolvedStudioDocumentId || userId == null || workroomId == null) return
       try {
-        const resp = await fetchSnapshot(backendBaseUrl, tenantId, userId, workroomId, resolvedId)
+        const resp = await fetchSnapshot(
+          backendBaseUrl,
+          tenantId ?? 0,
+          userId,
+          workroomId,
+          resolvedStudioDocumentId,
+        )
         const normalized = {
           ...resp,
-          document_id: (resp as any).document_id ?? (resp as any).studio_document_id ?? resolvedId,
+          studio_document_id: resp.studio_document_id ?? resolvedStudioDocumentId,
         } as AgentSnapshotResponse
         setSnapshot(normalized)
         return normalized
@@ -127,12 +153,13 @@ export function useAgentSync({
         return null
       }
     },
-    [backendBaseUrl, documentId, tenantId, userId, workroomId],
+    [backendBaseUrl, studioDocumentId, tenantId, userId, workroomId],
   )
 
   return {
     isReady,
-    documentId,
+    studioDocumentId,
+    sourceDocumentId,
     isSyncing,
     lastSavedAt,
     error,
@@ -141,6 +168,7 @@ export function useAgentSync({
     syncDebounced,
     flushPending,
     loadSnapshot,
-    setDocumentId,
+    setStudioDocumentId,
+    setSourceDocumentId,
   }
 }

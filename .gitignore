@@ -142,3 +142,8 @@ pandoc-*/
 
 # KiRO
 .kiro/
+backend/scripts/
+
+# Local runtime data
+backend/local-data/
+Trace-*.json

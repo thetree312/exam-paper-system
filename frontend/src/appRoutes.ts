@@ -1,6 +1,6 @@
 export type AppRoute =
   | { kind: 'workspace-index' }
-  | { kind: 'workroom'; workspaceId: number }
+  | { kind: 'workroom'; workspaceId: string }
 
 function normalizePathname(pathname: string): string {
   if (!pathname || pathname === '/') return '/workspaces'
@@ -13,9 +13,9 @@ export function parseAppRoute(pathname: string): AppRoute | null {
     return { kind: 'workspace-index' }
   }
 
-  const match = normalized.match(/^\/workspaces\/(\d+)$/)
+  const match = normalized.match(/^\/workspaces\/([^/]+)$/)
   if (match) {
-    return { kind: 'workroom', workspaceId: Number(match[1]) }
+    return { kind: 'workroom', workspaceId: match[1] }
   }
 
   return null
@@ -25,6 +25,6 @@ export function buildWorkspaceIndexPath(): string {
   return '/workspaces'
 }
 
-export function buildWorkroomPath(workspaceId: number): string {
+export function buildWorkroomPath(workspaceId: string): string {
   return `/workspaces/${workspaceId}`
 }

@@ -1,3 +1,5 @@
+import type { MathContentDocument } from '../../../lib/mathContent'
+
 export interface FillBlankTextSegment {
   type: 'text'
   text: string
@@ -20,4 +22,4 @@ export interface FillBlankParsedResult {
   originalText: string
 }
 
-export type FillBlankAnswerMap = Record<number, string>
+export type FillBlankAnswerMap = Record<number, MathContentDocument>

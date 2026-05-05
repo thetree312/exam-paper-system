@@ -1,0 +1,26 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["agent/packages/opencode/src/*"],
+      "@opencode-ai/shared/*": ["agent/packages/shared/src/*"],
+      "@opencode-ai/plugin": ["agent/packages/plugin/src/index.ts"],
+      "@opencode-ai/plugin/*": ["agent/packages/plugin/src/*"],
+      "@opencode-ai/sdk": ["agent/packages/sdk/src/index.ts"],
+      "@opencode-ai/sdk/*": ["agent/packages/sdk/src/*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}

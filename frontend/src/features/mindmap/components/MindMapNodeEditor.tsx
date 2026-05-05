@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
+import Icon from '../../../components/Icon'
 import type { MindMapNodeTree } from '../domain/types'
 
 interface MindMapNodeEditorProps {
@@ -34,8 +35,8 @@ const MindMapNodeEditor: React.FC<MindMapNodeEditorProps> = ({ node, onClose, on
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('mindmap_node_editor.edit_node')}</p>
             <h3 className="text-base font-semibold text-slate-900">{node.topic}</h3>
           </div>
-          <button onClick={onClose} className="material-symbols-outlined text-slate-400 hover:text-slate-900" type="button">
-            close
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900" type="button">
+            <Icon name="close" className="text-[20px]" />
           </button>
         </div>
         <form

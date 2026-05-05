@@ -1,29 +1,49 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type {
-  AgentCitationAnchor,
-  AgentCitationStatus,
+  AgentInputFile,
   AgentNoteFocus,
+  AgentPermissionAskedFact,
+  AgentQuestionAskedFact,
   AgentRunMessage,
   AgentRunRequest,
-  AgentThinkingThoughtTrace,
-  AgentThinkingToolTrace,
 } from '../types'
 import type { AgentStreamEvent } from '../services/agentApi'
-import { sendAgentRunStream, sendAgentResumeStream } from '../services/agentApi'
+import { cancelAgentRun, sendAgentRunStream, sendAgentResumeStream } from '../services/agentApi'
+import {
+  applyPartDelta,
+  applyPartSnapshot,
+  createOptimisticAssistantMessage,
+  createOptimisticUserMessage,
+  markMessageCompleted,
+  normalizeAgentRunMessage,
+  upsertMessageFact,
+} from '../lib/agentFacts'
+import type { MathContentDocument } from '../lib/mathContent'
 
 interface UseAgentChatOptions {
   backendBaseUrl: string
   tenantId?: number | null
-  userId?: number | null
-  workroomId?: number | null
+  userId?: string | number | null
+  workroomId?: string | number | null
   uiContext?: 'blank' | 'exam_editor' | 'code_editor' | 'other' | 'batch_question'
-  documentId?: number | null
+  documentId?: string | number | null
   noteFocus?: AgentNoteFocus | null
-  onAgUiEvent?: (event: AgentStreamEvent & { type: 'ag_ui' }) => void
-  /** 会话视图 ID，用于同一文档下区分不同编辑视图/标签的 Agent 会话 */
   viewId?: string | null
-  onDocumentResolved?: (documentId: number) => void
+  onDocumentResolved?: (documentId: string | number) => void
 }
+
+type PendingInteraction =
+  | {
+      kind: 'permission'
+      requestId: string
+      request: AgentPermissionAskedFact
+    }
+  | {
+      kind: 'question'
+      requestId: string
+      request: AgentQuestionAskedFact
+    }
+  | null
 
 export function useAgentChat({
   backendBaseUrl,
@@ -33,187 +53,176 @@ export function useAgentChat({
   uiContext,
   documentId,
   noteFocus,
-  onAgUiEvent,
   viewId,
-  onDocumentResolved,
+  onDocumentResolved: _onDocumentResolved,
 }: UseAgentChatOptions) {
+  const streamDebugEnabled =
+    import.meta.env?.DEV && typeof window !== 'undefined' && (window as any).__AGENT_DEBUG__ === true
+  const debugStream = useCallback((label: string, payload?: Record<string, unknown>) => {
+    if (!streamDebugEnabled) return
+    console.info('[agent-stream-debug]', label, payload ?? {})
+  }, [streamDebugEnabled])
+
   const [messages, setMessages] = useState<AgentRunMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isAwaitingFirstToken, setIsAwaitingFirstToken] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const [sessionId, setSessionId] = useState<number | null>(null)
-
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [pendingInteraction, setPendingInteraction] = useState<PendingInteraction>(null)
+  const [cancelRequested, setCancelRequested] = useState(false)
   const messagesRef = useRef<AgentRunMessage[]>([])
+  const pendingInteractionRef = useRef<PendingInteraction>(null)
 
   const updateMessages = useCallback((next: AgentRunMessage[]) => {
     messagesRef.current = next
     setMessages(next)
   }, [])
 
-  const patchLastAssistant = useCallback((patch: Partial<AgentRunMessage> | ((message: AgentRunMessage) => AgentRunMessage)) => {
-    const current = messagesRef.current
-    if (!current.length) return
-    const lastIndex = current.length - 1
-    const last = current[lastIndex]
-    if (!last || last.role !== 'assistant') return
-    const next = [...current]
-    next[lastIndex] = typeof patch === 'function' ? patch(last) : { ...last, ...patch }
-    updateMessages(next)
-  }, [updateMessages])
-
-  const applyAssistantCitations = useCallback(
-    (citations: AgentCitationAnchor[], citationStatus: AgentCitationStatus) => {
-      patchLastAssistant((last) => ({
-        ...last,
-        citations,
-        citationStatus,
-        usedRagEvidence: citations.length > 0,
-      }))
-    },
-    [patchLastAssistant],
+  const isReady = useMemo(
+    () => Boolean(backendBaseUrl && userId != null && workroomId != null),
+    [backendBaseUrl, userId, workroomId],
   )
 
-  const applyAssistantFinal = useCallback(
-    (answerText: string, citationStatus: AgentCitationStatus) => {
-      patchLastAssistant((last) => ({
-        ...last,
-        content: answerText,
-        citationStatus,
-        usedRagEvidence: last.usedRagEvidence ?? false,
-      }))
-    },
-    [patchLastAssistant],
-  )
+  const applyStreamEvent = useCallback((event: AgentStreamEvent) => {
+    debugStream('stream event received', {
+      event_type: event.type,
+      message_id:
+        'message' in event && event.message && typeof event.message === 'object' && 'info' in event.message
+          ? event.message.info.id
+          : undefined,
+      part_id: 'part' in event && event.part ? event.part.id : undefined,
+      field: event.type === 'part_delta' ? event.field : undefined,
+      delta_preview:
+        event.type === 'part_delta'
+          ? String(event.delta || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+          : undefined,
+    })
 
-  const appendAgentTraceToLastAssistant = useCallback((event: Extract<AgentStreamEvent, { type: 'agent_trace' }>) => {
-    const current = messagesRef.current
-    if (!current.length) return
-    const lastIndex = current.length - 1
-    const last = current[lastIndex]
-    if (!last || last.role !== 'assistant') return
-
-    const payload = event.payload || {}
-    const traceType = String((payload as any).trace_type || '').trim().toLowerCase()
-
-    const next = [...current]
-    const updated: AgentRunMessage = {
-      ...last,
-      historyTraces: [...(last.historyTraces || [])],
-      activeThought: null,
-      activeTool: null,
-      isStreaming: true,
+    if (event.type === 'session') {
+      setSessionId(event.session.id)
+      return
+    }
+    if (event.type === 'cancelled') {
+      setCancelRequested(false)
+      setIsAwaitingFirstToken(false)
+      return
     }
 
-    if (traceType === 'model_native_thinking') {
-      const content = String((payload as any).content || '')
-      if (content) {
-        const traces = updated.historyTraces || []
-        const lastTrace = traces.length > 0 ? traces[traces.length - 1] : null
-        if (lastTrace && lastTrace.type === 'thought') {
-          lastTrace.text = `${lastTrace.text || ''}${content}`
-        } else {
-          traces.push({
-            id: `thought-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            type: 'thought',
-            text: content,
-          } as AgentThinkingThoughtTrace)
-        }
-      }
-    } else if (traceType === 'model_event') {
-      const toolCalls = Array.isArray((payload as any).tool_calls) ? (payload as any).tool_calls : []
-      for (const item of toolCalls) {
-        if (!item || typeof item !== 'object') continue
-        const toolCallId = String((item as any).id || '').trim()
-        if (!toolCallId) continue
-        const name = String((item as any).name || '').trim() || 'tool'
-        const exists = (updated.historyTraces || []).some(
-          (trace) => trace.type === 'tool' && (trace as AgentThinkingToolTrace).toolCallId === toolCallId,
-        )
-        if (exists) continue
-        updated.historyTraces?.push({
-          id: `tool-${toolCallId}`,
-          type: 'tool',
-          toolCallId,
-          name,
-          status: 'calling',
-        } as AgentThinkingToolTrace)
-      }
-    } else if (traceType === 'tool_call') {
-      const toolCallId = String((payload as any).tool_call_id || '').trim()
-      const toolName = String((payload as any).tool_name || '').trim() || 'tool'
-      const rawStatus = String((payload as any).status || '').trim().toLowerCase()
-      let mappedStatus: AgentThinkingToolTrace['status'] = 'calling'
-      if (rawStatus === 'ok' || rawStatus === 'success') {
-        mappedStatus = 'success'
-      } else if (rawStatus === 'error' || rawStatus === 'fail' || rawStatus === 'failed') {
-        mappedStatus = 'fail'
-      }
-
-      let target = (updated.historyTraces || []).find(
-        (trace) => trace.type === 'tool' && (trace as AgentThinkingToolTrace).toolCallId === toolCallId,
-      ) as AgentThinkingToolTrace | undefined
-
-      if (!target) {
-        const reversed = [...(updated.historyTraces || [])].reverse()
-        target = reversed.find(
-          (trace) =>
-            trace.type === 'tool' &&
-            (trace as AgentThinkingToolTrace).name === toolName &&
-            (trace as AgentThinkingToolTrace).status === 'calling',
-        ) as AgentThinkingToolTrace | undefined
-      }
-
-      if (target) {
-        target.status = mappedStatus
-      } else {
-        updated.historyTraces?.push({
-          id: `tool-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          type: 'tool',
-          toolCallId: toolCallId || undefined,
-          name: toolName,
-          status: mappedStatus,
-        } as AgentThinkingToolTrace)
-      }
+    if (event.type === 'session_status') {
+      return
     }
 
-    next[lastIndex] = updated
-    updateMessages(next)
-  }, [updateMessages])
+    if (event.type === 'message_started') {
+      updateMessages(upsertMessageFact(messagesRef.current, event.message, { allowOptimisticReplace: true }))
+      return
+    }
 
-  const isReady = useMemo(() => Boolean(backendBaseUrl && tenantId && userId && workroomId), [backendBaseUrl, tenantId, userId, workroomId])
+    if (event.type === 'message_updated') {
+      updateMessages(upsertMessageFact(messagesRef.current, event.message))
+      return
+    }
 
-  const markLastAssistantFinished = useCallback(() => {
-    patchLastAssistant((last) => (last.isStreaming ? { ...last, isStreaming: false } : last))
-  }, [patchLastAssistant])
+    if (event.type === 'message_completed') {
+      pendingInteractionRef.current = null
+      setPendingInteraction(null)
+      updateMessages(markMessageCompleted(messagesRef.current, event.message))
+      setIsAwaitingFirstToken(false)
+      return
+    }
+
+    if (event.type === 'part_added') {
+      updateMessages(applyPartSnapshot(messagesRef.current, event.part, { isAdd: true }))
+      if (
+        event.part.type === 'text' ||
+        event.part.type === 'commentary' ||
+        event.part.type === 'final_answer' ||
+        event.part.type === 'tool'
+      ) {
+        setIsAwaitingFirstToken(false)
+      }
+      return
+    }
+
+    if (event.type === 'part_updated') {
+      updateMessages(applyPartSnapshot(messagesRef.current, event.part, { isAdd: false }))
+      return
+    }
+
+    if (event.type === 'part_completed') {
+      updateMessages(applyPartSnapshot(messagesRef.current, event.part, { isAdd: false, markCompleted: true }))
+      return
+    }
+
+    if (event.type === 'part_delta') {
+      const targetMessage = messagesRef.current.find((item) => item.messageInfo?.id === event.message_id)
+      const targetPart = Array.isArray(targetMessage?.parts)
+        ? targetMessage.parts.find((part) => part.id === event.part_id)
+        : undefined
+      updateMessages(
+        applyPartDelta(messagesRef.current, {
+          messageId: event.message_id,
+          partId: event.part_id,
+          field: event.field,
+          delta: event.delta,
+        }),
+      )
+      if (
+        targetPart?.type === 'text' ||
+        targetPart?.type === 'commentary' ||
+        targetPart?.type === 'final_answer' ||
+        targetPart?.type === 'tool'
+      ) {
+        setIsAwaitingFirstToken(false)
+      }
+      return
+    }
+
+    if (event.type === 'permission_asked') {
+      const nextInteraction: PendingInteraction = {
+        kind: 'permission',
+        requestId: event.request.id,
+        request: event.request,
+      }
+      pendingInteractionRef.current = nextInteraction
+      setPendingInteraction(nextInteraction)
+      return
+    }
+
+    if (event.type === 'question_asked') {
+      const nextInteraction: PendingInteraction = {
+        kind: 'question',
+        requestId: event.request.id,
+        request: event.request,
+      }
+      pendingInteractionRef.current = nextInteraction
+      setPendingInteraction(nextInteraction)
+    }
+  }, [debugStream, updateMessages])
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (
+      content: string | MathContentDocument,
+      model?: { providerID: string; modelID: string } | null,
+      inputFiles?: AgentInputFile[],
+    ) => {
       if (!isReady) {
         setError('Agent 尚未完成初始化')
         return
       }
 
       setIsLoading(true)
+      setIsAwaitingFirstToken(true)
+      setCancelRequested(false)
       setError(null)
+      pendingInteractionRef.current = null
+      setPendingInteraction(null)
+
+      const optimisticUser = createOptimisticUserMessage(content, inputFiles)
+      const optimisticAssistant = createOptimisticAssistantMessage()
+      const optimisticMessages = [...messagesRef.current, optimisticUser, optimisticAssistant]
+      updateMessages(optimisticMessages)
 
       try {
-        const userMessage: AgentRunMessage = {
-          role: 'user',
-          content,
-        }
-        const assistantMessage: AgentRunMessage = {
-          role: 'assistant',
-          content: '',
-          isStreaming: true,
-          historyTraces: [],
-          activeThought: null,
-          activeTool: null,
-        }
-
-        const optimisticMessages = [...messagesRef.current, userMessage, assistantMessage]
-        updateMessages(optimisticMessages)
-
         const payload: AgentRunRequest = {
           tenantId: tenantId ?? 0,
           userId: userId ?? 0,
@@ -224,107 +233,40 @@ export function useAgentChat({
           noteFocus: noteFocus ?? undefined,
           viewId: viewId ?? undefined,
           sessionId: sessionId ?? undefined,
+          model: model ?? undefined,
+          inputFiles: Array.isArray(inputFiles) && inputFiles.length > 0 ? inputFiles : undefined,
         }
 
-        // 将流式增量合并到同一条助手消息中，但通过 requestAnimationFrame
-        // 节流 UI 更新，避免每个小 token 都触发一次 React 重渲，从而在
-        // 拖拽/动画时明显掉帧。
-        let acc = ''
-        let pendingContent = ''
-        let authoritativeFinalText: string | null = null
-        let rafId: number | null = null
-
-        const flush = () => {
-          rafId = null
-          const current = messagesRef.current
-          if (!current.length) return
-          const lastIndex = current.length - 1
-          const last = current[lastIndex]
-          if (!last || last.role !== 'assistant') return
-
-          // 创建新的消息数组和新的助手消息对象，避免就地修改，
-          // 以便 React.memo 能正确感知 props 变化并触发重渲染。
-          const next = current.map((msg, index) =>
-            index === lastIndex
-              ? { ...msg, content: authoritativeFinalText ?? pendingContent }
-              : msg,
-          )
-          updateMessages(next)
-        }
-
-        setIsAwaitingFirstToken(true)
-        let hasReceivedFirstToken = false
-
-        await sendAgentRunStream(backendBaseUrl, payload, (event) => {
-          if (event.type === 'session') {
-            setSessionId(event.session_id)
-            const resolvedDocumentId = (event as any).studio_document_id ?? (event as any).document_id
-            if (typeof resolvedDocumentId === 'number') {
-              onDocumentResolved?.(resolvedDocumentId)
-            }
-            return
-          }
-
-          if (event.type === 'delta') {
-            acc += event.delta
-            pendingContent = acc
-            if (!hasReceivedFirstToken) {
-              hasReceivedFirstToken = true
-              setIsAwaitingFirstToken(false)
-            }
-            if (rafId == null) {
-              rafId = window.requestAnimationFrame(flush)
-            }
-          } else if (event.type === 'agent_trace') {
-            appendAgentTraceToLastAssistant(event)
-          } else if (event.type === 'assistant_citations') {
-            applyAssistantCitations(event.citations, event.citation_status)
-          } else if (event.type === 'assistant_final') {
-            authoritativeFinalText = event.answer_text
-            acc = event.answer_text
-            pendingContent = event.answer_text
-            applyAssistantFinal(event.answer_text, event.citation_status)
-          } else if (event.type === 'ag_ui') {
-            console.debug('[agentStream] ag_ui received', event.event)
-            onAgUiEvent?.({ ...event, type: 'ag_ui' })
-          }
+        console.info('[agent-run] run_started', {
+          sessionId: payload.sessionId ?? null,
+          workroomId,
+          viewId,
+        })
+        const outcome = await sendAgentRunStream(backendBaseUrl, payload, (event) => {
+          applyStreamEvent(event)
+        })
+        console.info(outcome === 'cancelled' ? '[agent-run] run_cancelled' : '[agent-run] run_completed', {
+          sessionId: sessionId ?? null,
+          workroomId,
         })
 
-        // 保证最终结果被刷新一次
-        if (rafId != null) {
-          window.cancelAnimationFrame(rafId)
-          flush()
-        }
-        markLastAssistantFinished()
-        return { messages: messagesRef.current }
+        const finalized = messagesRef.current.map((message) =>
+          message.role === 'assistant' ? { ...message, isStreaming: false, isOptimistic: false } : { ...message, isOptimistic: false },
+        )
+        updateMessages(finalized)
+        return { messages: finalized }
       } catch (err) {
+        console.error('[agent-run] run_failed', err)
         setError(err instanceof Error ? err.message : 'Agent 请求失败')
-        // 回滚最后一条助手消息
-        const next = messagesRef.current.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant'))
-        updateMessages(next)
+        const rollback = messagesRef.current.filter((item) => !item.isOptimistic)
+        updateMessages(rollback)
         throw err
       } finally {
         setIsLoading(false)
         setIsAwaitingFirstToken(false)
       }
     },
-    [
-      appendAgentTraceToLastAssistant,
-      applyAssistantCitations,
-      applyAssistantFinal,
-      backendBaseUrl,
-      isReady,
-      markLastAssistantFinished,
-      sessionId,
-      tenantId,
-      uiContext,
-      documentId,
-      noteFocus,
-      updateMessages,
-      userId,
-      workroomId,
-      viewId,
-    ],
+    [applyStreamEvent, backendBaseUrl, documentId, isReady, noteFocus, sessionId, tenantId, uiContext, updateMessages, userId, viewId, workroomId],
   )
 
   const resumeWithPayload = useCallback(
@@ -334,105 +276,50 @@ export function useAgentChat({
         return
       }
 
-      const tenant = tenantId ?? 0
-      const user = userId ?? 0
-      const workroom = workroomId ?? 0
-      const docId = documentId ?? undefined
+      if (sessionId == null) {
+        throw new Error('Agent 会话已丢失，无法从中断点恢复，请重新开始对话')
+      }
+
+      if (!pendingInteractionRef.current) {
+        throw new Error('当前没有待处理的审批或提问，无法恢复会话')
+      }
 
       setIsLoading(true)
+      setIsAwaitingFirstToken(true)
+      setCancelRequested(false)
       setError(null)
 
       try {
-        // 确保存在一条末尾的助手消息供追加
-        let current = messagesRef.current
+        const current = messagesRef.current
         if (!current.length || current[current.length - 1]?.role !== 'assistant') {
-          const assistantMessage: AgentRunMessage = {
-            role: 'assistant',
-            content: '',
-            isStreaming: true,
-            historyTraces: [],
-            activeThought: null,
-            activeTool: null,
-          }
-          current = [...current, assistantMessage]
-          updateMessages(current)
+          updateMessages([...current, createOptimisticAssistantMessage()])
         }
 
-        // 从现有助手消息内容开始累积增量
-        const lastIndex = current.length - 1
-        const last = current[lastIndex]
-        let acc = typeof last?.content === 'string' ? last.content : ''
-        let pendingContent = acc
-        let authoritativeFinalText: string | null = null
-        let rafId: number | null = null
-
-        const flush = () => {
-          rafId = null
-          const snapshot = messagesRef.current
-          if (!snapshot.length) return
-          const li = snapshot.length - 1
-          const lastMsg = snapshot[li]
-          if (!lastMsg || lastMsg.role !== 'assistant') return
-
-          const next = snapshot.map((msg, index) =>
-            index === li
-              ? { ...msg, content: authoritativeFinalText ?? pendingContent }
-              : msg,
-          )
-          updateMessages(next)
-        }
-
-        setIsAwaitingFirstToken(true)
-        let hasReceivedFirstToken = false
-
-        if (sessionId == null) {
-          throw new Error('Agent 会话已丢失，无法从中断点恢复，请重新开始对话')
-        }
-
-        await sendAgentResumeStream(
+        const outcome = await sendAgentResumeStream(
           backendBaseUrl,
           {
-            tenantId: tenant,
-            userId: user,
-            workroomId: workroom,
-            documentId: docId,
+            workroomId: workroomId ?? 0,
             sessionId,
             resumePayload,
+            interaction: pendingInteractionRef.current,
           },
-          (event: AgentStreamEvent) => {
-            if (event.type === 'delta') {
-              acc += event.delta
-              pendingContent = acc
-              if (!hasReceivedFirstToken) {
-                hasReceivedFirstToken = true
-                setIsAwaitingFirstToken(false)
-              }
-              if (rafId == null) {
-                rafId = window.requestAnimationFrame(flush)
-              }
-            } else if (event.type === 'agent_trace') {
-              appendAgentTraceToLastAssistant(event)
-            } else if (event.type === 'assistant_citations') {
-              applyAssistantCitations(event.citations, event.citation_status)
-            } else if (event.type === 'assistant_final') {
-              authoritativeFinalText = event.answer_text
-              acc = event.answer_text
-              pendingContent = event.answer_text
-              applyAssistantFinal(event.answer_text, event.citation_status)
-            } else if (event.type === 'ag_ui') {
-              console.debug('[agentResumeStream] ag_ui received', event.event)
-              onAgUiEvent?.({ ...event, type: 'ag_ui' })
-            }
+          (event) => {
+            applyStreamEvent(event)
           },
         )
+        console.info(outcome === 'cancelled' ? '[agent-run] run_cancelled' : '[agent-run] run_completed', {
+          sessionId,
+          workroomId,
+          resumed: true,
+        })
 
-        if (rafId != null) {
-          window.cancelAnimationFrame(rafId)
-          flush()
-        }
-        markLastAssistantFinished()
-        return { messages: messagesRef.current }
+        const finalized = messagesRef.current.map((message) =>
+          message.role === 'assistant' ? { ...message, isStreaming: false, isOptimistic: false } : { ...message, isOptimistic: false },
+        )
+        updateMessages(finalized)
+        return { messages: finalized }
       } catch (err) {
+        console.error('[agent-run] run_failed', err)
         setError(err instanceof Error ? err.message : 'Agent 请求失败')
         throw err
       } finally {
@@ -440,27 +327,45 @@ export function useAgentChat({
         setIsAwaitingFirstToken(false)
       }
     },
-    [
-      appendAgentTraceToLastAssistant,
-      applyAssistantCitations,
-      applyAssistantFinal,
-      backendBaseUrl,
-      documentId,
-      isReady,
-      markLastAssistantFinished,
-      onAgUiEvent,
-      sessionId,
-      tenantId,
-      updateMessages,
-      userId,
-      workroomId,
-    ],
+    [applyStreamEvent, backendBaseUrl, isReady, sessionId, updateMessages, workroomId],
   )
 
   const resetChat = useCallback(() => {
     updateMessages([])
     setError(null)
     setSessionId(null)
+    pendingInteractionRef.current = null
+    setPendingInteraction(null)
+  }, [updateMessages])
+
+  const cancelCurrentRun = useCallback(async () => {
+    if (!isReady || !sessionId) return
+    setError(null)
+    setCancelRequested(true)
+    console.info('[agent-run] cancel_requested', { sessionId, workroomId })
+    try {
+      await cancelAgentRun(backendBaseUrl, {
+        workroomId: workroomId ?? 0,
+        sessionId,
+      })
+      console.info('[agent-run] cancel_ack', { sessionId, workroomId })
+    } catch (err) {
+      setCancelRequested(false)
+      setError(err instanceof Error ? err.message : 'Agent 中断失败')
+      throw err
+    }
+  }, [backendBaseUrl, isReady, sessionId, workroomId])
+
+  const setMessagesFromHistory = useCallback((next: AgentRunMessage[]) => {
+    updateMessages(next.map((message) => {
+      if (message.messageInfo && Array.isArray(message.parts)) {
+        return normalizeAgentRunMessage({
+          info: message.messageInfo,
+          parts: message.parts,
+        })
+      }
+      return message
+    }))
   }, [updateMessages])
 
   return {
@@ -471,10 +376,12 @@ export function useAgentChat({
     error,
     sendMessage,
     resumeWithPayload,
+    cancelCurrentRun,
     resetChat,
-    // 供会话历史加载时直接灌入完整消息列表
-    setMessagesFromHistory: updateMessages,
+    setMessagesFromHistory,
+    pendingInteraction,
     sessionId,
     setSessionId,
+    cancelRequested,
   }
 }

@@ -1,49 +1,32 @@
 import type {
-  AddFavoriteRequest,
   AddFavoriteResponse,
   CheckFavoriteResponse,
-  FavoriteQuotaResponse,
   FavoritesListResponse,
   RemoveFavoriteResponse,
 } from '../types'
-
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-}
+import { apiFetch, apiJson, withJsonBody } from '../lib/api'
 
 /**
  * 收藏题目
  */
 export async function addFavorite(
   baseUrl: string,
-  tenantId: number,
-  userId: number,
+  _tenantId: number,
+  _userId: string | number,
   questionId: number,
-  questionTypeId?: number | null,
-  subjectId?: number | null,
-  tagIds?: number[] | null,
+  questionTypeId?: number | string | null,
+  subjectId?: number | string | null,
+  tagIds?: Array<number | string> | null,
 ): Promise<AddFavoriteResponse> {
-  const body: AddFavoriteRequest = {
-    tenant_id: tenantId,
-    user_id: userId,
-    question_id: questionId,
-    question_type_id: questionTypeId,
-    subject_id: subjectId,
-    tag_ids: tagIds,
-  }
-
-  const resp = await fetch(`${baseUrl}/api/questions/favorites`, {
+  return apiJson<AddFavoriteResponse>(`${baseUrl}/api/favorites`, {
     method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
+    ...withJsonBody({
+      questionID: String(questionId),
+      questionTypeID: questionTypeId != null ? String(questionTypeId) : null,
+      subjectID: subjectId != null ? String(subjectId) : null,
+      tagIDs: tagIds?.map((id) => String(id)),
+    }),
   })
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `收藏失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as AddFavoriteResponse
 }
 
 /**
@@ -51,23 +34,14 @@ export async function addFavorite(
  */
 export async function removeFavorite(
   baseUrl: string,
-  tenantId: number,
-  userId: number,
+  _tenantId: number,
+  _userId: string | number,
   questionId: number,
 ): Promise<RemoveFavoriteResponse> {
-  const resp = await fetch(
-    `${baseUrl}/api/questions/favorites/${questionId}?tenant_id=${tenantId}&user_id=${userId}`,
-    {
-      method: 'DELETE',
-    },
-  )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `取消收藏失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as RemoveFavoriteResponse
+  const response = await apiFetch(`${baseUrl}/api/favorites/${questionId}`, {
+    method: 'DELETE',
+  })
+  return (await response.json()) as RemoveFavoriteResponse
 }
 
 /**
@@ -75,21 +49,14 @@ export async function removeFavorite(
  */
 export async function getFavorites(
   baseUrl: string,
-  tenantId: number,
-  userId: number,
+  _tenantId: number,
+  _userId: string | number,
   page: number = 1,
   pageSize: number = 20,
 ): Promise<FavoritesListResponse> {
-  const resp = await fetch(
-    `${baseUrl}/api/questions/favorites?tenant_id=${tenantId}&user_id=${userId}&page=${page}&page_size=${pageSize}`,
-  )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `获取收藏列表失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as FavoritesListResponse
+  return apiJson<FavoritesListResponse>(`${baseUrl}/api/favorites?page=${page}&page_size=${pageSize}`, {
+    method: 'GET',
+  })
 }
 
 /**
@@ -97,38 +64,12 @@ export async function getFavorites(
  */
 export async function checkFavorite(
   baseUrl: string,
-  tenantId: number,
-  userId: number,
+  _tenantId: number,
+  _userId: string | number,
   questionId: number,
 ): Promise<CheckFavoriteResponse> {
-  const resp = await fetch(
-    `${baseUrl}/api/questions/favorites/${questionId}/check?tenant_id=${tenantId}&user_id=${userId}`,
-  )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `检查收藏状态失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as CheckFavoriteResponse
+  return apiJson<CheckFavoriteResponse>(`${baseUrl}/api/favorites/${questionId}/check`, {
+    method: 'GET',
+  })
 }
 
-/**
- * 获取收藏配额信息
- */
-export async function getFavoriteQuota(
-  baseUrl: string,
-  tenantId: number,
-  userId: number,
-): Promise<FavoriteQuotaResponse> {
-  const resp = await fetch(
-    `${baseUrl}/api/questions/favorites/quota?tenant_id=${tenantId}&user_id=${userId}`,
-  )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `获取配额信息失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as FavoriteQuotaResponse
-}

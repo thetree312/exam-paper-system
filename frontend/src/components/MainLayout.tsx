@@ -5,13 +5,9 @@ import { EditorConnector } from './EditorConnector'
 import { AgentConnector } from './AgentConnector'
 import { ExportTemplateDialog } from './ExportTemplateDialog'
 import { useAppStore } from '../store/appStore'
-import { useAuth } from '../hooks'
 
 interface MainLayoutProps {
   backendBaseUrl: string
-  statusMessage: string
-  isUploading: boolean
-  isExtracting: boolean
   onStatusMessage: (msg: string) => void
   onToast: (message: string, type: 'info' | 'success' | 'error') => void
   toastState: { id: number; message: string; type: 'info' | 'success' | 'error' } | null
@@ -19,18 +15,14 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
   backendBaseUrl,
-  statusMessage,
-  isUploading,
-  isExtracting,
   onStatusMessage,
   onToast,
   toastState,
 }) => {
   const user = useAppStore((state) => state.user)
   const isAgentDrawerOpen = useAppStore((state) => state.isAgentDrawerOpen)
+  const setIsAgentDrawerOpen = useAppStore((state) => state.setIsAgentDrawerOpen)
   const agentDrawerWidth = useAppStore((state) => state.agentDrawerWidth)
-  const isUserMenuOpen = useAppStore((state) => state.isUserMenuOpen)
-  const setIsUserMenuOpen = useAppStore((state) => state.setIsUserMenuOpen)
   const isResizing = useAppStore((state) => state.isResizing)
   const setIsResizing = useAppStore((state) => state.setIsResizing)
   const leftWidth = useAppStore((state) => state.leftWidth)
@@ -40,28 +32,16 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const isExportDialogOpen = useAppStore((state) => state.isExportDialogOpen)
   const setIsExportDialogOpen = useAppStore((state) => state.setIsExportDialogOpen)
   const viewportWidth = useAppStore((state) => state.viewportWidth)
+  const ocrItems = useAppStore((state) => state.ocrItems)
+  const fileTabs = useAppStore((state) => state.fileTabs)
+  const activeTabIndex = useAppStore((state) => state.activeTabIndex)
 
-  const { handleLogout } = useAuth(backendBaseUrl)
-  const userMenuRef = useRef<HTMLDivElement>(null)
   const leftPaneRef = useRef<HTMLElement>(null)
   const pendingLeftWidthRef = useRef<number | null>(null)
 
   const isMobileOrTablet = viewportWidth < 1024
+  const currentFile = activeTabIndex >= 0 ? fileTabs[activeTabIndex] ?? null : null
 
-  // 监听用户菜单外部点击
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isUserMenuOpen &&
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsUserMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isUserMenuOpen, setIsUserMenuOpen])
 
   // 处理左侧面板拖拽
   useEffect(() => {
@@ -96,23 +76,16 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }
   }, [isResizing, setIsResizing, setLeftWidth])
 
-  const handleLogoutClick = () => {
-    handleLogout()
-    setIsUserMenuOpen(false)
-  }
+  useEffect(() => {
+    if (appView === 'favorites') {
+      setIsAgentDrawerOpen(false)
+    }
+  }, [appView, setIsAgentDrawerOpen])
 
   return (
     <div className="bg-background-light text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col">
       <AppHeader
-        statusMessage={statusMessage}
-        isUploading={isUploading}
-        isExtracting={isExtracting}
         onExportClick={() => setIsExportDialogOpen(true)}
-        user={user!}
-        userMenuRef={userMenuRef as React.RefObject<HTMLDivElement>}
-        isUserMenuOpen={isUserMenuOpen}
-        onToggleUserMenu={() => setIsUserMenuOpen(!isUserMenuOpen)}
-        onLogout={handleLogoutClick}
         rightOffset={!isMobileOrTablet && isAgentDrawerOpen ? agentDrawerWidth : 0}
       />
 
@@ -134,7 +107,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             isMobileOrTablet
               ? { width: '100%', minWidth: 0 }
               : isPreviewCollapsed
-                ? { width: 64, minWidth: 64 }
+                ? { width: 44, minWidth: 44 }
                 : { width: leftWidth, minWidth: 320 }
           }
         >
@@ -169,8 +142,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         open={isExportDialogOpen}
         onClose={() => setIsExportDialogOpen(false)}
         backendBaseUrl={backendBaseUrl}
-        ocrItems={[]}
-        documentTitle={null}
+        ocrItems={ocrItems}
+        documentTitle={currentFile?.name ?? null}
         user={user}
         onStatusMessage={onStatusMessage}
       />

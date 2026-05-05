@@ -1,4 +1,6 @@
 import React from 'react'
+import Icon from '../../../components/Icon'
+
 
 interface RadialAction {
   id?: string
@@ -80,7 +82,7 @@ const MindMapRadialMenu: React.FC<MindMapRadialMenuProps> = ({ anchor, visible, 
           className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           onClick={() => onClose?.()}
         >
-          <span className="material-symbols-outlined text-[18px] leading-none">close</span>
+          <Icon name={"close"} className="text-[18px] leading-none" />
         </button>
       </div>
 
@@ -112,7 +114,7 @@ const MindMapRadialMenu: React.FC<MindMapRadialMenuProps> = ({ anchor, visible, 
               top: offsetY,
             }}
           >
-            <span className="material-symbols-outlined text-[20px] leading-none">{action.icon}</span>
+            <Icon name={action.icon} className="text-[20px] leading-none" />
           </button>
         )
       })}

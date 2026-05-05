@@ -1,4 +1,6 @@
 import React from 'react'
+import Icon from '../../../components/Icon'
+
 
 interface MindMapNodeQuickActionsProps {
   anchor: {
@@ -28,7 +30,7 @@ const QuickButton: React.FC<{
         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
     }`}
   >
-    <span className="material-symbols-outlined text-[18px] leading-none">{icon}</span>
+    <Icon name={icon} className="text-[18px] leading-none" />
   </button>
 )
 

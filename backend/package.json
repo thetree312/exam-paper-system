@@ -1,0 +1,33 @@
+{
+  "name": "llm-wiki-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "test": "bun test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "models:build": "bun scripts/build-local-models-catalog.ts",
+    "models:sync": "bun scripts/sync-models-catalog.ts",
+    "audit:provider-runtime": "bun scripts/audit-provider-runtime.ts",
+    "verify:provider-adapter": "bun scripts/verify-provider-adapter.ts",
+    "verify:runtime-boundary": "bun scripts/verify-runtime-boundary.ts",
+    "verify:backend-migration-slice": "bun scripts/verify-backend-migration-slice.ts",
+    "verify:studio-selection-ocr": "bun scripts/verify-studio-selection-ocr.ts",
+    "verify:learning-artifact-generation": "bun scripts/verify-learning-artifact-generation.ts",
+    "verify:ocr-providers": "bun scripts/verify-ocr-providers.ts"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.10",
+    "hono": "^4.10.6",
+    "pg": "^8.16.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@types/pg": "^8.15.5",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -12,10 +12,12 @@ const STORAGE_KEYS = {
 } as const
 
 export interface StoredUser {
-  id: number
+  id: string | number
   tenant_id: number
   email: string
   display_name: string
+  token?: string
+  session_id?: string
 }
 
 /**
@@ -59,4 +61,10 @@ export function clearUser(): void {
  */
 export function clearAll(): void {
   clearUser()
+}
+
+export function getAuthToken(): string | null {
+  const user = loadUser()
+  const token = typeof user?.token === 'string' ? user.token.trim() : ''
+  return token || null
 }

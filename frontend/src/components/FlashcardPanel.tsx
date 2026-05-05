@@ -3,16 +3,20 @@ import { useTranslation } from 'react-i18next'
 import type { FlashcardItem, FlashcardMasteryStats, UserInfo } from '../types'
 import { MarkdownWithMath } from './MarkdownWithMath'
 import { FlashcardApi } from '../services/flashcardApi'
+import { fetchWorkroomArtifact, upsertWorkroomArtifact } from '../services/workroomApi'
+import Icon from './Icon'
+
 
 interface FlashcardPanelProps {
   backendBaseUrl: string
-  documentId: number | null
+  workroomId: string | null | undefined
+  documentId: string | null
   documentTitle: string | null
   user: UserInfo | null
   onBack: () => void
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
-  ensureDocument?: () => Promise<number | null>
-  onDocumentResolved?: (documentId: number) => void
+  ensureDocument?: () => Promise<string | null>
+  onDocumentResolved?: (documentId: string) => void
 }
 
 const MASTERY_COLORS: Record<string, string> = {
@@ -24,6 +28,7 @@ const MASTERY_COLORS: Record<string, string> = {
 
 export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   backendBaseUrl,
+  workroomId,
   documentId,
   documentTitle,
   user,
@@ -42,26 +47,28 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [stats, setStats] = useState<FlashcardMasteryStats | null>(null)
   const [mode, setMode] = useState<'all' | 'due'>('all')
+  const restoredStateKeyRef = React.useRef<string | null>(null)
+  const restoredCardIdRef = React.useRef<string | null>(null)
 
-  const tenantId = user?.tenant_id
   const userId = user?.id
   const docTitle = documentTitle ?? t('flashcard.document.untitled')
-  const canOperate = Boolean(tenantId && userId)
+  const canOperate = Boolean(userId)
+  const panelStateKey = userId && workroomId && documentId ? `${workroomId}:${documentId}:${userId}` : null
 
   // ── 加载闪卡列表 ──────────────────────────────────
 
-  const loadCards = useCallback(async (overrideMode?: 'all' | 'due', overrideDocumentId?: number) => {
+  const loadCards = useCallback(async (overrideMode?: 'all' | 'due', overrideDocumentId?: string) => {
     const targetDocumentId = overrideDocumentId ?? documentId
-    if (!tenantId || !userId || !targetDocumentId) return
+    if (!userId || !targetDocumentId || !workroomId) return
     setLoading(true)
     setError(null)
     try {
       let cards: FlashcardItem[]
       const effectiveMode = overrideMode ?? mode
       if (effectiveMode === 'due') {
-        cards = await FlashcardApi.getDueFlashcards(backendBaseUrl, tenantId, userId, targetDocumentId)
+        cards = await FlashcardApi.getDueFlashcards(backendBaseUrl, workroomId, targetDocumentId)
       } else {
-        cards = await FlashcardApi.listFlashcards(backendBaseUrl, tenantId, userId, targetDocumentId)
+        cards = await FlashcardApi.listFlashcards(backendBaseUrl, workroomId, targetDocumentId)
       }
       setItems(cards)
       setCurrentIndex(0)
@@ -72,24 +79,24 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
     } finally {
       setLoading(false)
     }
-  }, [backendBaseUrl, tenantId, userId, documentId, mode, t])
+  }, [backendBaseUrl, userId, documentId, mode, t, workroomId])
 
   // ── 加载掌握统计 ──────────────────────────────────
 
   const loadStats = useCallback(async () => {
-    if (!tenantId || !userId || !documentId) return
+    if (!userId || !documentId || !workroomId) return
     try {
-      const s = await FlashcardApi.getMasteryStats(backendBaseUrl, tenantId, userId, documentId)
+      const s = await FlashcardApi.getMasteryStats(backendBaseUrl, workroomId, documentId)
       setStats(s)
     } catch {
       // 统计加载失败不阻塞主流程
     }
-  }, [backendBaseUrl, tenantId, userId, documentId])
+  }, [backendBaseUrl, userId, documentId, workroomId])
 
   // ── 生成闪卡 ──────────────────────────────────────
 
   const handleGenerate = useCallback(async (force = false) => {
-    if (!tenantId || !userId) return
+    if (!userId || !workroomId) return
 
     setGenerating(true)
     setError(null)
@@ -109,7 +116,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
       }
 
       const result = await FlashcardApi.generateFlashcards(
-        backendBaseUrl, tenantId, userId, targetDocId, 40, force,
+        backendBaseUrl, workroomId, targetDocId, 40, force,
       )
       onToast?.(
         t('flashcard.toast.generated', { count: result.cardCount, mode: result.mode }),
@@ -126,17 +133,17 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
     } finally {
       setGenerating(false)
     }
-  }, [backendBaseUrl, tenantId, userId, documentId, ensureDocument, onDocumentResolved, onToast, t, loadCards, loadStats])
+  }, [backendBaseUrl, userId, documentId, ensureDocument, onDocumentResolved, onToast, t, loadCards, loadStats, workroomId])
 
   // ── 自评提交 ──────────────────────────────────────
 
   const handleReview = useCallback(async (score: number) => {
     const card = items[currentIndex]
-    if (!card || !tenantId || !userId) return
+    if (!card || !userId || !workroomId) return
 
     setReviewSubmitting(true)
     try {
-      await FlashcardApi.submitReview(backendBaseUrl, tenantId, userId, card.cardId, score)
+      await FlashcardApi.submitReview(backendBaseUrl, workroomId, card.cardId, score)
       // 更新本地状态
       const updated = [...items]
       const newMastery = score === 0 ? 'struggling' : score === 1 ? 'reviewing' : 'mastered'
@@ -155,35 +162,135 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
     } finally {
       setReviewSubmitting(false)
     }
-  }, [items, currentIndex, tenantId, userId, backendBaseUrl, onToast, t, loadStats])
+  }, [items, currentIndex, userId, backendBaseUrl, onToast, t, loadStats, workroomId])
 
   // ── Agent 升级 ────────────────────────────────────
 
   const handleEscalate = useCallback(async () => {
     const card = items[currentIndex]
-    if (!card || !tenantId || !userId) return
+    if (!card || !userId || !workroomId) return
 
     try {
-      const result = await FlashcardApi.agentEscalate(backendBaseUrl, tenantId, userId, card.cardId)
+      const result = await FlashcardApi.agentEscalate(backendBaseUrl, workroomId, card.cardId)
       onToast?.(result.message, 'info')
     } catch (err) {
       onToast?.(t('flashcard.toast.escalate_failed'), 'error')
     }
-  }, [items, currentIndex, tenantId, userId, backendBaseUrl, onToast, t])
+  }, [items, currentIndex, userId, backendBaseUrl, onToast, t, workroomId])
 
   // ── 初始加载 ──────────────────────────────────────
 
   useEffect(() => {
-    if (!tenantId || !userId || !documentId) {
+    if (!userId || !documentId || !workroomId) {
       setItems([])
       setStats(null)
       setCurrentIndex(0)
       setRevealed(false)
+      restoredStateKeyRef.current = null
       return
     }
     void loadCards()
     void loadStats()
-  }, [tenantId, userId, documentId, loadCards, loadStats])
+  }, [userId, documentId, loadCards, loadStats, workroomId])
+
+  useEffect(() => {
+    if (!panelStateKey) {
+      restoredStateKeyRef.current = null
+      return
+    }
+    if (restoredStateKeyRef.current === panelStateKey) {
+      return
+    }
+
+    let cancelled = false
+    void fetchWorkroomArtifact(
+      backendBaseUrl,
+      workroomId!,
+      user?.tenant_id ?? 0,
+      userId!,
+      'flashcard_panel',
+      'current',
+    )
+      .then((artifact) => {
+        if (cancelled || !artifact) return
+        const payload = artifact.payload_json ?? {}
+        if (String(payload.documentId ?? '') !== String(documentId)) return
+        const artifactMode = payload.mode
+        const artifactCurrentIndex = payload.currentIndex
+        const artifactCurrentCardId = payload.currentCardId
+        const artifactRevealed = payload.revealed
+
+        if (artifactMode === 'all' || artifactMode === 'due') {
+          setMode(artifactMode)
+        }
+        if (typeof artifactCurrentCardId === 'string' && artifactCurrentCardId.trim()) {
+          restoredCardIdRef.current = artifactCurrentCardId
+        }
+        if (typeof artifactCurrentIndex === 'number' && artifactCurrentIndex >= 0) {
+          setCurrentIndex(artifactCurrentIndex)
+        }
+        if (typeof artifactRevealed === 'boolean') {
+          setRevealed(artifactRevealed)
+        }
+        restoredStateKeyRef.current = panelStateKey
+      })
+      .catch((err) => {
+        console.error('[flashcard] failed to restore panel state', err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [backendBaseUrl, documentId, panelStateKey, user?.tenant_id, userId, workroomId])
+
+  useEffect(() => {
+    if (!documentId || !userId || !workroomId || items.length === 0) return
+    const safeIndex = Math.min(Math.max(currentIndex, 0), Math.max(items.length - 1, 0))
+    const currentCard = items[safeIndex] ?? null
+    const timer = window.setTimeout(() => {
+      void upsertWorkroomArtifact(
+        backendBaseUrl,
+        workroomId,
+        user?.tenant_id ?? 0,
+        userId,
+        'flashcard_panel',
+        'current',
+        {
+          source_file_id: documentId,
+          payload_json: {
+            documentId,
+            mode,
+            currentIndex: safeIndex,
+            currentCardId: currentCard?.cardId ?? null,
+            revealed,
+          },
+        },
+      ).catch((err) => {
+        console.error('[flashcard] failed to persist panel state', err)
+      })
+    }, 220)
+
+    return () => window.clearTimeout(timer)
+  }, [backendBaseUrl, currentIndex, documentId, items, mode, revealed, user?.tenant_id, userId, workroomId])
+
+  useEffect(() => {
+    if (items.length === 0) {
+      if (currentIndex !== 0) setCurrentIndex(0)
+      if (revealed) setRevealed(false)
+      return
+    }
+    if (restoredCardIdRef.current) {
+      const restoredIndex = items.findIndex((item) => item.cardId === restoredCardIdRef.current)
+      restoredCardIdRef.current = null
+      if (restoredIndex >= 0 && restoredIndex !== currentIndex) {
+        setCurrentIndex(restoredIndex)
+        return
+      }
+    }
+    if (currentIndex >= items.length) {
+      setCurrentIndex(items.length - 1)
+    }
+  }, [currentIndex, items, revealed])
 
   // ── 导航 ──────────────────────────────────────────
 
@@ -324,11 +431,11 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
             {/* 导航 */}
             <div className="flex items-center gap-4 text-sm text-slate-500">
               <button type="button" onClick={goPrev} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
-                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                <Icon name={"chevron_left"} className="text-[18px]" />
               </button>
               <span className="text-slate-700 font-semibold">{currentIndex + 1}/{items.length}</span>
               <button type="button" onClick={goNext} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
-                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                <Icon name={"chevron_right"} className="text-[18px]" />
               </button>
             </div>
 

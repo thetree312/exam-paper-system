@@ -1,8 +1,9 @@
 import type { AgentSnapshotResponse, AggregatedOcrItem, GradingJudgement } from '../types'
+import { createTextMathDocument } from '../lib/mathContent'
 
 interface SnapshotRestoreContext {
-  sessionId?: number | null
-  fileId?: number | null
+  sessionId?: string | number | null
+  fileId?: string | number | null
   fileName?: string | null
   createdAt?: number
 }
@@ -27,8 +28,10 @@ export function buildOcrItemsFromSnapshot(
 ): AggregatedOcrItem[] {
   const baseCreatedAt = context.createdAt ?? Date.now()
   const fileName = context.fileName?.trim() || snapshot.title || 'Recovered Document'
-  const fileId = context.fileId ?? 0
-  const sessionId = context.sessionId ?? 0
+  const fileId =
+    context.fileId ?? String(snapshot.source_document_id ?? snapshot.studio_document_id ?? 'restored-file')
+  const sessionId =
+    context.sessionId ?? String(snapshot.source_document_id ?? snapshot.studio_document_id ?? 'restored-session')
 
   return [...(snapshot.questions ?? [])]
     .sort((a, b) => {
@@ -36,7 +39,7 @@ export function buildOcrItemsFromSnapshot(
       return a.id - b.id
     })
     .map((question, index) => ({
-      id: `restored-${snapshot.document_id}-${question.id}`,
+      id: `restored-${snapshot.studio_document_id}-${question.id}`,
       region_index: question.sequenceIndex ?? index,
       text: question.content,
       sessionId,
@@ -46,8 +49,15 @@ export function buildOcrItemsFromSnapshot(
       createdAt: baseCreatedAt + index,
       legendImages: question.legendImages ?? [],
       originalText: question.content,
+      answerContent: createTextMathDocument(question.studentAnswer ?? ''),
       answerText: question.studentAnswer ?? '',
+      canonicalAnswer: question.canonicalAnswer ?? '',
       sourceType: 'upload' as const,
+      documentContext: {
+        studioDocumentID: String(snapshot.studio_document_id),
+        sourceDocumentID:
+          snapshot.source_document_id != null ? String(snapshot.source_document_id) : null,
+      },
       questionMeta: {
         questionId: question.id,
         sequenceIndex: question.sequenceIndex,

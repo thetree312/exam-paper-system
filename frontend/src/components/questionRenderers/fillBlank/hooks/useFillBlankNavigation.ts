@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 export function useFillBlankNavigation(totalBlanks: number) {
-  const refs = useRef<(HTMLInputElement | null)[]>([])
+  const refs = useRef<(HTMLElement | null)[]>([])
 
   const register = useCallback(
-    (index: number) => (el: HTMLInputElement | null) => {
+    (index: number) => (el: HTMLElement | null) => {
       refs.current[index] = el
     },
     [],
@@ -15,12 +15,6 @@ export function useFillBlankNavigation(totalBlanks: number) {
     const el = refs.current[index]
     if (el) {
       el.focus()
-      const len = el.value.length
-      try {
-        el.setSelectionRange(len, len)
-      } catch {
-        // ignore
-      }
     }
   }, [totalBlanks])
 

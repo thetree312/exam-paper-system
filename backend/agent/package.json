@@ -1,0 +1,12 @@
+{
+  "name": "llm-wiki-agent-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspace @llm-wiki/agent"
+  }
+}
+

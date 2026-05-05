@@ -2,6 +2,8 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { TranslationScope } from '../types'
+import Icon from './Icon'
+
 
 export type InlineIndicatorStatus = 'idle' | 'loading' | 'error'
 
@@ -39,7 +41,7 @@ export const TranslationInlineIndicator: React.FC<TranslationInlineIndicatorProp
           onClick={onRetry}
           aria-label={t('translation.retry')}
         >
-          <span className="material-symbols-outlined translation-inline-indicator__error-icon">error</span>
+          <Icon name={"error"} className="translation-inline-indicator__error-icon" />
         </button>
       ) : (
         <span

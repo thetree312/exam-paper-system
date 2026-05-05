@@ -9,6 +9,8 @@ import type {
   UserInfo,
 } from '../types'
 import type { StatusMessageSetter } from '../types'
+import Icon from './Icon'
+
 
 interface ExportTemplateDialogProps {
   open: boolean
@@ -145,7 +147,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
             onClick={onClose}
             disabled={isLoading}
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <Icon name={"close"} className="text-[20px]" />
           </button>
         </div>
 

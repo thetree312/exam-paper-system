@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserInfo } from '../types'
+import Icon from './Icon'
+
 
 interface UserMenuProps {
   user: UserInfo
@@ -22,6 +24,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const initials = useMemo(() => {
     return (user.display_name || user.email || 'U').trim().charAt(0).toUpperCase()
   }, [user.display_name, user.email])
+  const hasTenant = typeof user.tenant_id === 'number' && user.tenant_id > 0
 
   if (!isOpen) return null
 
@@ -39,7 +42,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             <div className="min-w-0 flex-1">
               <p className="truncate text-base font-bold text-slate-900">{user.display_name}</p>
               <p className="truncate text-sm text-slate-500">{user.email}</p>
-              <p className="mt-1 text-xs text-slate-400">Tenant #{user.tenant_id}</p>
+              {hasTenant && <p className="mt-1 text-xs text-slate-400">Tenant #{user.tenant_id}</p>}
             </div>
           </div>
         </div>
@@ -54,8 +57,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               }}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
             >
-              <span className="material-symbols-outlined text-[18px] text-slate-400">bookmark</span>
-              <span>{t('user_menu.favorites', '我的收藏')}</span>
+              <Icon name={"bookmark"} className="text-[18px] text-slate-400" />
+              <span>{t('user_menu.actions.favorites')}</span>
             </button>
           )}
 
@@ -64,8 +67,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             onClick={onLogout}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50"
           >
-            <span className="material-symbols-outlined text-[18px]">logout</span>
-            <span>{t('user_menu.logout', '退出登录')}</span>
+            <Icon name={"logout"} className="text-[18px]" />
+            <span>{t('user_menu.actions.logout')}</span>
           </button>
         </div>
       </div>

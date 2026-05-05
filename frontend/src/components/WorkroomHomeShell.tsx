@@ -2,6 +2,8 @@ import React from 'react'
 import type { UserInfo, WorkspaceInfo, WorkroomInfo } from '../types'
 import BrandIcon from './BrandIcon'
 import { WorkroomSourceTimeline } from './WorkroomSourceTimeline'
+import Icon from './Icon'
+
 
 interface WorkroomHomeShellProps {
   user: UserInfo
@@ -33,7 +35,7 @@ export const WorkroomHomeShell: React.FC<WorkroomHomeShellProps> = ({
                 onClick={onBackToWorkspace}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
               >
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                <Icon name={"arrow_back"} className="text-[18px]" />
                 Workspace
               </button>
             )}
@@ -61,7 +63,7 @@ export const WorkroomHomeShell: React.FC<WorkroomHomeShellProps> = ({
               onClick={onLogout}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
-              <span className="material-symbols-outlined text-[18px]">logout</span>
+              <Icon name={"logout"} className="text-[18px]" />
               Sign out
             </button>
           </div>

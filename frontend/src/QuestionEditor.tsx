@@ -19,10 +19,12 @@ import type { Node as PMNode } from '@tiptap/pm/model'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { shouldParseAsInlineMath } from './utils/math'
+import { normalizeMathExpression } from './lib/mathRecovery'
 import { TranslationBlock } from './extensions/TranslationBlock'
 import { TranslationFootnote } from './extensions/TranslationFootnote'
 import { lookupTranslation, TranslationApiError } from './services/translationApi'
 import { TranslationInlineIndicator } from './components/TranslationInlineIndicator'
+import Icon from './components/Icon'
 import type {
   TranslationContext,
   TranslationLookupResponse,
@@ -265,12 +267,13 @@ const insertTranslationFootnoteNode = (
 const MathInlineComponent: React.FC<NodeViewProps> = ({ node }) => {
   const ref = useRef<HTMLSpanElement | null>(null)
   const formula = (node.attrs.formula as string) || ''
+  const recoveredFormula = normalizeMathExpression(formula)
 
   useEffect(() => {
     if (!ref.current) return
     try {
-      katex.render(formula, ref.current, {
-        throwOnError: false,
+      katex.render(recoveredFormula, ref.current, {
+        throwOnError: true,
         strict: 'ignore',
       })
     } catch {
@@ -278,7 +281,7 @@ const MathInlineComponent: React.FC<NodeViewProps> = ({ node }) => {
         ref.current.textContent = formula
       }
     }
-  }, [formula])
+  }, [formula, recoveredFormula])
 
   return (
     <NodeViewWrapper as="span" data-math-inline ref={ref} />
@@ -386,9 +389,14 @@ function docToPlainTextWithMath(doc: PMNode, legendImages?: string[]): string {
   return lines.join('\n')
 }
 
-function buildDocFromText(value: string) {
+function normalizeEditorTextInput(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function buildDocFromText(value: unknown) {
+  const normalizedValue = normalizeEditorTextInput(value)
   const nodes: any[] = []
-  const lines = value.split(/\r?\n/)
+  const lines = normalizedValue.split(/\r?\n/)
 
   let lineIndex = 0
   while (lineIndex < lines.length) {
@@ -422,7 +430,7 @@ function buildDocFromText(value: string) {
       if (match[1]) {
         const formulaRaw = match[2] ?? ''
         if (shouldParseAsInlineMath(formulaRaw)) {
-          content.push({ type: 'mathInline', attrs: { formula: formulaRaw.trim() } })
+          content.push({ type: 'mathInline', attrs: { formula: normalizeMathExpression(formulaRaw.trim()) } })
         } else {
           const asText = `$${formulaRaw}$`
           content.push({ type: 'text', text: asText })
@@ -472,7 +480,7 @@ function buildDocFromText(value: string) {
   }
 }
 
-function buildDocWithLegends(value: string, legendImages?: string[]) {
+function buildDocWithLegends(value: unknown, legendImages?: string[]) {
   const base = buildDocFromText(value)
   if (!legendImages || legendImages.length === 0) return base
 
@@ -1188,7 +1196,7 @@ export const QuestionEditor: React.FC<QuestionEditorProps> = ({
             onClick={handleTranslate}
             disabled={!translationContext}
           >
-            <span className="material-symbols-outlined translation-toolbar-fab__icon">translate</span>
+            <Icon name={"translate"} className="translation-toolbar-fab__icon" />
           </button>,
           document.body,
         )}

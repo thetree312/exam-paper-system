@@ -1,0 +1,207 @@
+[
+  {
+    "name": "@lobehub/icons-static-svg",
+    "packageName": "@lobehub/icons-static-svg",
+    "license": "MIT"
+  },
+  {
+    "name": "@lydell/node-pty",
+    "packageName": "@lydell/node-pty",
+    "license": "MIT"
+  },
+  {
+    "name": "@material-symbols/svg-400",
+    "packageName": "@material-symbols/svg-400",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "@openuidev/react-lang",
+    "packageName": "@openuidev/react-lang",
+    "license": "MIT"
+  },
+  {
+    "name": "Tiptap Core",
+    "packageName": "@tiptap/core",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-image",
+    "packageName": "@tiptap/extension-image",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-subscript",
+    "packageName": "@tiptap/extension-subscript",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-superscript",
+    "packageName": "@tiptap/extension-superscript",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-table",
+    "packageName": "@tiptap/extension-table",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-table-cell",
+    "packageName": "@tiptap/extension-table-cell",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-table-header",
+    "packageName": "@tiptap/extension-table-header",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/extension-table-row",
+    "packageName": "@tiptap/extension-table-row",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/html",
+    "packageName": "@tiptap/html",
+    "license": "MIT"
+  },
+  {
+    "name": "@tiptap/markdown",
+    "packageName": "@tiptap/markdown",
+    "license": "MIT"
+  },
+  {
+    "name": "Tiptap React",
+    "packageName": "@tiptap/react",
+    "license": "MIT"
+  },
+  {
+    "name": "Tiptap Starter Kit",
+    "packageName": "@tiptap/starter-kit",
+    "license": "MIT"
+  },
+  {
+    "name": "@types/dompurify",
+    "packageName": "@types/dompurify",
+    "license": "MIT"
+  },
+  {
+    "name": "@types/react",
+    "packageName": "@types/react",
+    "license": "MIT"
+  },
+  {
+    "name": "@types/react-dom",
+    "packageName": "@types/react-dom",
+    "license": "MIT"
+  },
+  {
+    "name": "@types/react-window",
+    "packageName": "@types/react-window",
+    "license": "MIT"
+  },
+  {
+    "name": "dompurify",
+    "packageName": "dompurify",
+    "license": "(MPL-2.0 OR Apache-2.0)"
+  },
+  {
+    "name": "hono",
+    "packageName": "hono",
+    "license": "MIT"
+  },
+  {
+    "name": "i18next",
+    "packageName": "i18next",
+    "license": "MIT"
+  },
+  {
+    "name": "i18next-browser-languagedetector",
+    "packageName": "i18next-browser-languagedetector",
+    "license": "MIT"
+  },
+  {
+    "name": "katex",
+    "packageName": "katex",
+    "license": "MIT"
+  },
+  {
+    "name": "lottie-react",
+    "packageName": "lottie-react",
+    "license": "MIT"
+  },
+  {
+    "name": "mathlive",
+    "packageName": "mathlive",
+    "license": "MIT"
+  },
+  {
+    "name": "mind-elixir",
+    "packageName": "mind-elixir",
+    "license": "MIT"
+  },
+  {
+    "name": "PDF.js",
+    "packageName": "pdfjs-dist",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "pg",
+    "packageName": "pg",
+    "license": "MIT"
+  },
+  {
+    "name": "react",
+    "packageName": "react",
+    "license": "MIT"
+  },
+  {
+    "name": "react-dom",
+    "packageName": "react-dom",
+    "license": "MIT"
+  },
+  {
+    "name": "react-i18next",
+    "packageName": "react-i18next",
+    "license": "MIT"
+  },
+  {
+    "name": "react-markdown",
+    "packageName": "react-markdown",
+    "license": "MIT"
+  },
+  {
+    "name": "react-window",
+    "packageName": "react-window",
+    "license": "MIT"
+  },
+  {
+    "name": "rehype-katex",
+    "packageName": "rehype-katex",
+    "license": "MIT"
+  },
+  {
+    "name": "rehype-sanitize",
+    "packageName": "rehype-sanitize",
+    "license": "MIT"
+  },
+  {
+    "name": "remark-gfm",
+    "packageName": "remark-gfm",
+    "license": "MIT"
+  },
+  {
+    "name": "remark-math",
+    "packageName": "remark-math",
+    "license": "MIT"
+  },
+  {
+    "name": "zod",
+    "packageName": "zod",
+    "license": "MIT"
+  },
+  {
+    "name": "zustand",
+    "packageName": "zustand",
+    "license": "MIT"
+  }
+]

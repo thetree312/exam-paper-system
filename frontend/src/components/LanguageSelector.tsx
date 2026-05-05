@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import Icon from './Icon'
+
 
 const Flags = {
   zh: (
@@ -55,7 +57,7 @@ export const LanguageSelector: React.FC = () => {
       <div className="absolute left-[4px] top-[4px] w-[34px] h-[34px] pointer-events-none z-10">
          <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden transition-all duration-500 border border-slate-50 ${!currentLang ? 'bg-slate-50 text-slate-400' : 'bg-white shadow-sm'}`}>
           {!currentLang ? (
-            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ${isOpen ? 'rotate-180 scale-110' : ''}`}>globe</span>
+            <Icon name={"globe"} className={`text-[20px] transition-transform duration-700 ${isOpen ? 'rotate-180 scale-110' : ''}`} />
           ) : (
             <div className="w-full h-full">
               {Flags[currentLang as keyof typeof Flags]}

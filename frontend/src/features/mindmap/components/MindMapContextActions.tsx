@@ -1,4 +1,6 @@
 import React from 'react'
+import Icon from '../../../components/Icon'
+
 
 interface MindMapContextActionsProps {
   canEditNode?: boolean
@@ -40,7 +42,7 @@ const ActionButton: React.FC<{
         : 'border-slate-200 text-slate-700 hover:bg-slate-50'
     }`}
   >
-    <span className="material-symbols-outlined text-[18px] leading-none">{icon}</span>
+    <Icon name={icon} className="text-[18px] leading-none" />
     <span>{label}</span>
   </button>
 )

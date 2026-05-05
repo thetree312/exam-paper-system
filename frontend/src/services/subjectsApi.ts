@@ -1,8 +1,5 @@
 import type { Subject } from '../types'
-
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-}
+import { apiJson, withJsonBody } from '../lib/api'
 
 /**
  * 获取科目列表
@@ -11,16 +8,12 @@ export async function getSubjects(
   baseUrl: string,
   tenantId: number,
 ): Promise<Subject[]> {
-  const resp = await fetch(
-    `${baseUrl}/api/subjects?tenant_id=${tenantId}`,
+  const data = await apiJson<{ items: Subject[] }>(
+    `${baseUrl}/api/taxonomies/subjects?tenant_id=${tenantId}`,
+    {
+      method: 'GET',
+    },
   )
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `获取科目列表失败 (${resp.status})`)
-  }
-
-  const data = (await resp.json()) as { items: Subject[] }
   return data.items
 }
 
@@ -32,21 +25,11 @@ export async function createSubject(
   tenantId: number,
   name: string,
 ): Promise<Subject> {
-  const body = {
-    tenant_id: tenantId,
-    name,
-  }
-
-  const resp = await fetch(`${baseUrl}/api/subjects`, {
+  return apiJson<Subject>(`${baseUrl}/api/taxonomies/subjects`, {
     method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
+    ...withJsonBody({
+      tenant_id: tenantId,
+      name,
+    }),
   })
-
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `创建科目失败 (${resp.status})`)
-  }
-
-  return (await resp.json()) as Subject
 }

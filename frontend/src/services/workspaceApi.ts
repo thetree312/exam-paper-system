@@ -1,83 +1,111 @@
-import type { WorkspaceInfo, WorkspaceLaunchResponse, WorkroomCurrentResponse } from '../types'
+import { apiFetch, apiJson, withJsonBody } from '../lib/api'
+import type { WorkroomArtifact, WorkroomCurrentResponse, WorkroomInfo } from '../types'
 
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
+export function mapWorkroom(input: any): WorkroomInfo {
+  const workspaceId = input.workspaceID ?? input.workspace_id ?? input.id ?? null
+  return {
+    id: String(input.id),
+    workspace_id: workspaceId != null ? String(workspaceId) : null,
+    tenant_id: Number(input.tenantID ?? input.tenant_id ?? 0),
+    user_id: String(input.userID ?? input.user_id ?? ''),
+    name: String(input.name || ''),
+    status: String(input.status ?? 'ready'),
+  }
 }
 
 export async function fetchWorkspaces(
   baseUrl: string,
-  tenantId: number,
-  userId: number,
-): Promise<WorkspaceInfo[]> {
-  const search = new URLSearchParams({
-    tenant_id: String(tenantId),
-    user_id: String(userId),
-  })
-  const resp = await fetch(`${baseUrl}/api/workspaces?${search.toString()}`, {
+  _tenantId: number,
+  _userId: string,
+): Promise<WorkroomInfo[]> {
+  const data = await apiJson<{ items: unknown[] }>(`${baseUrl}/api/workrooms`, {
     method: 'GET',
-    headers: JSON_HEADERS,
   })
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `Request failed (${resp.status})`)
-  }
-  return (await resp.json()) as WorkspaceInfo[]
+  return data.items.map(mapWorkroom)
 }
 
 export async function createWorkspace(
   baseUrl: string,
-  payload: { tenantId: number; userId: number; name: string; topic?: string | null },
-): Promise<WorkspaceLaunchResponse> {
-  const resp = await fetch(`${baseUrl}/api/workspaces`, {
+  payload: { tenantId: number; userId: string; name: string; topic?: string | null },
+): Promise<{ workspace: WorkroomInfo }> {
+  const workroom = await apiJson(`${baseUrl}/api/workrooms`, {
     method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      tenant_id: payload.tenantId,
-      user_id: payload.userId,
+    ...withJsonBody({
       name: payload.name,
-      topic: payload.topic ?? null,
     }),
   })
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `Request failed (${resp.status})`)
+
+  return {
+    workspace: mapWorkroom(workroom),
   }
-  return (await resp.json()) as WorkspaceLaunchResponse
+}
+
+async function fetchOptionalArtifact(
+  baseUrl: string,
+  workroomId: string,
+  artifactType: string,
+  artifactRefId: string,
+): Promise<WorkroomArtifact | null> {
+  try {
+    return await apiJson<WorkroomArtifact>(
+      `${baseUrl}/api/workrooms/${workroomId}/artifacts/${artifactType}/${artifactRefId}`,
+      {
+        method: 'GET',
+      },
+    )
+  } catch {
+    return null
+  }
 }
 
 export async function launchWorkspace(
   baseUrl: string,
-  payload: { tenantId: number; userId: number; workspaceId: number },
+  payload: { tenantId: number; userId: string; workspaceId: string },
 ): Promise<WorkroomCurrentResponse> {
-  const search = new URLSearchParams({
-    tenant_id: String(payload.tenantId),
-    user_id: String(payload.userId),
-  })
-  const resp = await fetch(`${baseUrl}/api/workspaces/${payload.workspaceId}/launch?${search.toString()}`, {
+  const payloadData = await apiJson<any>(`${baseUrl}/api/workrooms/${payload.workspaceId}`, {
     method: 'GET',
-    headers: JSON_HEADERS,
   })
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `Request failed (${resp.status})`)
+
+  const workroom = payloadData.workroom ? mapWorkroom(payloadData.workroom) : mapWorkroom(payloadData)
+  const runtimeState = payloadData.runtimeState ?? payloadData.runtime_state ?? null
+  const sources = Array.isArray(payloadData.sources) ? payloadData.sources : payloadData.sources?.items ?? []
+  const existingArtifacts = Array.isArray(payloadData.artifacts) ? payloadData.artifacts : []
+  const documents = Array.isArray(payloadData.documents) ? payloadData.documents : []
+  const restoration = payloadData.restoration ?? {
+    openDocumentIDs: runtimeState?.open_document_ids ?? [],
+    activeDocumentID: runtimeState?.active_file_id ?? null,
+    activeStudioDocumentID: runtimeState?.active_studio_document_id ?? null,
+    activeAgentSessionID: runtimeState?.active_agent_session_id ?? null,
+    activeExtractionSessionID: runtimeState?.active_extraction_session_id ?? null,
   }
-  return (await resp.json()) as WorkroomCurrentResponse
+
+  if (existingArtifacts.length > 0) {
+    return {
+      workroom,
+      runtime_state: runtimeState,
+      sources,
+      artifacts: existingArtifacts,
+      documents,
+      restoration,
+    }
+  }
+
+  const mindmapPanelArtifact = await fetchOptionalArtifact(baseUrl, payload.workspaceId, 'mindmap_panel', 'current')
+  return {
+    workroom,
+    runtime_state: runtimeState,
+    sources,
+    artifacts: mindmapPanelArtifact ? [mindmapPanelArtifact] : [],
+    documents,
+    restoration,
+  }
 }
 
 export async function deleteWorkspace(
   baseUrl: string,
-  payload: { tenantId: number; userId: number; workspaceId: number },
+  payload: { tenantId: number; userId: string; workspaceId: string },
 ): Promise<void> {
-  const search = new URLSearchParams({
-    tenant_id: String(payload.tenantId),
-    user_id: String(payload.userId),
-  })
-  const resp = await fetch(`${baseUrl}/api/workspaces/${payload.workspaceId}?${search.toString()}`, {
+  await apiFetch(`${baseUrl}/api/workrooms/${payload.workspaceId}`, {
     method: 'DELETE',
-    headers: JSON_HEADERS,
   })
-  if (!resp.ok) {
-    const text = await resp.text()
-    throw new Error(text || `Request failed (${resp.status})`)
-  }
 }

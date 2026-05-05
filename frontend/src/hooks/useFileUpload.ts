@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { UploadedFileTab, SessionStatus, StatusMessageSetter, UserInfo } from '../types'
+import type { DocumentPreviewAssetRef, UploadedFileTab, StatusMessageSetter, UserInfo } from '../types'
 import { useAppStore } from '../store/appStore'
+import { apiFetch } from '../lib/api'
+import { createDocumentPreviewAssetRefs } from '../services/documentPreviewAsset'
 
 interface UseFileUploadReturn {
   fileTabs: UploadedFileTab[]
@@ -11,30 +13,23 @@ interface UseFileUploadReturn {
   setIsUploading: (loading: boolean) => void
   fileInputRef: React.RefObject<HTMLInputElement>
   previewScrollRef: React.RefObject<HTMLDivElement>
-  previewScrollPositions: Record<number, number>
-  setPreviewScrollPositions: (positions: Record<number, number> | ((prev: Record<number, number>) => Record<number, number>)) => void
+  previewScrollPositions: Record<string, number>
+  setPreviewScrollPositions: (positions: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void
   activeFile: UploadedFileTab | null
   currentFile: UploadedFileTab | null
   fileName: string
   previewType: UploadedFileTab['previewType']
-  previewPages: string[]
-  previewUrl: string | null
-  sessionId: number | null
+  previewPages: DocumentPreviewAssetRef[]
+  previewUrl: DocumentPreviewAssetRef | null
+  sessionId: string | number | null
   activeStatus: UploadedFileTab['status']
-  previewSources: string[]
+  previewSources: DocumentPreviewAssetRef[]
   handleUploadClick: () => void
   handleAddEmptyTab: () => void
   handleTabSelect: (index: number) => void
   handleCloseTab: (index: number) => void
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>
   rememberPreviewScroll: () => void
-}
-
-const deriveTabStatus = (pageStatuses?: UploadedFileTab['status'][]): UploadedFileTab['status'] => {
-  if (!pageStatuses || pageStatuses.length === 0) return 'pending'
-  if (pageStatuses.includes('failed')) return 'failed'
-  if (pageStatuses.includes('processing') || pageStatuses.includes('pending')) return 'processing'
-  return 'ready'
 }
 
 export const useFileUpload = (
@@ -56,110 +51,11 @@ export const useFileUpload = (
   const previewScrollRef = useRef<HTMLDivElement>(null)
   const fileTabsRef = useRef<UploadedFileTab[]>([])
 
-  // 把最新的 fileTabs 写入 ref，供轮询闭包使用
+  // 保留 ref 仅用于读取最新 tabs，上传链路已经切到同步完成的 /api/documents/upload，
+  // 不再轮询旧 /api/files/session/*。
   useEffect(() => {
     fileTabsRef.current = [...storeFileTabs]
   }, [storeFileTabs])
-
-  // 轮询后端会话状态，直到预览就绪
-  useEffect(() => {
-    const interval = window.setInterval(async () => {
-      const pendingTabs = fileTabsRef.current.filter((t) => {
-        if (t.isPlaceholder) return false
-        if (t.previewType === 'image' && t.pageSessionIds?.length) {
-          const pageStatuses = t.pageStatuses ?? []
-          return pageStatuses.some((s) => s === 'pending' || s === 'processing')
-        }
-        return t.status === 'pending' || t.status === 'processing'
-      })
-      if (pendingTabs.length === 0) return
-
-      try {
-        const updates: UploadedFileTab[] = []
-        for (const tab of pendingTabs) {
-          // 对图片类型，逐页 session 轮询
-          if (tab.previewType === 'image' && tab.pageSessionIds?.length) {
-            const pageStatuses = tab.pageStatuses ?? Array(tab.pageSessionIds.length).fill('pending')
-            const nextPreviewPages = [...tab.previewPages]
-            const nextPageStatuses = [...pageStatuses]
-            const normalizeUrl = (url: string) =>
-              url.startsWith('http') ? url : `${backendBaseUrl}${url}`
-
-            for (let i = 0; i < tab.pageSessionIds.length; i += 1) {
-              const pageSessionId = tab.pageSessionIds[i]
-              const status = nextPageStatuses[i] ?? 'pending'
-              if (status !== 'pending' && status !== 'processing') continue
-              const resp = await fetch(`${backendBaseUrl}/api/files/session/${pageSessionId}`)
-              if (!resp.ok) continue
-              const data = (await resp.json()) as SessionStatus
-              let pageStatus: UploadedFileTab['status'] = status
-              if (data.status === 'done') pageStatus = 'ready'
-              else if (data.status === 'failed') pageStatus = 'failed'
-              else if (data.status === 'processing') pageStatus = 'processing'
-
-              nextPageStatuses[i] = pageStatus
-              const pages = (data.preview_pages ?? []).map(normalizeUrl)
-              const firstPreviewUrl =
-                pages[0] ?? (data.preview_url ? normalizeUrl(data.preview_url) : null)
-              if (firstPreviewUrl) {
-                nextPreviewPages[i] = firstPreviewUrl
-              }
-            }
-
-            const tabStatus = deriveTabStatus(nextPageStatuses)
-            updates.push({
-              ...tab,
-              status: tabStatus,
-              previewPages: nextPreviewPages,
-              pageStatuses: nextPageStatuses,
-            })
-          } else {
-            // 其他类型按原有单 session 轮询
-            const resp = await fetch(
-              `${backendBaseUrl}/api/files/session/${tab.sessionId}`,
-            )
-            if (!resp.ok) continue
-            const data = (await resp.json()) as SessionStatus
-            let nextStatus: UploadedFileTab['status'] = tab.status
-            if (data.status === 'done') nextStatus = 'ready'
-            else if (data.status === 'failed') nextStatus = 'failed'
-            else if (data.status === 'processing') nextStatus = 'processing'
-
-            if (nextStatus === tab.status && !data.preview_pages?.length) continue
-
-            const normalizeUrl = (url: string) =>
-              url.startsWith('http') ? url : `${backendBaseUrl}${url}`
-            const pages = (data.preview_pages ?? []).map(normalizeUrl)
-            const firstPreviewUrl =
-              pages[0] ?? (data.preview_url ? normalizeUrl(data.preview_url) : null)
-
-            updates.push({
-              ...tab,
-              status: nextStatus,
-              previewUrl: firstPreviewUrl,
-              previewPages: pages,
-            })
-          }
-        }
-
-        if (updates.length > 0) {
-          const updateMap = new Map(
-            updates.map((tab) => [`${tab.fileId}-${tab.sessionId}`, tab]),
-          )
-          setStoreFileTabs((prev) =>
-            prev.map((tab) => {
-              const key = `${tab.fileId}-${tab.sessionId}`
-              return updateMap.get(key) ?? tab
-            }),
-          )
-        }
-      } catch (err) {
-        console.error('[session poll] failed', err)
-      }
-    }, 2000)
-
-    return () => window.clearInterval(interval)
-  }, [backendBaseUrl])
 
   const activeFile = storeActiveTabIndex >= 0 ? storeFileTabs[storeActiveTabIndex] ?? null : null
   const currentFile = activeFile?.isPlaceholder ? null : activeFile
@@ -171,16 +67,31 @@ export const useFileUpload = (
   const activeStatus = currentFile?.status ?? 'pending'
   const previewSources = previewPages.length > 0 ? previewPages : previewUrl ? [previewUrl] : []
 
+  useEffect(() => {
+    if (sessionId == null) return
+    const container = previewScrollRef.current
+    if (!container) return
+    const key = String(sessionId)
+    const targetTop = storePreviewScrollPositions[key] ?? 0
+    const rafId = window.requestAnimationFrame(() => {
+      if (previewScrollRef.current) {
+        previewScrollRef.current.scrollTop = targetTop
+      }
+    })
+    return () => window.cancelAnimationFrame(rafId)
+  }, [sessionId, storePreviewScrollPositions])
+
   const rememberPreviewScroll = useCallback(() => {
     if (!sessionId) return
     const container = previewScrollRef.current
     if (!container) return
     const currentTop = container.scrollTop
+    const key = String(sessionId)
     setStorePreviewScrollPositions((prev) => {
-      if (prev[sessionId] === currentTop) return prev
+      if (prev[key] === currentTop) return prev
       return {
         ...prev,
-        [sessionId]: currentTop,
+        [key]: currentTop,
       }
     })
   }, [sessionId, setStorePreviewScrollPositions])
@@ -191,7 +102,7 @@ export const useFileUpload = (
   }, [rememberPreviewScroll])
 
   const handleAddEmptyTab = useCallback(() => {
-    const placeholderId = -Date.now()
+    const placeholderId = `placeholder_${Date.now()}`
     const newTab: UploadedFileTab = {
       sessionId: placeholderId,
       fileId: placeholderId,
@@ -222,9 +133,9 @@ export const useFileUpload = (
       const next = prev.filter((_, idx) => idx !== index)
 
       const relatedSessionIds = [
-        ...(typeof removed.sessionId === 'number' ? [removed.sessionId] : []),
+        ...(removed.sessionId != null ? [String(removed.sessionId)] : []),
         ...(Array.isArray(removed.pageSessionIds)
-          ? removed.pageSessionIds.filter((id): id is number => typeof id === 'number')
+          ? removed.pageSessionIds.map((id) => String(id))
           : []),
       ]
 
@@ -270,8 +181,8 @@ export const useFileUpload = (
         name: file.name,
         size: file.size,
         type: file.type,
-        tenant: user.tenant_id,
         user: user.id,
+        workroom: workroom?.id ?? null,
       })
 
       let previewType: UploadedFileTab['previewType'] = null
@@ -289,92 +200,68 @@ export const useFileUpload = (
       }
 
       const formData = new FormData()
-      formData.append('tenant_id', String(user.tenant_id))
-      formData.append('user_id', String(user.id))
-      if (workroom?.id) {
-        formData.append('workroom_id', String(workroom.id))
+      if (!workroom?.id) {
+        onStatusMessage('upload_failed')
+        setIsUploading(false)
+        if (inputEl) inputEl.value = ''
+        return
       }
+      formData.append('workroomID', String(workroom.id))
       formData.append('file', file)
 
       try {
-        console.log('[upload] sending fetch to', `${backendBaseUrl}/api/files/upload-image`)
-        const resp = await fetch(`${backendBaseUrl}/api/files/upload-image`, {
+        console.log('[upload] sending fetch to', `${backendBaseUrl}/api/documents/upload`)
+        const resp = await apiFetch(`${backendBaseUrl}/api/documents/upload`, {
           method: 'POST',
           body: formData,
         })
-        if (!resp.ok) throw new Error(await resp.text())
         const data = (await resp.json()) as {
-          file_id: number
-          session_id: number
-          preview_url?: string | null
-          preview_pages?: string[]
+          id: string
+          name: string
+          mimeType: string
+          previewPages: Array<{
+            pageNumber: number
+          }>
         }
-
-        const normalizeUrl = (url: string | null | undefined) =>
-          url ? (url.startsWith('http') ? url : `${backendBaseUrl}${url}`) : null
 
         const targetIsPlaceholder =
           activeFile?.isPlaceholder === true && storeActiveTabIndex >= 0
-        const canAppendImage =
-          previewType === 'image' &&
-          activeFile &&
-          !activeFile.isPlaceholder &&
-          activeFile.previewType === 'image'
+        const pageCount = Math.max(1, Number(data.previewPages?.length ?? 1))
+        const previewPages = createDocumentPreviewAssetRefs({
+          documentId: data.id,
+          workroomId: workroom.id,
+          pageCount,
+        })
+        const newTab: UploadedFileTab = {
+          sessionId: data.id,
+          fileId: data.id,
+          name: data.name ?? file.name,
+          previewType,
+          previewUrl: previewPages[0] ?? null,
+          previewPages,
+          pageSessionIds: previewType === 'image' ? [data.id] : undefined,
+          pageFileIds: previewType === 'image' ? [data.id] : undefined,
+          pageStatuses: previewType === 'image' ? ['ready'] : undefined,
+          status: 'ready',
+          isPlaceholder: false,
+        }
 
-        // 图片追加：如果当前 tab 是图片且已存在内容，则追加为新页
-        if (canAppendImage && storeActiveTabIndex >= 0) {
-          const newPreview =
-            normalizeUrl(data.preview_url) ?? normalizeUrl(data.preview_pages?.[0]) ?? null
+        if (targetIsPlaceholder) {
           setStoreFileTabs((prev) =>
             prev.map((tab, idx) => {
               if (idx !== storeActiveTabIndex) return tab
-              return {
-                ...tab,
-                previewPages: [...tab.previewPages, ...(newPreview ? [newPreview] : [])],
-                pageSessionIds: [...(tab.pageSessionIds ?? []), data.session_id],
-                pageFileIds: [...(tab.pageFileIds ?? []), data.file_id],
-                pageStatuses: [...(tab.pageStatuses ?? []), 'pending'],
-                status: 'processing',
-              }
+              return newTab
             }),
           )
-          onStatusMessage('append_image')
+          setStoreActiveTabIndex(storeActiveTabIndex)
         } else {
-          // 新建或占位符替换（图片/PDF/Word）
-          const pages = (data.preview_pages ?? []).map(normalizeUrl).filter(Boolean) as string[]
-          const preview = normalizeUrl(data.preview_url) ?? pages[0] ?? null
-          const newTab: UploadedFileTab = {
-            sessionId: data.session_id,
-            fileId: data.file_id,
-            name: file.name,
-            previewType,
-            previewUrl: preview,
-            previewPages: preview ? [preview] : [],
-            pageSessionIds: previewType === 'image' ? [data.session_id] : undefined,
-            pageFileIds: previewType === 'image' ? [data.file_id] : undefined,
-            pageStatuses: previewType === 'image' ? ['pending'] : undefined,
-            status: 'processing',
-            isPlaceholder: false,
-          }
-
-          if (targetIsPlaceholder) {
-            setStoreFileTabs((prev) =>
-              prev.map((tab, idx) => {
-                if (idx !== storeActiveTabIndex) return tab
-                return newTab
-              })
-            )
-            setStoreActiveTabIndex(storeActiveTabIndex)
-            onStatusMessage('preview_generating')
-          } else {
-            const nextIndex = storeFileTabs.length
-            setStoreFileTabs((prev) => [...prev, newTab])
-            setStoreActiveTabIndex(nextIndex)
-            onStatusMessage('preview_generating')
-          }
+          const nextIndex = storeFileTabs.length
+          setStoreFileTabs((prev) => [...prev, newTab])
+          setStoreActiveTabIndex(nextIndex)
         }
 
-        console.log('[upload] success session', data.session_id)
+        onStatusMessage('preview_generating')
+        console.log('[upload] success document', data.id)
       } catch (err) {
         console.error('[upload] failed', err)
         onStatusMessage('upload_failed')

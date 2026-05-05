@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { addFavorite, checkFavorite, removeFavorite } from '../services/favoritesApi'
 import { FavoriteConfigDialog } from './FavoriteConfigDialog'
 import AnimatedHeartButton from './AnimatedHeartButton'
@@ -7,7 +8,7 @@ import type { FavoriteConfig } from '../types'
 interface FavoriteButtonProps {
   backendBaseUrl: string
   tenantId: number
-  userId: number
+  userId: string | number
   questionId: number | undefined
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
   isFromFavorite?: boolean
@@ -21,6 +22,7 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
   onToast,
   isFromFavorite = false,
 }) => {
+  const { t } = useTranslation('common')
   const [isFavorited, setIsFavorited] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
@@ -91,25 +93,29 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
           config.tag_ids.length > 0 ? config.tag_ids : undefined,
         )
         setIsFavorited(true)
-        onToast?.('已收藏', 'success')
+        onToast?.(t('favorites.toast.added'), 'success')
         
         // 通知 onLike Promise 成功
         likePromiseRef.current?.resolve()
         likePromiseRef.current = null
       } catch (err) {
         console.error('[favorite] add failed', err)
-        const errorMsg = err instanceof Error ? err.message : '操作失败'
+        const errorMsg = err instanceof Error ? err.message : t('favorites.toast.operation_failed')
 
         // 解析错误信息
-        if (errorMsg.includes('402') || errorMsg.includes('配额') || errorMsg.includes('上限')) {
-          onToast?.('收藏数量已达上限，请升级订阅', 'error')
+        if (
+          errorMsg.includes('Favorite local storage limit exceeded') ||
+          errorMsg.includes('local storage limit') ||
+          errorMsg.includes('收藏上限')
+        ) {
+          onToast?.(t('favorites.toast.local_limit_exceeded'), 'error')
           likePromiseRef.current?.reject(err as Error)
         } else if (errorMsg.includes('409') || errorMsg.includes('已收藏')) {
-          onToast?.('该题目已收藏', 'info')
+          onToast?.(t('favorites.toast.already_added'), 'info')
           setIsFavorited(true)
           likePromiseRef.current?.resolve()
         } else {
-          onToast?.('收藏失败', 'error')
+          onToast?.(t('favorites.toast.add_failed'), 'error')
           likePromiseRef.current?.reject(err as Error)
         }
         likePromiseRef.current = null
@@ -117,7 +123,7 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
         setIsLoading(false)
       }
     },
-    [backendBaseUrl, tenantId, userId, questionId, isLoading, onToast],
+    [backendBaseUrl, tenantId, userId, questionId, isLoading, onToast, t],
   )
 
   const handleConfigClose = useCallback(() => {
@@ -149,10 +155,10 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
           try {
             await removeFavorite(backendBaseUrl, tenantId, userId, questionId)
             setIsFavorited(false)
-            onToast?.('已取消收藏', 'success')
+            onToast?.(t('favorites.toast.removed'), 'success')
           } catch (err) {
             console.error('[favorite] remove failed', err)
-            onToast?.('取消收藏失败', 'error')
+            onToast?.(t('favorites.toast.remove_failed'), 'error')
             // 不抛出错误，让动画完整播放，然后状态会自动回退
           } finally {
             setIsLoading(false)

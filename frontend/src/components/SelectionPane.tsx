@@ -3,6 +3,7 @@ import { SelectionWorkspace } from './SelectionWorkspace'
 import { useSelectionInteraction } from '../hooks/useSelectionInteraction'
 import type {
   AgentCitationFocus,
+  DocumentPreviewAssetRef,
   PageSelectionSegment,
   SelectionBox,
   RegionPayload,
@@ -10,11 +11,12 @@ import type {
 } from '../types'
 
 interface SelectionPaneProps {
-  previewSources: string[]
+  backendBaseUrl: string
+  previewSources: DocumentPreviewAssetRef[]
   previewType: string | null
   activeStatus: string
   hasActiveFile: boolean
-  activeFileId?: number | null
+  activeFileId?: string | number | null
   pageRefs: React.MutableRefObject<Record<number, HTMLDivElement | null>>
   imageRefs: React.MutableRefObject<Record<number, HTMLImageElement | null>>
   isExtracting: boolean
@@ -33,6 +35,7 @@ interface SelectionPaneProps {
 }
 
 export const SelectionPane: React.FC<SelectionPaneProps> = ({
+  backendBaseUrl,
   previewSources,
   previewType,
   activeStatus,
@@ -98,7 +101,7 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
 
   useEffect(() => {
     if (!citationFocus || !hasActiveFile) return
-    if (activeFileId != null && citationFocus.fileId !== activeFileId) return
+    if (activeFileId != null && String(citationFocus.fileId) !== String(activeFileId)) return
     const pageNode = pageRefs.current[citationFocus.pageNo]
     if (!pageNode) return
     pageNode.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -107,10 +110,11 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
   return (
     <div
       ref={previewScrollRef}
-      className="flex-1 overflow-y-auto bg-slate-100 p-3 sm:p-4 lg:p-6 relative scrollbar-hidden"
+      className="relative flex-1 overflow-y-auto bg-slate-100 p-2 sm:p-2.5 lg:p-3 scrollbar-hidden"
       onPointerDown={handlePointerDown}
     >
       <SelectionWorkspace
+        backendBaseUrl={backendBaseUrl}
         previewSources={previewSources}
         previewType={previewType}
         activeStatus={activeStatus}

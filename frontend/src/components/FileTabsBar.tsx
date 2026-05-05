@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UploadedFileTab } from '../types'
+import Icon from './Icon'
+
 
 interface FileTabsBarProps {
   fileTabs: UploadedFileTab[]
@@ -9,7 +11,8 @@ interface FileTabsBarProps {
   onAddTab: () => void
   onCloseTab: (index: number) => void
   isUploading: boolean
-  onCollapse?: () => void
+  onToggleFileTree?: () => void
+  isFileTreeOpen?: boolean
 }
 
 const renderOfficeIcon = (type: UploadedFileTab['previewType']) => {
@@ -20,33 +23,6 @@ const renderOfficeIcon = (type: UploadedFileTab['previewType']) => {
           <rect width="24" height="24" rx="2" fill="#2B579A" />
           <text x="12" y="17" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">
             W
-          </text>
-        </svg>
-      )
-    case 'excel':
-      return (
-        <svg viewBox="0 0 24 24" className="w-4 h-4 mr-2 flex-shrink-0">
-          <rect width="24" height="24" rx="2" fill="#217346" />
-          <text x="12" y="17" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">
-            X
-          </text>
-        </svg>
-      )
-    case 'powerpoint':
-      return (
-        <svg viewBox="0 0 24 24" className="w-4 h-4 mr-2 flex-shrink-0">
-          <rect width="24" height="24" rx="2" fill="#D24726" />
-          <text x="12" y="17" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">
-            P
-          </text>
-        </svg>
-      )
-    case 'onenote':
-      return (
-        <svg viewBox="0 0 24 24" className="w-4 h-4 mr-2 flex-shrink-0">
-          <rect width="24" height="24" rx="2" fill="#80397B" />
-          <text x="12" y="17" fill="white" fontSize="14" fontWeight="bold" textAnchor="middle">
-            N
           </text>
         </svg>
       )
@@ -67,7 +43,7 @@ const renderOfficeIcon = (type: UploadedFileTab['previewType']) => {
       )
     default:
       return (
-        <span className="material-symbols-outlined text-[16px] text-slate-500 mr-2">insert_drive_file</span>
+        <Icon name={"insert_drive_file"} className="text-[16px] text-slate-500 mr-2" />
       )
   }
 }
@@ -79,7 +55,8 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
   onAddTab,
   onCloseTab,
   isUploading,
-  onCollapse,
+  onToggleFileTree,
+  isFileTreeOpen = false,
 }) => {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -104,9 +81,9 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
   const addButtonContent = useMemo(
     () =>
       isUploading ? (
-        <span className="material-symbols-outlined text-[18px] text-gray-400 animate-spin">progress_activity</span>
+        <Icon name={"progress_activity"} className="text-[18px] text-gray-400 animate-spin" />
       ) : (
-        <span className="material-symbols-outlined text-[18px] text-gray-600">add</span>
+        <Icon name={"add"} className="text-[18px] text-gray-600" />
       ),
     [isUploading],
   )
@@ -139,7 +116,8 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                   <span
                     role="button"
                     tabIndex={0}
-                    className={`material-symbols-outlined text-[14px] ml-1 p-0.5 rounded-sm hover:bg-gray-200 transition-opacity [&:focus-visible]:ring-2 [&:focus-visible]:ring-offset-1 [&:focus-visible]:ring-slate-400 ${
+                    aria-label={t('file_tabs.close_label')}
+                    className={`ml-1 rounded-sm p-0.5 transition-opacity hover:bg-gray-200 [&:focus-visible]:ring-2 [&:focus-visible]:ring-offset-1 [&:focus-visible]:ring-slate-400 ${
                       isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
                     onClick={(event) => {
@@ -149,12 +127,12 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
+                        event.stopPropagation()
                         onCloseTab(index)
                       }
                     }}
-                    aria-label={t('file_tabs.close_label')}
                   >
-                    close
+                    <Icon name="close" className="text-[14px] leading-none text-slate-500" />
                   </span>
                 </button>
                 {showDivider && <div className="h-[16px] w-[1px] bg-[#C1C6CC] self-center" />}
@@ -172,14 +150,14 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
           </button>
         </div>
 
-        {onCollapse && (
+        {onToggleFileTree && (
           <button
             type="button"
             className="flex-shrink-0 inline-flex items-center justify-center px-1.5 h-8 text-[#647185] hover:text-[#4c586d] mr-[-8px]"
-            onClick={onCollapse}
-            title={t('file_tabs.collapse_label')}
+            onClick={onToggleFileTree}
+            title={isFileTreeOpen ? t('file_tabs.toggle_preview') : t('file_tabs.toggle_workroom_files')}
           >
-            <span className="material-symbols-outlined text-[22px] leading-none">menu_open</span>
+            <Icon name={"alt_route"} className="text-[22px] leading-none" />
           </button>
         )}
       </div>

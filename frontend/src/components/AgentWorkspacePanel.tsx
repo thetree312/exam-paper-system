@@ -9,39 +9,9 @@ import { MarkdownWithMath } from './MarkdownWithMath'
 
 import { FavoriteButton } from './FavoriteButton'
 
-import type {
+import type { AgentSendPayload, AgentSnapshotResponse, AggregatedOcrItem, GradingJudgement, QuestionVersionRecord, UserInfo } from '../types'
 
-  AgentSendPayload,
-
-  AggregatedOcrItem,
-
-  GradingJudgement,
-
-  QuestionVersionRecord,
-
-  TranslationContext,
-
-  UserInfo,
-
-} from '../types'
-
-import {
-
-  normalizeQuestionText,
-
-  OPTION_REGEX,
-
-  parseMultipleChoiceQuestion,
-
-  parseParagraphMatching,
-
-  parseReadingComprehension,
-
-  parseReadingAnswerMap,
-
-  stripChoiceBlockFromEditedText,
-
-} from './questionRenderers/utils'
+import { parseMultipleChoiceQuestion, parseParagraphMatching, parseReadingComprehension, stripChoiceBlockFromEditedText } from './questionRenderers/utils'
 
 import { ReadingQuestionRenderer } from './questionRenderers/ReadingQuestionRenderer'
 
@@ -52,6 +22,11 @@ import { parseFillBlankQuestion } from './questionRenderers/fillBlank/parser'
 import { FillBlankRenderer } from './questionRenderers/fillBlank/FillBlankRenderer'
 
 import { McqAnswerRenderer } from './questionRenderers/McqAnswerRenderer'
+import { RichMathComposer } from './math/RichMathComposer'
+import Icon from './Icon'
+import { createPlainTextMathDocument, ensureMathContentDocument, mathContentToPromptText, type MathContentDocument } from '../lib/mathContent'
+import { fetchModelSettings } from '../services/modelSettingsApi'
+
 
 
 
@@ -126,19 +101,18 @@ interface AgentWorkspacePanelProps {
   items: AggregatedOcrItem[]
 
   documentTitle?: string | null
-
-  initialDocumentId?: number | null
-  workroomId?: number | null
+  
+  studioDocumentId?: string | number | null
+  sourceDocumentId?: string | number | null
+  workroomId?: string | number | null
 
   onUpdateItem: (id: string, updater: OcrItemUpdater) => void
 
   onDeleteItem: (id: string) => void
 
-  onDocumentChange?: (documentId: number | null) => void
-
   onSendToAgent?: (payload: AgentSendPayload) => void
 
-  onAnswerChange?: (id: string, value: string) => void
+  onAnswerChange?: (id: string, value: MathContentDocument) => void
 
   onSubmitGrading?: () => void
 
@@ -151,6 +125,8 @@ interface AgentWorkspacePanelProps {
   splittingItemId?: string | null
 
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
+
+  modelSettingsRevision?: number
 
 }
 
@@ -165,15 +141,14 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
   items,
 
   documentTitle,
-
-  initialDocumentId = null,
+  
+  studioDocumentId = null,
+  sourceDocumentId = null,
   workroomId = null,
 
   onUpdateItem,
 
   onDeleteItem,
-
-  onDocumentChange,
 
   onSendToAgent,
 
@@ -191,14 +166,18 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
   onToast,
 
+  modelSettingsRevision = 0,
+
 }) => {
   const { t } = useTranslation('common')
+  const [mathInputEnabled, setMathInputEnabled] = useState(false)
 
   const {
 
     isReady,
 
-    documentId,
+    studioDocumentId: syncedStudioDocumentId,
+    sourceDocumentId: syncedSourceDocumentId,
 
     isSyncing,
 
@@ -224,21 +203,26 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     workroomId,
 
-    initialDocumentId,
+    initialStudioDocumentId: studioDocumentId,
+    initialSourceDocumentId: sourceDocumentId,
 
   })
 
-
-
   useEffect(() => {
-
-    if (onDocumentChange) {
-
-      onDocumentChange(documentId ?? null)
-
+    let cancelled = false
+    void fetchModelSettings(backendBaseUrl)
+      .then((settings) => {
+        if (cancelled) return
+        setMathInputEnabled(Boolean(settings.experimentalFeatures.mathInput.enabled))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setMathInputEnabled(false)
+      })
+    return () => {
+      cancelled = true
     }
-
-  }, [documentId, onDocumentChange])
+  }, [backendBaseUrl, modelSettingsRevision])
 
 
 
@@ -260,31 +244,56 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
   const [versionMap, setVersionMap] = useState<Record<number, QuestionVersionRecord[]>>({})
 
-  const snapshotDocRef = useRef<number | null>(null)
+  const snapshotDocRef = useRef<string | number | null>(null)
+
+  const localVersionMap = useMemo(() => {
+    const mapping: Record<number, QuestionVersionRecord[]> = {}
+    for (const item of items) {
+      const sequenceIndex = item.questionMeta?.sequenceIndex
+      if (typeof sequenceIndex !== 'number') continue
+      if (Array.isArray(item.versions) && item.versions.length > 0) {
+        mapping[sequenceIndex] = item.versions.slice(0, 4)
+      }
+    }
+    return mapping
+  }, [items])
 
 
 
   useEffect(() => {
+    setVersionMap((prev) => ({ ...prev, ...localVersionMap }))
+  }, [localVersionMap])
 
-    if (!documentId || !isReady) {
+  useEffect(() => {
+    const needsSnapshotHydration = items.some((item) => {
+      const sequenceIndex = item.questionMeta?.sequenceIndex
+      if (typeof sequenceIndex !== 'number') return false
+      const missingVersions = !Array.isArray(item.versions) || item.versions.length === 0
+      const missingQuestionId = typeof item.questionMeta?.questionId !== 'number'
+      return missingVersions || missingQuestionId
+    })
+
+    if (!syncedStudioDocumentId || !isReady || !needsSnapshotHydration) {
 
       snapshotDocRef.current = null
 
-      setVersionMap({})
+      if (!syncedStudioDocumentId || !isReady) {
+        setVersionMap(localVersionMap)
+      }
 
       return
 
     }
 
-    if (snapshotDocRef.current === documentId) {
+    if (snapshotDocRef.current === syncedStudioDocumentId) {
 
       return
 
     }
 
-    snapshotDocRef.current = documentId
+    snapshotDocRef.current = syncedStudioDocumentId
 
-    setVersionMap({})
+    setVersionMap(localVersionMap)
 
 
 
@@ -292,9 +301,15 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     ;(async () => {
 
-      const resp = await loadSnapshot(documentId)
+      const resp = await loadSnapshot(syncedStudioDocumentId)
 
       if (!resp || cancelled) return
+      const questionBySequence = new Map<number, AgentSnapshotResponse['questions'][number]>()
+      for (const question of resp.questions) {
+        if (typeof question.sequenceIndex === 'number') {
+          questionBySequence.set(question.sequenceIndex, question)
+        }
+      }
 
       const mapping: Record<number, QuestionVersionRecord[]> = {}
 
@@ -316,7 +331,28 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
       if (!cancelled) {
 
-        setVersionMap(mapping)
+        setVersionMap((prev) => ({ ...mapping, ...prev }))
+        for (const item of items) {
+          const sequenceIndex = item.questionMeta?.sequenceIndex
+          if (typeof sequenceIndex !== 'number') continue
+          const snapshotQuestion = questionBySequence.get(sequenceIndex)
+          if (!snapshotQuestion) continue
+          const snapshotQuestionId = typeof snapshotQuestion.id === 'number' ? snapshotQuestion.id : null
+          if (!snapshotQuestionId) continue
+          const currentQuestionId = item.questionMeta?.questionId
+          if (typeof currentQuestionId === 'number' && currentQuestionId === snapshotQuestionId) continue
+          onUpdateItem(item.id, (prev) => ({
+            ...prev,
+            questionMeta: {
+              questionId: snapshotQuestionId,
+              sequenceIndex: prev.questionMeta?.sequenceIndex ?? sequenceIndex,
+              groupId:
+                typeof prev.questionMeta?.groupId === 'number'
+                  ? prev.questionMeta.groupId
+                  : snapshotQuestion.groupId ?? prev.questionMeta?.sequenceIndex ?? sequenceIndex,
+            },
+          }))
+        }
 
       }
 
@@ -330,7 +366,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     }
 
-  }, [documentId, isReady, loadSnapshot])
+  }, [syncedStudioDocumentId, isReady, items, loadSnapshot, localVersionMap, onUpdateItem])
 
 
 
@@ -346,9 +382,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     }
 
-    return documentId ? t('editor_workspace.synced') : t('editor_workspace.not_synced')
+    return syncedStudioDocumentId ? t('editor_workspace.synced') : t('editor_workspace.not_synced')
 
-  }, [documentId, isSyncing, lastSavedAt])
+  }, [syncedStudioDocumentId, isSyncing, lastSavedAt, t])
 
 
 
@@ -541,8 +577,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
       }))
 
       syncDebounced({
-
-        documentId: documentId ?? undefined,
+        studioDocumentId: item.documentContext?.studioDocumentID ?? syncedStudioDocumentId ?? undefined,
+        sourceDocumentId:
+          item.documentContext?.sourceDocumentID ?? syncedSourceDocumentId ?? sourceDocumentId ?? undefined,
 
         sessionId: item.sessionId,
 
@@ -555,6 +592,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         content: nextValue,
 
         legendImages: item.legendImages ?? [],
+        canonicalAnswer: item.canonicalAnswer ?? null,
 
         title: documentTitle ?? item.fileName ?? '未命名试卷',
 
@@ -564,7 +602,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     },
 
-    [documentId, documentTitle, onUpdateItem, resolveSequenceIndex, syncDebounced],
+    [documentTitle, onUpdateItem, resolveSequenceIndex, sourceDocumentId, syncedSourceDocumentId, syncedStudioDocumentId, syncDebounced],
 
   )
 
@@ -609,8 +647,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         try {
 
           const resp = await syncImmediate({
-
-            documentId: documentId ?? undefined,
+            studioDocumentId: item.documentContext?.studioDocumentID ?? syncedStudioDocumentId ?? undefined,
+            sourceDocumentId:
+              item.documentContext?.sourceDocumentID ?? syncedSourceDocumentId ?? sourceDocumentId ?? undefined,
 
             sessionId: item.sessionId,
 
@@ -623,6 +662,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
             content: item.text,
 
             legendImages: item.legendImages ?? [],
+            canonicalAnswer: item.canonicalAnswer ?? null,
 
             title: documentTitle ?? item.fileName ?? '未命名试卷',
 
@@ -648,6 +688,12 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
             },
 
+            documentContext: {
+              studioDocumentID: String(resp.studio_document_id),
+              sourceDocumentID:
+                resp.source_document_id != null ? String(resp.source_document_id) : prev.documentContext?.sourceDocumentID ?? null,
+            },
+
           }))
 
         } catch {
@@ -668,7 +714,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     })()
 
-  }, [documentId, documentTitle, isReady, isSyncing, items, resolveSequenceIndex, syncImmediate, onUpdateItem])
+  }, [documentTitle, isReady, isSyncing, items, resolveSequenceIndex, sourceDocumentId, syncedSourceDocumentId, syncedStudioDocumentId, syncImmediate, onUpdateItem])
 
 
 
@@ -680,7 +726,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     // 如果还没有创建文档，则对当前所有题目做一次完整同步
 
-    if (!documentId) {
+    if (!syncedStudioDocumentId) {
 
       for (let index = 0; index < items.length; index += 1) {
 
@@ -689,8 +735,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         try {
 
           const resp = await syncImmediate({
-
-            documentId: documentId ?? undefined,
+            studioDocumentId: item.documentContext?.studioDocumentID ?? syncedStudioDocumentId ?? undefined,
+            sourceDocumentId:
+              item.documentContext?.sourceDocumentID ?? syncedSourceDocumentId ?? sourceDocumentId ?? undefined,
 
             sessionId: item.sessionId,
 
@@ -703,6 +750,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
             content: item.text,
 
             legendImages: item.legendImages ?? [],
+            canonicalAnswer: item.canonicalAnswer ?? null,
 
             title: documentTitle ?? item.fileName ?? '未命名试卷',
 
@@ -724,6 +772,12 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               groupId: prev.questionMeta?.groupId ?? resp.question.id,
 
+            },
+
+            documentContext: {
+              studioDocumentID: String(resp.studio_document_id),
+              sourceDocumentID:
+                resp.source_document_id != null ? String(resp.source_document_id) : prev.documentContext?.sourceDocumentID ?? null,
             },
 
           }))
@@ -750,21 +804,26 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     }
 
-  }, [documentId, documentTitle, flushPending, isSyncing, items, resolveSequenceIndex, syncImmediate, onUpdateItem])
+  }, [documentTitle, flushPending, isSyncing, items, resolveSequenceIndex, sourceDocumentId, syncedSourceDocumentId, syncedStudioDocumentId, syncImmediate, onUpdateItem])
 
 
 
   const handleAnswerChangeInternal = useCallback(
 
-    (item: AggregatedOcrItem, index: number, value: string) => {
-
+    (item: AggregatedOcrItem, index: number, value: MathContentDocument) => {
+      const promptText = mathContentToPromptText(value)
+      const previousAnswerText = item.answerText ?? mathContentToPromptText(item.answerContent)
+      if (promptText === previousAnswerText) {
+        return
+      }
       onAnswerChange?.(item.id, value)
 
       // 同步学生作答到后端题目快照，便于侧边栏 Agent 感知当前作答状态
 
       syncDebounced({
-
-        documentId: documentId ?? undefined,
+        studioDocumentId: item.documentContext?.studioDocumentID ?? syncedStudioDocumentId ?? undefined,
+        sourceDocumentId:
+          item.documentContext?.sourceDocumentID ?? syncedSourceDocumentId ?? sourceDocumentId ?? undefined,
 
         sessionId: item.sessionId,
 
@@ -777,10 +836,11 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         content: item.text,
 
         legendImages: item.legendImages ?? [],
+        canonicalAnswer: item.canonicalAnswer ?? null,
 
         title: documentTitle ?? item.fileName ?? '未命名试卷',
 
-        studentAnswer: value || null,
+        studentAnswer: promptText || null,
 
         sourceType: item.sourceType,
 
@@ -788,7 +848,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     },
 
-    [documentId, documentTitle, onAnswerChange, resolveSequenceIndex, syncDebounced],
+    [documentTitle, onAnswerChange, resolveSequenceIndex, sourceDocumentId, syncedSourceDocumentId, syncedStudioDocumentId, syncDebounced],
 
   )
 
@@ -892,7 +952,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
       </div>
 
-      {cards.map((card, cardIndex) => {
+      {cards.map((card) => {
 
         if (!card.items.length) return null
 
@@ -935,6 +995,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
             legendImages: item.legendImages ?? [],
 
             studentAnswer: item.answerText,
+            canonicalAnswer: item.canonicalAnswer ?? null,
 
             grading: item.grading
 
@@ -979,30 +1040,28 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         const versionAnswerKey = `${resolvedSequenceIndex}:${activeVersionIndex}`
 
         const renderedAnswerValue =
-
           answerMode && activeVersionIndex > 0
-
             ? versionAnswerMap[versionAnswerKey] ?? ''
-
-            : item.answerText ?? ''
-
-
+            : item.answerText ?? mathContentToPromptText(item.answerContent)
 
         const mcqSourceText = viewingContent
 
-
-
         const { matching, reading, mcq, fillBlank } = getParsedQuestion(mcqSourceText, answerMode)
 
-        const showChoices = Boolean(answerMode && !matching && !reading && mcq && mcq.options.length >= 2)
+        const renderedAnswerContent =
+          activeVersionIndex > 0
+            ? ensureMathContentDocument(renderedAnswerValue)
+            : fillBlank
+              ? ensureMathContentDocument(item.answerContent)
+              : ensureMathContentDocument(item.answerContent, item.answerText ?? '')
 
-        const selectedOption = showChoices ? renderedAnswerValue.trim().toUpperCase() : null
+        const showChoices = Boolean(answerMode && !matching && !reading && mcq && mcq.options.length >= 2)
 
         const isSplitting = splittingItemId === item.id
 
 
 
-        const handleVersionAnswerChange = (value: string) => {
+        const handleVersionAnswerChange = (value: MathContentDocument) => {
 
           if (activeVersionIndex === 0) {
 
@@ -1016,12 +1075,47 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               ...prev,
 
-              [key]: value,
+              [key]: mathContentToPromptText(value),
 
             }))
 
           }
 
+        }
+
+        const handleVersionFillBlankChange = (rawValue: string) => {
+          if (activeVersionIndex === 0 && rawValue === (item.answerText ?? '')) {
+            return
+          }
+          if (activeVersionIndex === 0) {
+            onUpdateItem(item.id, (prev) => ({
+              ...prev,
+              answerText: rawValue,
+              // 填空题 answerText 使用 JSON 字符串，answerContent 仅做同值镜像，避免回流缺省成空
+              answerContent: createPlainTextMathDocument(rawValue),
+            }))
+            syncDebounced({
+              studioDocumentId: item.documentContext?.studioDocumentID ?? syncedStudioDocumentId ?? undefined,
+              sourceDocumentId:
+                item.documentContext?.sourceDocumentID ?? syncedSourceDocumentId ?? sourceDocumentId ?? undefined,
+              sessionId: item.sessionId,
+              fileId: item.fileId,
+              sequenceIndex: resolveSequenceIndex(item, index),
+              page: item.page,
+              content: item.text,
+              legendImages: item.legendImages ?? [],
+              canonicalAnswer: item.canonicalAnswer ?? null,
+              title: documentTitle ?? item.fileName ?? '未命名试卷',
+              studentAnswer: rawValue || null,
+              sourceType: item.sourceType,
+            })
+            return
+          }
+          const key = `${resolvedSequenceIndex}:${activeVersionIndex}`
+          setVersionAnswerMap((prev) => ({
+            ...prev,
+            [key]: rawValue,
+          }))
         }
 
         const handleVersionChange = (nextIndex: number) => {
@@ -1144,7 +1238,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
           <div className="absolute left-[-24px] top-4 text-slate-300 group-hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
 
-            <span className="material-symbols-outlined">drag_indicator</span>
+            <Icon name={"drag_indicator"} />
 
           </div>
 
@@ -1157,21 +1251,15 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
                 <span className="text-slate-500 text-sm font-medium">{t('editor_workspace.question_label', { index: index + 1 })}</span>
 
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">
-
-                  <span className="material-symbols-outlined text-[14px]">description</span>
-
+                  <Icon name="description" className="text-[14px]" />
                   {t('editor_workspace.page_label', { page: item.page ?? '-' })}
-
                 </span>
 
                 {item.noteSource && (
 
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] border border-amber-200">
-
-                    <span className="material-symbols-outlined text-[14px]">stylus_note</span>
-
+                    <Icon name="stylus_note" className="text-[14px]" />
                     {item.noteSource.title ? `${t('editor_workspace.source_label')}${item.noteSource.title}` : `${t('editor_workspace.source_label')}${t('editor_workspace.source_note')}`}
-
                   </span>
 
                 )}
@@ -1304,7 +1392,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   >
 
-                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                    <Icon name={"delete"} className="text-[18px]" />
 
                   </button>
 
@@ -1330,11 +1418,11 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       {isSplitting ? (
 
-                        <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+                        <Icon name={"progress_activity"} className="text-[18px] animate-spin" />
 
                       ) : (
 
-                        <span className="material-symbols-outlined text-[18px]">splitscreen_add</span>
+                        <Icon name={"splitscreen_add"} className="text-[18px]" />
 
                       )}
 
@@ -1388,7 +1476,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   >
 
-                    <span className="material-symbols-outlined text-[18px]">chat_paste_go</span>
+                    <Icon name={"chat_paste_go"} className="text-[18px]" />
 
                   </button>
 
@@ -1406,7 +1494,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   >
 
-                    <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                    <Icon name={"content_copy"} className="text-[18px]" />
 
                   </button>
 
@@ -1420,7 +1508,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-2 py-1 inline-flex items-center gap-1">
 
-                <span className="material-symbols-outlined text-[14px]">history</span>
+                <Icon name={"history"} className="text-[14px]" />
 
                 {t('question_editor.viewing_history')}
 
@@ -1440,11 +1528,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               >
 
-                <span className="material-symbols-outlined text-[16px]">
-
-                  {statusMeta[item.grading.status].icon}
-
-                </span>
+                <Icon name={statusMeta[item.grading.status].icon} className="text-[16px]" />
 
                 {statusMeta[item.grading.status].label}
 
@@ -1484,11 +1568,17 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   value={renderedAnswerValue}
 
-                  onChange={handleVersionAnswerChange}
+                  onChange={handleVersionFillBlankChange}
 
                   disabled={isSplitting}
 
                   legendImages={viewingLegendImages}
+
+                  mathInputEnabled={mathInputEnabled}
+
+                  backendBaseUrl={backendBaseUrl}
+
+                  userId={user.id}
 
                 />
 
@@ -1548,7 +1638,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   value={renderedAnswerValue}
 
-                  onChange={handleVersionAnswerChange}
+                  onChange={(value) => handleVersionAnswerChange(ensureMathContentDocument(value))}
 
                   disabled={isSplitting}
 
@@ -1562,7 +1652,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   value={renderedAnswerValue}
 
-                  onChange={handleVersionAnswerChange}
+                  onChange={(value) => handleVersionAnswerChange(ensureMathContentDocument(value))}
 
                   legendImages={viewingLegendImages}
 
@@ -1582,7 +1672,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                   value={renderedAnswerValue}
 
-                  onChange={handleVersionAnswerChange}
+                  onChange={(value) => handleVersionAnswerChange(ensureMathContentDocument(value))}
 
                   disabled={isSplitting}
 
@@ -1599,20 +1689,24 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
                   我的答案
 
                   <textarea
-
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
-
-                    placeholder="请输入你的答案或解题过程"
-
-                    value={renderedAnswerValue}
-
-                    onChange={(e) => handleVersionAnswerChange(e.target.value)}
-
+                    className="sr-only"
+                    value={mathContentToPromptText(renderedAnswerContent)}
+                    onChange={(e) => handleVersionAnswerChange(ensureMathContentDocument(e.target.value))}
                     disabled={isSplitting}
-
-                    rows={renderedAnswerValue && renderedAnswerValue.length > 60 ? 4 : 2}
-
+                    aria-label="我的答案"
                   />
+
+                  <div className="mt-1 rounded-lg border border-slate-200 bg-white p-2">
+                    <RichMathComposer
+                      value={renderedAnswerContent}
+                      onChange={handleVersionAnswerChange}
+                      disabled={isSplitting}
+                      placeholder="输入答案，可直接写数理化表达，系统会原位自动转写"
+                      mathInputEnabled={mathInputEnabled}
+                      backendBaseUrl={backendBaseUrl}
+                      userId={user.id}
+                    />
+                  </div>
 
                 </label>
 
@@ -1657,6 +1751,8 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
     prev.items.every((item, idx) => {
 
       const nextItem = next.items[idx]
+      const prevQuestionId = item.questionMeta?.questionId
+      const nextQuestionId = nextItem?.questionMeta?.questionId
 
       return (
 
@@ -1665,6 +1761,8 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         item.text === nextItem?.text &&
 
         item.answerText === nextItem?.answerText &&
+
+        prevQuestionId === nextQuestionId &&
 
         item.activeVersionIndex === nextItem?.activeVersionIndex &&
 

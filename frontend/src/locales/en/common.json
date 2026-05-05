@@ -49,6 +49,7 @@
     },
     "buttons": {
       "export": "Export",
+      "ai_model_settings": "Settings",
       "logout": "Sign out",
       "login": "Sign in",
       "register": "Register & sign in"
@@ -81,9 +82,13 @@
       "loading": "Processing…"
     },
     "footnote": "Account binding for WeChat / Google is reserved; currently email+password only.",
-    "error": {
-      "generic": "Login or registration failed, please check your credentials"
-    },
+      "error": {
+        "generic": "Login or registration failed, please check your credentials",
+        "invalid_credentials": "This email is not registered yet, or the password is incorrect. If this is your first time, switch to Sign up.",
+        "email_registered": "This email is already registered. Please sign in instead.",
+        "register_disabled": "Registration is disabled in local development. Please use an existing cloud account.",
+        "account_disabled": "This account is currently disabled."
+      },
     "validation": {
       "email_required": "Email is required",
       "email_too_long": "Email must not exceed 254 characters",
@@ -169,7 +174,10 @@
     },
     "collapsed": {
       "expand": "Expand preview pane",
-      "favorites": "My favorites"
+      "collapse": "Collapse preview pane",
+      "workroom_files": "Workroom files",
+      "favorites": "My favorites",
+      "workspace": "Back to Workspace"
     }
   },
   "selection": {
@@ -233,6 +241,242 @@
     "loading_word": "Translating word",
     "loading_sentence": "Translating sentence"
   },
+  "settings_modal": {
+    "title": "Settings",
+    "subtitle": "Manage general, account, and AI settings from one place.",
+    "unsaved_confirm": "You have unsaved changes. Close anyway?",
+    "loading": "Loading settings...",
+    "save_success": "Settings saved",
+    "footer_hint": "Save your changes to apply the latest bindings.",
+    "unconfigured": "Unconfigured",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "sections": {
+      "provider_accounts": "Provider accounts",
+      "provider_accounts_desc": "Set up the credentials you own on different model platforms first.",
+      "capability_binding": "Capability binding",
+      "capability_binding_desc": "Each AI capability picks its account and model from the provider account pool above."
+    },
+    "nav": {
+      "general": "General",
+      "account": "Account",
+      "ai": "AI Settings",
+      "open_source_license": "Open Source Notice"
+    },
+    "menu": {
+      "settings_center": "Settings Center",
+      "profile": "Profile",
+      "security": "Security",
+      "api_key": "Credentials",
+      "custom_model": "Custom Model",
+      "experimental_features": "Experimental",
+      "usage": "Usage",
+      "language": "Language",
+      "billing": "Billing",
+      "appearance": "Appearance",
+      "open_source_license": "Open Source Notice"
+    },
+    "menu_group": {
+      "settings": "Settings",
+      "model_service": "Model & Service",
+      "preference": "Preferences",
+      "security_privacy": "Security & Privacy",
+      "developer": "Developer"
+    },
+    "provider_runtime": {
+      "test_connection": "Test Connection",
+      "testing_connection": "Testing…",
+      "sync_models": "Sync Model Catalog",
+      "syncing_models": "Syncing…",
+      "last_sync": "Last Sync",
+      "connection_success": "Connection successful ({{latency}}ms)",
+      "connection_failed": "Connection failed: {{error}}",
+      "sync_success": "Model catalog synced: {{count}} models"
+    },
+    "time_ago": {
+      "seconds": "{{value}}s ago",
+      "minutes": "{{value}}m ago",
+      "hours": "{{value}}h ago",
+      "days": "{{value}}d ago"
+    },
+    "summary": {
+      "account": "Account",
+      "model": "Model"
+    },
+    "general": {
+      "hero_title": "General preferences",
+      "hero_desc": "Manage the basic display preferences used across the product.",
+      "language_title": "Language",
+      "language_desc": "Switch the display language used across the product."
+    },
+    "account": {
+      "hero_title": "Account",
+      "hero_desc": "Review the current signed-in account and manage session actions.",
+      "user_id": "User ID",
+      "tenant_id": "Tenant ID",
+      "security_title": "Account actions",
+      "security_desc": "You can sign out from the current device here.",
+      "session_title": "Current status",
+      "session_value": "Signed in"
+    },
+    "ai_summary": {
+      "hero_title": "Configure platform credentials first, then bind each capability to an account and model.",
+      "hero_desc": "Agent, splitting, grading, and OCR all share the same account pool, while each capability can still choose a different provider account and model.",
+      "provider_accounts": "Provider accounts",
+      "provider_accounts_desc": "Configured platform credentials",
+      "enabled_capabilities": "Bound capabilities",
+      "enabled_capabilities_desc": "AI capabilities that already have an account and model"
+    },
+    "experimental": {
+      "hero_desc": "Explore preview-stage features. Enabling them may affect stability.",
+      "hero_warning": "Experimental features may change or be removed in future versions.",
+      "math_input_title": "Math / Physics / Chemistry Input",
+      "math_input_desc": "Control whether the experimental model-powered scientific input flow is available in the product.",
+      "math_input_hint": "When enabled, input boxes can translate nearby scientific natural-language fragments into renderable LaTeX."
+    },
+    "appearance": {
+      "desc": "Set editor save behavior.",
+      "manual": "Manual Save",
+      "auto_delay": "Delayed Auto Save"
+    },
+    "provider": {
+      "connected_platforms": "Connected Platforms",
+      "security_local_only": "Credentials are stored locally and used only on this device.",
+      "last_sync": "Last sync",
+      "last_test": "Last test",
+      "hide_model_catalog": "Hide model catalog",
+      "show_model_catalog": "View model catalog",
+      "model_catalog": "Model Catalog",
+      "catalog_source": "Source",
+      "catalog_source_synced": "Realtime sync",
+      "catalog_source_official": "Official catalog",
+      "visible_models": "Visible models",
+      "items_suffix": "items",
+      "adapter_mode": "Adapter",
+      "adapter_official": "Official adapter",
+      "synced": "Synced",
+      "not_synced": "Not synced",
+      "empty_model_catalog": "No models yet. Click Sync Model Catalog.",
+      "security_notes_title": "Connection & Security Notes",
+      "security_note_1": "Keys are not uploaded to external account centers.",
+      "security_note_2": "Prefer local provider configuration first.",
+      "security_note_3": "General field changes apply after Save settings.",
+      "error_save_before_test": "Save this account before testing connection.",
+      "error_test_failed": "Connection test failed",
+      "error_save_before_sync": "Save this account before syncing model catalog.",
+      "error_sync_failed": "Model catalog sync failed"
+    },
+    "capability_group": {
+      "question": "Question Processing",
+      "learning": "Learning Generation",
+      "translation": "Translation",
+      "ocr": "OCR & Parsing"
+    },
+    "capability_label": {
+      "question_split": "Question Splitting",
+      "question_grading": "Smart Grading",
+      "flashcard_generation": "Flashcard Generation",
+      "flashcard_long_outline": "Long Flashcard Outline",
+      "mindmap_outline_generation": "Mindmap Outline",
+      "mindmap_generation": "Mindmap Generation",
+      "translation_math": "Math Translation",
+      "translation_word": "Word Translation",
+      "translation_sentence": "Sentence Translation",
+      "studio_selection_ocr": "Selection OCR",
+      "document_layout_ocr": "Full OCR / Layout"
+    },
+    "custom_model": {
+      "desc": "Bind account and model per capability. Agent supports multi-platform fallback.",
+      "catalog_hint": "Model availability depends on local models catalog and configured accounts.",
+      "col_capability": "Capability",
+      "col_account": "Account",
+      "col_model": "Model",
+      "col_action": "Action",
+      "agent_config_title": "Agent Config",
+      "agent_config_desc": "Agent can fallback by priority across account/model bindings.",
+      "col_priority": "Priority",
+      "add_model": "+ Add Model",
+      "auto_fallback": "Auto fallback to next model on failure",
+      "final_order": "Effective order:"
+    },
+    "fields": {
+      "provider": "Provider",
+      "api_key": "API key",
+      "base_url": "Service URL / Base URL",
+      "account": "Choose account",
+      "model_id": "Model ID",
+      "operation_type": "Operation type",
+      "status": "Status",
+      "base_url_override": "Override URL (advanced)",
+      "notes": "Notes"
+    },
+    "placeholders": {
+      "api_key": "Enter the API key for this account",
+      "keep_existing_key": "Leaving this blank keeps the currently saved key",
+      "base_url": "For example: https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "base_url_override": "Only fill this when a capability needs a dedicated endpoint",
+      "model_id": "For example: qwen-max / glm-4.5 / glm-ocr",
+      "notes": "Optional note on why this capability uses this account or model"
+    },
+    "api_key_state": {
+      "saved": "A key is already saved: {{masked}}. It stays unchanged unless you enter a new one.",
+      "will_override": "New key detected. Saving settings will replace the currently saved key.",
+      "missing": "No key is saved yet. Enter one before saving, otherwise this account cannot be used."
+    },
+    "operation": {
+      "chat_completion": "Chat / JSON generation",
+      "ocr_layout": "OCR / Layout parsing"
+    },
+    "actions": {
+      "save": "Save settings",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "add_account": "Add account",
+      "edit": "Edit",
+      "editing": "Editing",
+      "edit_binding": "Edit binding",
+      "apply_binding": "Apply binding",
+      "complete": "Done",
+      "show_api_key": "Show password",
+      "hide_api_key": "Hide password"
+    },
+    "provider_detail_title": "Account details",
+    "provider_complete_hint": "Click Done when finished, then use Save settings in the footer.",
+    "provider_status": {
+      "editing": "Editing",
+      "completed": "Done",
+      "pending": "To fill"
+    },
+    "connected": "Configured",
+    "disconnected": "Not configured",
+    "select_capability_hint": "Choose a capability from the left, then assign an account and model to it.",
+    "empty_provider_pool": "No provider account yet. Add one first.",
+    "placeholder": {
+      "title": "Development in Progress",
+      "desc": "This section is not configurable yet"
+    },
+    "license": {
+      "hero_title": "Open source notice",
+      "hero_desc": "This product uses several third-party open source projects. The items below cover the main points.",
+      "list_title": "Third-party software list",
+      "view_license": "View License",
+      "full_notice_title": "Full License Text",
+      "full_notice_action": "View Full License",
+      "note_1": "Full license texts are available in the install directory or repository.",
+      "note_2": "Third-party model services follow each platform's own terms.",
+      "col_project": "Project",
+      "col_license": "License",
+      "col_action": "Action",
+      "item_opencode_name": "OpenCode",
+      "item_dompurify_name": "DOMPurify",
+      "item_pdfjs_name": "pdfjs-dist",
+      "item_tiptap_name": "Tiptap",
+      "item_react_name": "React / React DOM",
+      "item_typescript_name": "TypeScript",
+      "full_notice_desc": "For the complete list and license texts, refer to the accompanying third-party software notice."
+    }
+  },
   "favorites": {
     "title": "Saved questions",
     "subtitle": "Manage your curated questions. Review, organize, or export them as papers.",
@@ -243,7 +487,6 @@
     "empty_desc": "Start bookmarking the questions you like.",
     "empty_desc_search": "No matching question found",
     "back": "Back to editor",
-    "quota_label": "Storage usage",
     "page_label": "Page {{page}}",
     "sequence_label": "Question #{{index}}",
     "toolbar": {
@@ -255,6 +498,11 @@
     },
     "toast": {
       "load_failed": "Failed to load favorites",
+      "added": "Added to favorites",
+      "add_failed": "Failed to add favorite",
+      "local_limit_exceeded": "Local favorites limit reached (10,000). Please export to JSON and clean up before adding more.",
+      "already_added": "This question is already favorited",
+      "operation_failed": "Operation failed",
       "removed": "Favorite removed",
       "remove_failed": "Failed to remove favorite"
     }
@@ -290,6 +538,46 @@
       "operation_failed": "Operation failed"
     }
   },
+  "workspace_page": {
+    "header": {
+      "title": "Workspace",
+      "search_placeholder": "Search folders, topics, or workspaces..."
+    },
+    "knowledge_base": {
+      "title": "Knowledge Base",
+      "subtitle": "Organized by creation timeline."
+    },
+    "actions": {
+      "new_workspace": "New Workspace",
+      "delete_workspace": "Delete workspace"
+    },
+    "timeline": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "earlier": "Earlier"
+    },
+    "empty": {
+      "title": "No workspace yet",
+      "description": "Create your first topic workspace, then enter its workroom to upload documents and start learning.",
+      "create_button": "Create Workspace"
+    },
+    "workspace": {
+      "open_hint": "Open workroom to continue"
+    },
+    "saved_questions": {
+      "title": "Saved Questions",
+      "workspace_badge": "workspace",
+      "topic_badge": "Topic",
+      "default_topic": "Enter this workspace to open its workroom, upload documents, and continue building question documents, flashcards, mindmaps, and notes.",
+      "workspace_id": "Workspace #{{id}}"
+    },
+    "delete_modal": {
+      "title": "Confirm permanent deletion",
+      "description": "This will permanently delete \"{{name}}\" and all bound data. This action cannot be undone. Continue?",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    }
+  },
   "export": {
     "title": "Export Settings",
     "subtitle": "Select an export template to begin",
@@ -311,6 +599,10 @@
     "text_button": "Text",
     "flashcard_button": "Flashcard",
     "mindmap_button": "Mind Map",
+    "toolbar": {
+      "mode_follow_preview": "Follow preview document",
+      "mode_keep_workset": "Keep current workspace set"
+    },
     "answer_mode_button": "Answer Mode",
     "copilot_button": "Ordis Chat",
     "workspace_title": "Content Workspace",
@@ -358,7 +650,23 @@
   },
   "file_tabs": {
     "close_label": "Close tab",
-    "collapse_label": "Collapse"
+    "collapse_label": "Collapse",
+    "toggle_preview": "Show preview",
+    "toggle_workroom_files": "Show Workroom files"
+  },
+  "workroom_tree": {
+    "title": "Workroom files",
+    "toggle_preview": "Show preview",
+    "untitled": "Untitled learning space",
+    "loading": "Loading Workroom files...",
+    "load_timeout": "Loading timed out. Please retry (first load can be slow with many files).",
+    "empty": "This Workroom is empty"
+  },
+  "favorite_button": {
+    "aria": {
+      "add": "Add to favorites",
+      "remove": "Remove from favorites"
+    }
   },
   "mindmap": {
     "generating": "Generating...",

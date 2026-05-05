@@ -1,0 +1,76 @@
+import { describe, test, expect } from "bun:test"
+import { Effect, Layer, ManagedRuntime, Schema } from "effect"
+import { Agent } from "../../src/agent/agent"
+import { Tool } from "../../src/tool"
+import { Truncate } from "../../src/tool"
+
+const runtime = ManagedRuntime.make(Layer.mergeAll(Truncate.defaultLayer, Agent.defaultLayer))
+
+const params = Schema.Struct({ input: Schema.String })
+
+function makeTool(id: string, executeFn?: () => void) {
+  return {
+    description: "test tool",
+    parameters: params,
+    execute() {
+      executeFn?.()
+      return Effect.succeed({ title: "test", output: "ok", metadata: {} })
+    },
+  }
+}
+
+describe("Tool.define", () => {
+  test("object-defined tool does not mutate the original init object", async () => {
+    const original = makeTool("test")
+    const originalExecute = original.execute
+
+    const info = await runtime.runPromise(Tool.define("test-tool", Effect.succeed(original)))
+
+    await Effect.runPromise(info.init())
+    await Effect.runPromise(info.init())
+    await Effect.runPromise(info.init())
+
+    expect(original.execute).toBe(originalExecute)
+  })
+
+  test("effect-defined tool returns fresh objects and is unaffected", async () => {
+    const info = await runtime.runPromise(
+      Tool.define(
+        "test-fn-tool",
+        Effect.succeed(() => Effect.succeed(makeTool("test"))),
+      ),
+    )
+
+    const first = await Effect.runPromise(info.init())
+    const second = await Effect.runPromise(info.init())
+
+    expect(first).not.toBe(second)
+  })
+
+  test("object-defined tool returns distinct objects per init() call", async () => {
+    const info = await runtime.runPromise(Tool.define("test-copy", Effect.succeed(makeTool("test"))))
+
+    const first = await Effect.runPromise(info.init())
+    const second = await Effect.runPromise(info.init())
+
+    expect(first).not.toBe(second)
+  })
+})
+
+describe("Tool.define schema compatibility", () => {
+  test("throws explicit error when parameters are not Effect Schema decoders", async () => {
+    const bad = {
+      description: "bad",
+      // Intentionally incompatible shape to simulate runtime drift.
+      parameters: { type: "object" } as any,
+      execute() {
+        return Effect.succeed({ title: "bad", output: "bad", metadata: {} })
+      },
+    }
+
+    const info = await runtime.runPromise(Tool.define("bad-tool", Effect.succeed(bad)))
+    await expect(Effect.runPromise(info.init())).rejects.toThrow(
+      'Tool "bad-tool" has incompatible parameters schema. Runtime only supports Effect Schema decoders',
+    )
+  })
+})

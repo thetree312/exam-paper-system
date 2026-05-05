@@ -4,6 +4,8 @@ import type { FavoriteConfig } from '../types'
 import { getQuestionTypes, createQuestionType } from '../services/questionTypesApi'
 import { getSubjects, createSubject } from '../services/subjectsApi'
 import { getTags, createTag } from '../services/tagsApi'
+import Icon from './Icon'
+
 
 interface FavoriteConfigDialogProps {
   open: boolean
@@ -116,9 +118,7 @@ const SelectWithCustomEntry: React.FC<SelectWithCustomEntryProps> = ({
         <span className="text-gray-900">
           {value || placeholder}
         </span>
-        <span className="material-symbols-outlined text-[18px] text-gray-400">
-          {isOpen ? 'expand_less' : 'expand_more'}
-        </span>
+        <Icon name={isOpen ? 'expand_less' : 'expand_more'} className="text-[18px] text-gray-400" />
       </button>
 
       {/* 下拉列表 */}

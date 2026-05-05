@@ -1,220 +1,181 @@
 import type {
-  FlashcardItem,
-  FlashcardGenerateResult,
-  FlashcardReviewResult,
-  FlashcardMasteryStats,
   FlashcardAgentEscalateResult,
+  FlashcardGenerateResult,
+  FlashcardItem,
+  FlashcardMasteryStats,
+  FlashcardReviewResult,
 } from '../types'
+import { apiJson, withJsonBody } from '../lib/api'
 
-// ── Server DTO → Client 映射 ────────────────────────
-
-interface ServerFlashcardCard {
-  card_id: number
-  tenant_id: number
-  document_id: number
-  question_id: number | null
-  chunk_id: string | null
-  concept_tag: string
-  cue: string
-  answer: string
-  confidence: number | null
-  source_ref: Record<string, unknown> | null
-  legend_images: string[] | null
-  mastery_state: string
-  bucket: number | null
-  next_review_at: string | null
-  last_score: number | null
-  review_count: number
-}
-
-interface ServerListResponse {
-  items: ServerFlashcardCard[]
-}
-
-interface ServerGenerateResponse {
-  job_id: number
-  status: string
-  mode: string
-  card_count: number
-}
-
-interface ServerReviewResponse {
-  review_id: number
-  card_id: number
-  score: number
-  bucket: number | null
-  interval_days: number
-  next_review_at: string | null
-}
-
-interface ServerStatsResponse {
-  total: number
-  never_reviewed: number
-  mastered: number
-  reviewing: number
-  struggling: number
-  due_today: number
-}
-
-interface ServerEscalateResponse {
-  escalated: boolean
-  card_id: number
-  concept_tag: string
-  message: string
-}
-
-function normalizeCard(s: ServerFlashcardCard): FlashcardItem {
-  return {
-    cardId: s.card_id,
-    tenantId: s.tenant_id,
-    documentId: s.document_id,
-    questionId: s.question_id,
-    chunkId: s.chunk_id,
-    conceptTag: s.concept_tag,
-    cue: s.cue,
-    answer: s.answer,
-    confidence: s.confidence,
-    sourceRef: s.source_ref,
-    legendImages: s.legend_images,
-    masteryState: (s.mastery_state as FlashcardItem['masteryState']) || 'new',
-    bucket: s.bucket,
-    nextReviewAt: s.next_review_at,
-    lastScore: s.last_score,
-    reviewCount: s.review_count,
+type LearningArtifactRecord = {
+  id: string
+  linkage: {
+    documentIDs: string[]
+  }
+  payload: {
+    title: string
+    front: string
+    back: string
+    hint?: string
+    masteryState: FlashcardItem['masteryState']
+    bucket: number | null
+    lastScore: number | null
+    nextReviewAt: string | null
+    reviewCount: number
+    conceptTag?: string
+    confidence?: number | null
+    sourceRef?: {
+      questionID?: string
+      sequenceIndex?: number
+      page?: number | null
+      documentID: string
+    }
   }
 }
 
-function buildQuery(params: Record<string, string | number | boolean | undefined | null>): string {
-  const search = new URLSearchParams()
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null) return
-    search.set(key, String(value))
-  })
-  const query = search.toString()
-  return query ? `?${query}` : ''
+function normalizeCard(item: LearningArtifactRecord): FlashcardItem {
+  return {
+    cardId: item.id,
+    documentId: item.linkage.documentIDs[0] ?? item.payload.sourceRef?.documentID ?? null,
+    questionId: item.payload.sourceRef?.questionID ?? null,
+    sequenceIndex: item.payload.sourceRef?.sequenceIndex ?? null,
+    page: item.payload.sourceRef?.page ?? null,
+    conceptTag: item.payload.conceptTag ?? item.payload.title,
+    cue: item.payload.front,
+    answer: item.payload.back,
+    confidence: item.payload.confidence ?? null,
+    masteryState: item.payload.masteryState,
+    bucket: item.payload.bucket,
+    nextReviewAt: item.payload.nextReviewAt,
+    lastScore: item.payload.lastScore,
+    reviewCount: item.payload.reviewCount,
+    sourceRef: item.payload.sourceRef ?? null,
+  }
 }
 
-// ── API 方法 ─────────────────────────────────────────
-
 export async function generateFlashcards(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  documentId: number,
+  baseUrl: string,
+  workroomID: string,
+  documentID: string,
   maxCards = 40,
   force = false,
 ): Promise<FlashcardGenerateResult> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/generate${query}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ document_id: documentId, max_cards: maxCards, force }),
-  })
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerGenerateResponse
+  const data = await apiJson<{ mode: 'cached' | 'generated'; generatedCount: number }>(
+    `${baseUrl}/api/learning-artifacts/flashcards/generate`,
+    {
+      method: 'POST',
+      ...withJsonBody({
+        workroomID,
+        documentID,
+        maxCards,
+        force,
+      }),
+    },
+  )
+
   return {
-    jobId: data.job_id,
-    status: data.status,
     mode: data.mode,
-    cardCount: data.card_count,
+    cardCount: data.generatedCount,
   }
 }
 
 export async function listFlashcards(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  documentId: number,
-  conceptTag?: string,
+  baseUrl: string,
+  workroomID: string,
+  documentID: string,
 ): Promise<FlashcardItem[]> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId, concept_tag: conceptTag })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/list/${documentId}${query}`)
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerListResponse
-  return data.items.map(normalizeCard)
+  const data = await apiJson<{ items: LearningArtifactRecord[] }>(
+    `${baseUrl}/api/learning-artifacts?workroom_id=${encodeURIComponent(workroomID)}&type=flashcard`,
+    {
+      method: 'GET',
+    },
+  )
+  return (data.items ?? [])
+    .filter((item) => item.linkage.documentIDs.includes(documentID))
+    .map(normalizeCard)
 }
 
 export async function getDueFlashcards(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  documentId?: number,
+  baseUrl: string,
+  workroomID: string,
+  documentID?: string,
   limit = 50,
 ): Promise<FlashcardItem[]> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId, document_id: documentId, limit })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/due${query}`)
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerListResponse
-  return data.items.map(normalizeCard)
+  const search = new URLSearchParams({
+    workroom_id: workroomID,
+    limit: String(limit),
+  })
+  if (documentID) {
+    search.set('document_id', documentID)
+  }
+  const data = await apiJson<{ items: LearningArtifactRecord[] }>(
+    `${baseUrl}/api/learning-artifacts/flashcards/due?${search.toString()}`,
+    {
+      method: 'GET',
+    },
+  )
+  return (data.items ?? []).map(normalizeCard)
 }
 
 export async function submitReview(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  cardId: number,
+  baseUrl: string,
+  workroomID: string,
+  artifactID: string,
   score: number,
-  memo?: string,
 ): Promise<FlashcardReviewResult> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/review${query}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ card_id: cardId, score, memo }),
-  })
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerReviewResponse
+  const data = await apiJson<LearningArtifactRecord>(
+    `${baseUrl}/api/learning-artifacts/${artifactID}/review`,
+    {
+      method: 'POST',
+      ...withJsonBody({
+        workroomID,
+        score,
+      }),
+    },
+  )
   return {
-    reviewId: data.review_id,
-    cardId: data.card_id,
-    score: data.score,
-    bucket: data.bucket,
-    intervalDays: data.interval_days,
-    nextReviewAt: data.next_review_at,
+    artifactID: data.id,
+    score,
+    bucket: data.payload.bucket,
+    nextReviewAt: data.payload.nextReviewAt,
   }
 }
 
 export async function getMasteryStats(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  documentId: number,
+  baseUrl: string,
+  workroomID: string,
+  documentID?: string,
 ): Promise<FlashcardMasteryStats> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/stats/${documentId}${query}`)
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerStatsResponse
-  return {
-    total: data.total,
-    neverReviewed: data.never_reviewed,
-    mastered: data.mastered,
-    reviewing: data.reviewing,
-    struggling: data.struggling,
-    dueToday: data.due_today,
+  const search = new URLSearchParams({
+    workroom_id: workroomID,
+  })
+  if (documentID) {
+    search.set('document_id', documentID)
   }
+  return apiJson<FlashcardMasteryStats>(
+    `${baseUrl}/api/learning-artifacts/flashcards/stats?${search.toString()}`,
+    {
+      method: 'GET',
+    },
+  )
 }
 
 export async function agentEscalate(
-  backendBaseUrl: string,
-  tenantId: number,
-  userId: number,
-  cardId: number,
+  baseUrl: string,
+  workroomID: string,
+  artifactID: string,
   userNote?: string,
 ): Promise<FlashcardAgentEscalateResult> {
-  const query = buildQuery({ tenant_id: tenantId, user_id: userId })
-  const resp = await fetch(`${backendBaseUrl}/api/flashcards/agent-escalate${query}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ card_id: cardId, user_note: userNote }),
-  })
-  if (!resp.ok) throw new Error(await resp.text())
-  const data = (await resp.json()) as ServerEscalateResponse
-  return {
-    escalated: data.escalated,
-    cardId: data.card_id,
-    conceptTag: data.concept_tag,
-    message: data.message,
-  }
+  return apiJson<FlashcardAgentEscalateResult>(
+    `${baseUrl}/api/learning-artifacts/flashcards/${artifactID}/agent-escalate`,
+    {
+      method: 'POST',
+      ...withJsonBody({
+        workroomID,
+        userNote,
+      }),
+    },
+  )
 }
 
 export const FlashcardApi = {
