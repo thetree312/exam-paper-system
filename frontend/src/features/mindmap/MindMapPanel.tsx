@@ -732,35 +732,15 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
 
   if (!user || !workroomId || (!documentId && !fileId)) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-slate-500">
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-[var(--ui-text-primary)]">
         <p>{!user ? t('mindmap.login_required') : !workroomId ? 'Workroom context required' : t('mindmap.no_source')}</p>
       </div>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-transparent">
-      <div className="flex shrink-0 flex-col gap-1 px-2 py-2 sm:px-3 sm:py-2">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 sm:text-[11px]">Mindmap Workspace</p>
-          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-            <h2 className="truncate text-base font-semibold leading-none text-slate-900 sm:text-lg">{t('mindmap_panel.title')}</h2>
-            {document && (
-              <span className="shrink-0 pb-0.5 text-[11px] font-semibold text-emerald-600 sm:text-xs">
-                {'v' +
-                  document.version +
-                  ' | ' +
-                  document.meta.generatedBy +
-                  ' | ' +
-                  (mindmapMode === 'knowledge_structure'
-                    ? t('mindmap_toolbar.mode_knowledge_short')
-                    : t('mindmap_toolbar.mode_exam_short'))}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white/88 shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:border sm:border-slate-200">
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-[var(--ui-bg-app)]">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--ui-bg-panel)] shadow-none sm:border sm:border-[var(--ui-border-default)]">
         <MindMapToolbar
           mode={mode}
           onModeChange={setMode}
@@ -795,7 +775,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
           }}
         />
         {actionHint && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--ui-text-primary)] shadow-none backdrop-blur">
             {actionHint}
           </div>
         )}
@@ -817,7 +797,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
           </div>
         )}
         {!document && !isLoading && !error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-4 text-center text-slate-500">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-4 text-center text-[var(--ui-text-primary)]">
             <p className="text-sm">
               {mode === 'document'
                 ? canUseDocument
@@ -829,7 +809,7 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
             </p>
             <button
               type="button"
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg hover:bg-slate-800"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-none hover:bg-slate-800"
               onClick={() => void generateDocument(true)}
               disabled={!canGenerateCurrent}
             >
@@ -864,35 +844,35 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
         )}
         {document && !isLoading && !isCoarsePointer && hoveredNode && hoveredNodeData?.summary && (
           <div
-            className="pointer-events-none absolute z-20 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full rounded-2xl border border-slate-200 bg-white/97 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.14)] backdrop-blur"
+            className="pointer-events-none absolute z-20 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-full rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-3 shadow-none backdrop-blur"
             style={{
               left: hoveredNode.x,
               top: hoveredNode.y - 14,
             }}
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ui-text-primary)]">
               {t('mindmap_node_editor.description_label', { remaining: Math.max(0, 240 - hoveredNodeData.summary.length) })}
             </p>
-            <h3 className="mt-1 text-sm font-semibold text-slate-900">{hoveredNodeData.topic}</h3>
-            <p className="mt-2 text-xs leading-6 text-slate-600">{hoveredNodeData.summary}</p>
+            <h3 className="mt-1 text-sm font-semibold text-[var(--ui-text-primary)]">{hoveredNodeData.topic}</h3>
+            <p className="mt-2 text-xs leading-6 text-[var(--ui-text-primary)]">{hoveredNodeData.summary}</p>
           </div>
         )}
         {document && !isLoading && isCoarsePointer && selectedNode && (selectedNode.summary || selectedNode.questionRefs.length > 0) && (
           <div
-            className="pointer-events-none absolute left-4 z-20 max-w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-slate-200 bg-white/96 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur sm:left-5 lg:left-6"
+            className="pointer-events-none absolute left-4 z-20 max-w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-4 shadow-none backdrop-blur sm:left-5 lg:left-6"
             style={{
               bottom: showTouchContextActions ? '8.75rem' : '1rem',
             }}
           >
             <div className="space-y-2">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-text-primary)]">
                   {t('mindmap_node_editor.title')}
                 </p>
-                <h3 className="mt-1 text-sm font-semibold text-slate-900 sm:text-base">{selectedNode.topic}</h3>
+                <h3 className="mt-1 text-sm font-semibold text-[var(--ui-text-primary)] sm:text-base">{selectedNode.topic}</h3>
               </div>
               {selectedNode.summary && (
-                <p className="text-xs leading-6 text-slate-600 sm:text-[13px]">{selectedNode.summary}</p>
+                <p className="text-xs leading-6 text-[var(--ui-text-primary)] sm:text-[13px]">{selectedNode.summary}</p>
               )}
               {selectedNode.questionRefs.length > 0 && (
                 <p className="text-[11px] font-medium text-emerald-600 sm:text-xs">
@@ -998,4 +978,6 @@ export const MindMapPanel: React.FC<MindMapPanelProps> = ({
     </div>
   )
 }
+
+
 

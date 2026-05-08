@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   copyWorkroomPath,
@@ -154,7 +154,7 @@ const TreeNode: React.FC<{
         role="button"
         tabIndex={0}
         data-workroom-tree-path={node.path}
-        className={`group relative flex min-w-0 w-full items-center text-left text-[13px] text-slate-700 outline-none ${highlightedPath === node.path ? 'bg-blue-50/80' : ''}`}
+        className={`group relative flex min-w-0 w-full items-center text-left text-[13px] text-[var(--ui-text-primary)] outline-none ${highlightedPath === node.path ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
         onContextMenu={(event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -182,17 +182,17 @@ const TreeNode: React.FC<{
           {guidePositions.map((left) => (
             <span
               key={`${node.path || 'root'}-${left}`}
-              className="absolute bottom-[-2px] top-[-2px] w-px bg-slate-200/80"
+              className="absolute bottom-[-2px] top-[-2px] w-px bg-[var(--ui-border-default)]/80"
               style={{ left }}
             />
           ))}
         </span>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1.5 pr-2 transition-[background-color,box-shadow,color] duration-150 group-hover:bg-white group-hover:text-slate-950 group-hover:shadow-[0_8px_22px_rgba(15,23,42,0.07)] group-focus-visible:bg-white group-focus-visible:ring-2 group-focus-visible:ring-blue-200 motion-reduce:transition-none">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1.5 pr-2 transition-[background-color,color] duration-150 group-hover:bg-[var(--ui-bg-panel)] group-hover:text-[var(--ui-text-primary)] group-focus-visible:bg-[var(--ui-bg-panel)] group-focus-visible:ring-1 group-focus-visible:ring-[var(--ui-border-strong)] motion-reduce:transition-none">
           <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
             {isDirectory ? (
               <Icon
                 name="chevron_right"
-                className={`text-[18px] text-slate-400 transition-transform duration-200 ease-out motion-reduce:transition-none ${
+                className={`text-[18px] text-[var(--ui-text-primary)] transition-transform duration-200 ease-out motion-reduce:transition-none ${
                   isExpanded ? 'rotate-90' : ''
                 }`}
               />
@@ -200,7 +200,7 @@ const TreeNode: React.FC<{
               <span className="h-5 w-5" />
             )}
           </span>
-          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors duration-150 group-hover:bg-blue-50 group-hover:text-blue-600">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] transition-colors duration-150 group-hover:bg-[var(--ui-bg-elevated)] group-hover:text-[var(--ui-text-primary)]">
             <Icon name={icon} className="text-[18px]" />
           </span>
           {renamingPath === node.path ? (
@@ -220,18 +220,18 @@ const TreeNode: React.FC<{
                   onCancelRename?.()
                 }
               }}
-              className="min-w-0 flex-1 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[13px] font-medium text-slate-800 outline-none ring-1 ring-blue-100"
+              className="min-w-0 flex-1 rounded border border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)] px-1.5 py-0.5 text-[13px] font-medium text-[var(--ui-text-primary)] outline-none ring-1 ring-[var(--ui-border-default)]"
             />
           ) : (
             <span className="min-w-0 flex-1 truncate font-medium">{node.name}</span>
           )}
           {!isDirectory && (
-            <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+            <span className="shrink-0 text-[11px] tabular-nums text-[var(--ui-text-primary)]">
               {formatBytes(node.sizeBytes)}
             </span>
           )}
           {hasChildren && (
-            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-400">
+            <span className="shrink-0 rounded-full bg-[var(--ui-bg-panel-muted)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--ui-text-primary)]">
               {node.children.length}
             </span>
           )}
@@ -246,7 +246,7 @@ const TreeNode: React.FC<{
           <div className="min-h-0 overflow-hidden">
             <div className="relative py-0.5">
               <span
-                className="pointer-events-none absolute bottom-2 top-0 w-px bg-slate-200"
+                className="pointer-events-none absolute bottom-2 top-0 w-px bg-[var(--ui-border-default)]"
                 style={{ left: 13 + depth * 18 }}
               />
               {node.children.map((child) => (
@@ -646,12 +646,12 @@ export const WorkroomWikiTree: React.FC<WorkroomWikiTreeProps> = ({
   }, [])
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#F8FAFD]">
+    <div className="workroom-wiki-tree flex h-full min-h-0 flex-col bg-[var(--ui-bg-panel)]">
       {onTogglePreview && (
-        <div className="flex h-[34px] shrink-0 items-center justify-end border-b border-[#D1D1D1] bg-[#E9EEF5] px-2">
+        <div className="flex h-[34px] shrink-0 items-center justify-end border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-tabbar)] px-2">
           <button
             type="button"
-            className="mr-[-8px] inline-flex h-8 flex-shrink-0 items-center justify-center px-1.5 text-[#647185] hover:text-[#4c586d]"
+            className="mr-[-8px] inline-flex h-8 flex-shrink-0 items-center justify-center px-1.5 text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]"
             onClick={onTogglePreview}
             title={t('workroom_tree.toggle_preview')}
           >
@@ -662,14 +662,14 @@ export const WorkroomWikiTree: React.FC<WorkroomWikiTreeProps> = ({
 
       <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {isLoading ? (
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-slate-400">
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-[var(--ui-text-primary)]">
             <Icon name={"progress_activity"} className="animate-spin text-[26px]" />
             {t('workroom_tree.loading')}
           </div>
         ) : error ? (
           <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-3 text-sm text-rose-600">{error}</div>
         ) : tree.length === 0 ? (
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-sm text-slate-400">
+          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-sm text-[var(--ui-text-primary)]">
             <Icon name={"folder_open"} className="text-[30px]" />
             {t('workroom_tree.empty')}
           </div>
@@ -708,3 +708,6 @@ export const WorkroomWikiTree: React.FC<WorkroomWikiTreeProps> = ({
     </div>
   )
 }
+
+
+

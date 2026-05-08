@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
@@ -176,9 +176,9 @@ const TranslationFootnoteComponent: React.FC<NodeViewProps> = ({ node, editor, g
                           <span className="translation-footnote-lemma-value">{attrs.lemma}</span>
                         </span>
                       )}
-                      {attrs.morphology && <span className="ml-1 text-xs text-slate-300">{attrs.morphology}</span>}
+                      {attrs.morphology && <span className="ml-1 text-xs text-[var(--ui-text-primary)]">{attrs.morphology}</span>}
                       {attrs.forms && attrs.forms.length > 0 && (
-                        <span className="ml-1 text-xs text-slate-400">{attrs.forms.join(' / ')}</span>
+                        <span className="ml-1 text-xs text-[var(--ui-text-primary)]">{attrs.forms.join(' / ')}</span>
                       )}
                     </span>
                   )}
@@ -283,3 +283,4 @@ export const TranslationFootnote = Node.create({
     return ReactNodeViewRenderer(TranslationFootnoteComponent)
   },
 })
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { TranslationScope } from '../types'
@@ -54,3 +54,5 @@ export const TranslationInlineIndicator: React.FC<TranslationInlineIndicatorProp
 
   return createPortal(content, document.body)
 }
+
+

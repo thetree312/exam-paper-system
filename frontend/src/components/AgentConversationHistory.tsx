@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentConversationMeta } from '../types'
 
@@ -42,14 +42,14 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
   if (!isOpen) return null
 
   return (
-    <div className="w-full bg-white border-b border-neutral-200 shadow-sm">
+    <div className="w-full bg-[var(--ui-bg-panel)] border-b border-[var(--ui-border-default)]">
       <div className="p-2 space-y-1 max-h-[360px] overflow-y-auto custom-scrollbar relative">
-        <div className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-neutral-400 font-bold sticky top-0 bg-white/95 backdrop-blur-md z-10 border-b border-neutral-50 mb-1 text-left">
+        <div className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-[var(--ui-text-primary)] font-bold sticky top-0 bg-[var(--ui-bg-elevated)] backdrop-blur-md z-10 border-b border-[var(--ui-border-default)] mb-1 text-left">
           {t('agent_chat.conversation_history_title')} ({visibleConversations.length})
         </div>
         <div className="space-y-1">
           {visibleConversations.length === 0 && (
-            <div className="px-4 py-4 text-xs text-neutral-400 text-center">{t('agent_chat.conversation_history_empty')}</div>
+            <div className="px-4 py-4 text-xs text-[var(--ui-text-primary)] text-center">{t('agent_chat.conversation_history_empty')}</div>
           )}
           {visibleConversations.map((conv) => {
             const isActive = conv.key === activeConversationKey
@@ -57,7 +57,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
               <div
                 key={conv.key}
                 className={`w-full flex items-center justify-between p-3 rounded-xl transition-all group ${
-                  isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'
+                  isActive ? 'bg-[var(--ui-bg-panel-muted)]' : 'hover:bg-[var(--ui-bg-panel-muted)]'
                 }`}
               >
                 <button
@@ -70,7 +70,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                 >
                   <svg
                     className={`w-3.5 h-3.5 mr-3 flex-shrink-0 ${
-                      isActive ? 'text-blue-600' : 'text-neutral-300'
+                      'text-[var(--ui-text-primary)]'
                     }`}
                     viewBox="0 0 24 24"
                     fill="currentColor"
@@ -98,12 +98,12 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                               setEditingKey(null)
                             }
                           }}
-                          className="w-full bg-transparent border-b border-neutral-300 text-xs focus:outline-none"
+                          className="w-full bg-transparent border-b border-[var(--ui-border-default)] text-xs text-[var(--ui-text-primary)] focus:outline-none"
                         />
                       ) : (
                         <span
                           className={`text-xs truncate ${
-                            isActive ? 'font-semibold text-neutral-900' : 'text-neutral-600'
+                            isActive ? 'font-semibold text-[var(--ui-text-primary)]' : 'text-[var(--ui-text-primary)]'
                           }`}
                           onDoubleClick={(e) => {
                             e.stopPropagation()
@@ -123,7 +123,7 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
                     e.stopPropagation()
                     onDeleteConversation(conv.key)
                   }}
-                  className="text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 ml-2 transition-opacity pointer-events-auto"
+                  className="text-[var(--ui-text-primary)] hover:text-rose-500 opacity-0 group-hover:opacity-100 ml-2 transition-opacity pointer-events-auto"
                   aria-label={t('agent_chat.conversation_delete_aria')}
                 >
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
@@ -138,3 +138,6 @@ export const AgentConversationHistory: React.FC<AgentConversationHistoryProps> =
     </div>
   )
 }
+
+
+

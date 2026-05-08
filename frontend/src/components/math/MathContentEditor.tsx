@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSONContent, NodeViewProps } from '@tiptap/react'
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -612,7 +612,7 @@ export const MathContentEditor: React.FC<MathContentEditorProps> = ({
       editorProps: {
         attributes: {
           class: [
-            'math-content-editor prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus-within:border-slate-400',
+            'math-content-editor prose prose-slate max-w-none rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-4 py-3 text-sm text-[var(--ui-text-primary)] outline-none focus-within:border-[var(--ui-border-strong)]',
             singleLine ? 'min-h-[44px]' : '',
             contentClassName,
           ]
@@ -911,3 +911,5 @@ export const MathContentEditor: React.FC<MathContentEditorProps> = ({
     </>
   )
 }
+
+

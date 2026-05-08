@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+﻿import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileTabsBar } from './FileTabsBar'
 import { SelectionPane } from './SelectionPane'
@@ -59,10 +59,10 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
   const isMobileOrTablet = viewportWidth < 1024
 
   const renderPreviewRail = () => (
-    <div className="flex w-11 shrink-0 flex-col items-center gap-2 py-2 text-slate-500">
+    <div className="flex w-11 shrink-0 flex-col items-center gap-2 py-2 text-[var(--ui-text-primary)]">
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 hover:bg-slate-100"
+        className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)]"
         onClick={() => {
           setIsPreviewCollapsed(!isPreviewCollapsed)
           if (isPreviewCollapsed) {
@@ -78,7 +78,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
         <Icon name={"grid_view"} className="text-[18px]" />
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
           onClick={() => {
             setAppView('editor')
             setIsPreviewCollapsed(false)
@@ -90,7 +90,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
         </button>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
           onClick={() => {
             setAppView('favorites')
             setIsPreviewCollapsed(true)
@@ -99,7 +99,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
         >
           <Icon name={"bookmark"} className="text-[18px]" style={{ fontVariationSettings: appView === 'favorites' ? "'FILL' 1" : "'FILL' 0" }} />
         </button>
-        <div className="h-px w-6 bg-slate-200" />
+        <div className="h-px w-6 bg-[var(--ui-border-default)]" />
         <Icon name={"home_app_logo"} className="text-[18px]" title={t('source_panel.collapsed.workspace')} />
       </div>
       <div className="flex-1" />
@@ -109,7 +109,7 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
 
   return (
     <aside
-      className="bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex relative"
+      className="bg-[var(--ui-bg-panel)] border-b lg:border-b-0 lg:border-r border-[var(--ui-border-default)] flex relative"
       style={
         isMobileOrTablet
           ? { width: '100%', minWidth: 0 }
@@ -188,3 +188,5 @@ export const SourcePaneConnector: React.FC<SourcePaneConnectorProps> = ({
     </aside>
   )
 }
+
+

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, memo } from 'react'
+﻿import { useState, useCallback, useEffect, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 
@@ -56,7 +56,7 @@ const AnimatedHeartButton = memo(
         <Icon
           name={status === 1 ? 'bookmark_added' : 'bookmark_add'}
           filled={status === 1}
-          className={`text-[20px] ${status === 1 ? 'text-blue-600' : 'text-slate-500'}`}
+          className={`text-[20px] ${status === 1 ? 'text-blue-600' : 'text-[var(--ui-text-primary)]'}`}
         />
       </button>
     )
@@ -66,3 +66,5 @@ const AnimatedHeartButton = memo(
 AnimatedHeartButton.displayName = 'AnimatedHeartButton'
 
 export default AnimatedHeartButton
+
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import Icon from '../../../components/Icon'
 
 
@@ -38,8 +38,8 @@ const ActionButton: React.FC<{
     disabled={disabled}
     className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
       tone === 'danger'
-        ? 'border-rose-200 text-rose-600 hover:bg-rose-50'
-        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+        ? 'border-rose-300 text-rose-500 hover:bg-[var(--ui-bg-panel-muted)]'
+        : 'border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
     }`}
   >
     <Icon name={icon} className="text-[18px] leading-none" />
@@ -85,7 +85,7 @@ const MindMapContextActions: React.FC<MindMapContextActionsProps> = ({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 flex justify-center px-3 lg:bottom-5 lg:px-4">
-      <div className="pointer-events-auto flex max-w-full items-center gap-2 overflow-x-auto rounded-[22px] border border-slate-200 bg-white/96 px-3 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur scrollbar-hidden">
+      <div className="pointer-events-auto flex max-w-full items-center gap-2 overflow-x-auto rounded-[22px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] px-3 py-2 shadow-none backdrop-blur scrollbar-hidden">
         {(canEditNode || canAddChild || canAddSibling || canRemoveSelection) && (
           <>
             {onEditNode && <ActionButton icon="edit_note" label="编辑节点" disabled={!canEditNode} onClick={onEditNode} />}
@@ -122,3 +122,5 @@ const MindMapContextActions: React.FC<MindMapContextActionsProps> = ({
 }
 
 export default MindMapContextActions
+
+

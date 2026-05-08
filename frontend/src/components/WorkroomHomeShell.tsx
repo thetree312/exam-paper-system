@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import type { UserInfo, WorkspaceInfo, WorkroomInfo } from '../types'
 import BrandIcon from './BrandIcon'
 import { WorkroomSourceTimeline } from './WorkroomSourceTimeline'
@@ -25,43 +25,43 @@ export const WorkroomHomeShell: React.FC<WorkroomHomeShellProps> = ({
   children,
 }) => {
   return (
-    <div className="min-h-screen bg-[#f7f8fb] text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-[#f7f8fb] text-[var(--ui-text-primary)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] backdrop-blur">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
             {onBackToWorkspace && (
               <button
                 type="button"
                 onClick={onBackToWorkspace}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-3 text-sm font-medium text-[var(--ui-text-primary)] transition hover:bg-[var(--ui-bg-panel-muted)]"
               >
                 <Icon name={"arrow_back"} className="text-[18px]" />
                 Workspace
               </button>
             )}
             <BrandIcon />
-            <div className="h-8 w-px bg-slate-200" />
+            <div className="h-8 w-px bg-[var(--ui-border-default)]" />
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--ui-text-primary)]">
                 {workspace?.name || 'Exam Workroom'}
               </div>
-              <div className="mt-1 text-lg font-semibold tracking-tight text-slate-900">
+              <div className="mt-1 text-lg font-semibold tracking-tight text-[var(--ui-text-primary)]">
                 {workroom?.name || 'Current Workroom'}
               </div>
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-[var(--ui-text-primary)]">
                 {workspace?.topic || 'Active learning workbench under the current workspace'}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
-              <div className="text-xs text-slate-500">{user.email}</div>
+              <div className="text-sm font-medium text-[var(--ui-text-primary)]">{user.display_name}</div>
+              <div className="text-xs text-[var(--ui-text-primary)]">{user.email}</div>
             </div>
             <button
               type="button"
               onClick={onLogout}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-4 text-sm font-medium text-[var(--ui-text-primary)] transition hover:bg-[var(--ui-bg-panel-muted)]"
             >
               <Icon name={"logout"} className="text-[18px]" />
               Sign out
@@ -81,3 +81,5 @@ export const WorkroomHomeShell: React.FC<WorkroomHomeShellProps> = ({
     </div>
   )
 }
+
+

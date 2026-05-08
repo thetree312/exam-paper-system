@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 
 import { mathContentToPromptText, createPlainTextMathDocument, type MathContentDocument } from '../../lib/mathContent'
 
@@ -46,8 +46,10 @@ export const InlineMathAnswerInput: React.FC<InlineMathAnswerInputProps> = ({
         onKeyDown={onInputKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
         disabled={disabled}
         placeholder=""
-        className="min-w-[180px] flex-1 border-0 border-b-[1.5px] border-slate-500 bg-transparent px-1 py-1 text-sm text-slate-800 outline-none"
+        className="min-w-[180px] flex-1 border-0 border-b-[1.5px] border-slate-500 bg-transparent px-1 py-1 text-sm text-[var(--ui-text-primary)] outline-none"
       />
     </span>
   )
 }
+
+

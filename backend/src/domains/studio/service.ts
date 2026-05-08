@@ -1,4 +1,5 @@
 import { createID } from "../../lib/ids"
+import { createLogger } from "../../lib/logger"
 import {
   createTextMathDocument,
   ensureMathContentDocument,
@@ -8,8 +9,10 @@ import {
 import { DocumentsService } from "../documents/service"
 import { QuestionLlmService } from "../questions/llm-service"
 import { WorkroomService } from "../workrooms/service"
+import { StudioEvents } from "./events"
 import { StudioRepository } from "./repository"
 import { StudioOcrService } from "./ocr-service"
+import { StudioQuestionsProjection } from "./questions-projection"
 import { importDocumentLayoutAsQuestionCards } from "./layout-importer"
 import type {
   QuestionCardAttemptRecord,
@@ -20,6 +23,8 @@ import type {
   StudioQuestionCardRecord,
   StudioSelectionRegion,
 } from "./types"
+
+const logger = createLogger({ domain: "studio-service" })
 
 const DIAGNOSIS_PROMPT = [
   "你是学习诊断教练。请依据题目、本次作答、最近历史、已有薄弱点进行结构化诊断。",
@@ -36,6 +41,45 @@ function normalizeTitle(input?: string | null) {
 
 function normalizeText(input?: string | null) {
   return input?.trim() ?? ""
+}
+
+function normalizeOptionalText(input?: string | null) {
+  const normalized = input?.trim()
+  return normalized ? normalized : null
+}
+
+type StudioQuestionCardDraft = {
+  text: string
+  page?: number | null
+  originalText?: string | null
+  answerContent?: MathContentDocument
+  answerText?: string | null
+  canonicalAnswer?: string | null
+  explanation?: string | null
+  legendImages?: string[]
+  derivedFromCardID?: string | null
+  relationType?: StudioQuestionCardRecord["relationType"]
+  originTask?: StudioQuestionCardRecord["originTask"]
+}
+
+function normalizeDraft(input: StudioQuestionCardDraft) {
+  const text = normalizeText(input.text)
+  if (!text) throw new Error("Question card text is required")
+  const answerContent = ensureMathContentDocument(input.answerContent, input.answerText ?? input.canonicalAnswer ?? "")
+  const answerText = mathContentToPromptText(answerContent)
+  return {
+    text,
+    originalText: normalizeText(input.originalText) || text,
+    page: input.page && input.page > 0 ? input.page : 1,
+    answerContent,
+    answerText,
+    canonicalAnswer: normalizeOptionalText(input.canonicalAnswer) ?? normalizeOptionalText(answerText) ?? "",
+    explanation: normalizeOptionalText(input.explanation),
+    legendImages: Array.from(new Set((input.legendImages ?? []).map((item) => item.trim()).filter(Boolean))),
+    derivedFromCardID: normalizeOptionalText(input.derivedFromCardID),
+    relationType: input.relationType ?? "primary",
+    originTask: input.originTask ?? null,
+  }
 }
 
 function defaultAnswerEvidence(): StudioQuestionCardRecord["answerEvidence"] {
@@ -275,6 +319,33 @@ async function rebuildSnapshot(input: {
   return snapshot
 }
 
+async function upsertQuestionCardArtifacts(input: {
+  userID: string
+  workroomID: string
+  studioDocumentID: string
+  sourceDocumentID?: string | null
+  cards: StudioQuestionCardRecord[]
+}) {
+  for (const card of input.cards) {
+    await WorkroomService.upsertArtifact({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      artifactType: "question_card",
+      artifactRefID: card.id,
+      documentID: input.sourceDocumentID ?? card.sourceDocumentID ?? null,
+      payloadJson: {
+        studioDocumentID: input.studioDocumentID,
+        sourceDocumentID: input.sourceDocumentID ?? card.sourceDocumentID ?? null,
+        sequenceIndex: card.sequenceIndex,
+        cardGroupID: card.cardGroupID,
+        page: card.page,
+        relationType: card.relationType ?? "primary",
+        derivedFromCardID: card.derivedFromCardID ?? null,
+      },
+    })
+  }
+}
+
 export const StudioService = {
   async listDocuments(input: { userID: string; workroomID: string; sourceDocumentID?: string }) {
     const state = await StudioRepository.readDocuments()
@@ -369,6 +440,195 @@ export const StudioService = {
     return { card, attempts, diagnoses, weaknesses, reviewHeatmap180d: card.learningSnapshot.reviewHeatmap180d }
   },
 
+  async appendQuestionCards(input: {
+    userID: string
+    workroomID: string
+    studioDocumentID: string
+    drafts: StudioQuestionCardDraft[]
+  }) {
+    logger.info("append question cards start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      studio_document_id: input.studioDocumentID,
+      drafts_count: input.drafts.length,
+    })
+    if (input.drafts.length === 0) return []
+    const studioDocument = await this.getDocument({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+    })
+    if (!studioDocument) throw new Error(`Studio document not found: ${input.studioDocumentID}`)
+
+    const existing = await this.listQuestionCards({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+    })
+    const now = new Date().toISOString()
+    const created = input.drafts.map((draft, index) => {
+      const normalized = normalizeDraft(draft)
+      const cardID = createID("studio_question_card")
+      return {
+        id: cardID,
+        userID: input.userID,
+        workroomID: input.workroomID,
+        studioDocumentID: input.studioDocumentID,
+        sourceDocumentID: studioDocument.sourceDocumentID ?? null,
+        cardGroupID: cardID,
+        sequenceIndex: existing.length + index,
+        page: normalized.page,
+        text: normalized.text,
+        originalText: normalized.originalText,
+        answerContent: normalized.answerContent,
+        answerText: normalized.answerText,
+        canonicalAnswer: normalized.canonicalAnswer,
+        explanation: normalized.explanation,
+        legendImages: normalized.legendImages,
+        derivedFromCardID: normalized.derivedFromCardID,
+        relationType: normalized.relationType,
+        originTask: normalized.originTask,
+        sourceSelection: { regions: [], legends: [] },
+        answerEvidence: defaultAnswerEvidence(),
+        learningSnapshot: defaultLearningSnapshot(),
+        createdAt: now,
+        updatedAt: now,
+      } satisfies StudioQuestionCardRecord
+    })
+
+    await StudioRepository.updateQuestionCards((state) => {
+      state.items.push(...created)
+    })
+    await StudioQuestionsProjection.syncCards(created)
+    await upsertQuestionCardArtifacts({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+      sourceDocumentID: studioDocument.sourceDocumentID ?? null,
+      cards: created,
+    })
+    await StudioEvents.publishChanged({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+      reason: "create",
+      cardIDs: created.map((item) => item.id),
+      anchorCardID: null,
+      position: null,
+    })
+    logger.info("append question cards completed", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      studio_document_id: input.studioDocumentID,
+      created_card_ids: created.map((item) => item.id),
+      created_sequence_indexes: created.map((item) => item.sequenceIndex),
+    })
+    return created
+  },
+
+  async insertQuestionCards(input: {
+    userID: string
+    workroomID: string
+    studioDocumentID: string
+    anchorCardID: string
+    position: "before" | "after"
+    drafts: StudioQuestionCardDraft[]
+  }) {
+    logger.info("insert question cards start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      studio_document_id: input.studioDocumentID,
+      anchor_card_id: input.anchorCardID,
+      position: input.position,
+      drafts_count: input.drafts.length,
+    })
+    if (input.drafts.length === 0) return []
+    const studioDocument = await this.getDocument({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+    })
+    if (!studioDocument) throw new Error(`Studio document not found: ${input.studioDocumentID}`)
+
+    let created: StudioQuestionCardRecord[] = []
+    let affected: StudioQuestionCardRecord[] = []
+    await StudioRepository.updateQuestionCards((state) => {
+      const scoped = state.items
+        .filter((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.studioDocumentID === input.studioDocumentID)
+        .sort((left, right) => left.sequenceIndex - right.sequenceIndex || left.createdAt.localeCompare(right.createdAt))
+      const anchorIndex = scoped.findIndex((item) => item.id === input.anchorCardID)
+      if (anchorIndex === -1) throw new Error(`Anchor card not found: ${input.anchorCardID}`)
+      const insertIndex = input.position === "before" ? anchorIndex : anchorIndex + 1
+      const anchorCard = scoped[anchorIndex]
+      const anchorGroupID = anchorCard.cardGroupID || anchorCard.id
+      const now = new Date().toISOString()
+      created = input.drafts.map((draft) => {
+        const normalized = normalizeDraft(draft)
+        return {
+          id: createID("studio_question_card"),
+          userID: input.userID,
+          workroomID: input.workroomID,
+          studioDocumentID: input.studioDocumentID,
+          sourceDocumentID: studioDocument.sourceDocumentID ?? null,
+          cardGroupID: anchorGroupID,
+          sequenceIndex: -1,
+          page: normalized.page,
+          text: normalized.text,
+          originalText: normalized.originalText,
+          answerContent: normalized.answerContent,
+          answerText: normalized.answerText,
+          canonicalAnswer: normalized.canonicalAnswer,
+          explanation: normalized.explanation,
+          legendImages: normalized.legendImages,
+          derivedFromCardID: normalized.derivedFromCardID,
+          relationType: normalized.relationType,
+          originTask: normalized.originTask,
+          sourceSelection: { regions: [], legends: [] },
+          answerEvidence: defaultAnswerEvidence(),
+          learningSnapshot: defaultLearningSnapshot(),
+          createdAt: now,
+          updatedAt: now,
+        } satisfies StudioQuestionCardRecord
+      })
+      const merged = [...scoped.slice(0, insertIndex), ...created, ...scoped.slice(insertIndex)]
+      merged.forEach((item, index) => {
+        item.sequenceIndex = index
+        item.updatedAt = now
+      })
+      affected = merged
+      state.items = state.items
+        .filter((item) => !(item.userID === input.userID && item.workroomID === input.workroomID && item.studioDocumentID === input.studioDocumentID))
+        .concat(merged)
+    })
+    await StudioQuestionsProjection.syncCards(affected)
+    await upsertQuestionCardArtifacts({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+      sourceDocumentID: studioDocument.sourceDocumentID ?? null,
+      cards: created,
+    })
+    await StudioEvents.publishChanged({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: input.studioDocumentID,
+      reason: "insert",
+      cardIDs: created.map((item) => item.id),
+      anchorCardID: input.anchorCardID,
+      position: input.position,
+    })
+    logger.info("insert question cards completed", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      studio_document_id: input.studioDocumentID,
+      anchor_card_id: input.anchorCardID,
+      position: input.position,
+      created_card_ids: created.map((item) => item.id),
+      created_sequence_indexes: created.map((item) => item.sequenceIndex),
+    })
+    return created
+  },
+
   async updateQuestionCard(input: {
     userID: string
     workroomID: string
@@ -377,7 +637,20 @@ export const StudioService = {
     answerContent?: MathContentDocument
     answerText?: string
     legendImages?: string[]
+    canonicalAnswer?: string | null
+    explanation?: string | null
+    derivedFromCardID?: string | null
+    relationType?: StudioQuestionCardRecord["relationType"]
+    originTask?: StudioQuestionCardRecord["originTask"]
   }) {
+    logger.info("update question card start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.cardID,
+      has_text: input.text !== undefined,
+      has_answer_text: input.answerText !== undefined,
+      has_explanation: input.explanation !== undefined,
+    })
     let updated: StudioQuestionCardRecord | undefined
     await StudioRepository.updateQuestionCards((state) => {
       const record = state.items.find((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.id === input.cardID)
@@ -391,19 +664,119 @@ export const StudioService = {
         record.answerText = mathContentToPromptText(record.answerContent)
       }
       if (input.legendImages !== undefined) record.legendImages = input.legendImages
+      if (input.canonicalAnswer !== undefined) record.canonicalAnswer = normalizeOptionalText(input.canonicalAnswer) ?? ""
+      if (input.explanation !== undefined) record.explanation = normalizeOptionalText(input.explanation)
+      if (input.derivedFromCardID !== undefined) record.derivedFromCardID = normalizeOptionalText(input.derivedFromCardID)
+      if (input.relationType !== undefined) record.relationType = input.relationType ?? null
+      if (input.originTask !== undefined) record.originTask = input.originTask ?? null
       record.updatedAt = new Date().toISOString()
       updated = record
     })
     if (!updated) throw new Error(`Studio question card not found: ${input.cardID}`)
+    await StudioQuestionsProjection.syncCard(updated)
+    await StudioEvents.publishChanged({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: updated.studioDocumentID,
+      reason: "update",
+      cardIDs: [updated.id],
+      anchorCardID: null,
+      position: null,
+    })
+    logger.info("update question card completed", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: updated.id,
+      studio_document_id: updated.studioDocumentID,
+    })
+    return updated
+  },
+
+  async writeQuestionExplanation(input: {
+    userID: string
+    workroomID: string
+    cardID: string
+    explanation: string
+  }) {
+    logger.info("write question explanation start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.cardID,
+    })
+    return this.updateQuestionCard({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      cardID: input.cardID,
+      explanation: input.explanation,
+    })
+  },
+
+  async attachDerivedPracticeCards(input: {
+    userID: string
+    workroomID: string
+    sourceCardID: string
+    createdCardIDs: string[]
+  }) {
+    logger.info("attach derived practice cards start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      source_card_id: input.sourceCardID,
+      created_card_ids: input.createdCardIDs,
+    })
+    const targetIDs = new Set(input.createdCardIDs)
+    const updated: StudioQuestionCardRecord[] = []
+    await StudioRepository.updateQuestionCards((state) => {
+      const source = state.items.find((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.id === input.sourceCardID)
+      if (!source) throw new Error(`Studio question card not found: ${input.sourceCardID}`)
+      const now = new Date().toISOString()
+      for (const card of state.items) {
+        if (!(card.userID === input.userID && card.workroomID === input.workroomID && targetIDs.has(card.id))) continue
+        card.derivedFromCardID = source.id
+        card.relationType = "practice_generated"
+        card.updatedAt = now
+        updated.push(card)
+      }
+      if (updated.length !== targetIDs.size) {
+        throw new Error("Some derived practice cards were not found")
+      }
+    })
+    await StudioQuestionsProjection.syncCards(updated)
+    if (updated.length > 0) {
+      await StudioEvents.publishChanged({
+        userID: input.userID,
+        workroomID: input.workroomID,
+        studioDocumentID: updated[0]!.studioDocumentID,
+        reason: "attach",
+        cardIDs: updated.map((item) => item.id),
+        anchorCardID: input.sourceCardID,
+        position: null,
+      })
+    }
+    logger.info("attach derived practice cards completed", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      source_card_id: input.sourceCardID,
+      updated_card_ids: updated.map((item) => item.id),
+      studio_document_id: updated[0]?.studioDocumentID ?? null,
+    })
     return updated
   },
 
   async deleteQuestionCard(input: { userID: string; workroomID: string; cardID: string }) {
+    logger.info("delete question card start", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.cardID,
+    })
     let removed = false
+    let removedStudioDocumentID: string | null = null
     await StudioRepository.updateQuestionCards((state) => {
       state.items = state.items.filter((item) => {
         const keep = !(item.userID === input.userID && item.workroomID === input.workroomID && item.id === input.cardID)
-        if (!keep) removed = true
+        if (!keep) {
+          removed = true
+          removedStudioDocumentID = item.studioDocumentID
+        }
         return keep
       })
     })
@@ -416,6 +789,27 @@ export const StudioService = {
     })
     await StudioRepository.updateWeaknesses((state) => {
       state.items = state.items.filter((item) => !(item.userID === input.userID && item.workroomID === input.workroomID && item.cardID === input.cardID))
+    })
+    await StudioQuestionsProjection.removeCard({
+      userID: input.userID,
+      studioCardID: input.cardID,
+    })
+    if (removedStudioDocumentID) {
+      await StudioEvents.publishChanged({
+        userID: input.userID,
+        workroomID: input.workroomID,
+        studioDocumentID: removedStudioDocumentID,
+        reason: "delete",
+        cardIDs: [input.cardID],
+        anchorCardID: null,
+        position: null,
+      })
+    }
+    logger.info("delete question card completed", {
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.cardID,
+      studio_document_id: removedStudioDocumentID,
     })
     return { cardID: input.cardID, status: "deleted" }
   },
@@ -462,6 +856,7 @@ export const StudioService = {
       workroomID: input.workroomID,
       studioDocumentID: studioDocument.id,
       sourceDocumentID: input.sourceDocumentID,
+      cardGroupID: "",
       sequenceIndex: nextSequenceIndex,
       page: input.regions[0]?.page ?? 1,
       text: recognition.text,
@@ -469,16 +864,22 @@ export const StudioService = {
       answerContent: createTextMathDocument(""),
       answerText: "",
       canonicalAnswer: "",
+      explanation: null,
       legendImages: recognition.legendImages,
+      derivedFromCardID: null,
+      relationType: "primary",
+      originTask: null,
       sourceSelection: { regions: input.regions, legends: input.legends ?? [] },
       answerEvidence: defaultAnswerEvidence(),
       learningSnapshot: defaultLearningSnapshot(),
       createdAt: now,
       updatedAt: now,
     }
+    record.cardGroupID = record.id
     await StudioRepository.updateQuestionCards((state) => {
       state.items.push(record)
     })
+    await StudioQuestionsProjection.syncCard(record)
     await WorkroomService.upsertArtifact({
       userID: input.userID,
       workroomID: input.workroomID,
@@ -491,6 +892,15 @@ export const StudioService = {
         sequenceIndex: record.sequenceIndex,
         page: record.page,
       },
+    })
+    await StudioEvents.publishChanged({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: studioDocument.id,
+      reason: "recognize",
+      cardIDs: [record.id],
+      anchorCardID: null,
+      position: null,
     })
     return { studioDocument, questionCard: record }
   },
@@ -540,6 +950,7 @@ export const StudioService = {
         workroomID: input.workroomID,
         studioDocumentID: studioDocument.id,
         sourceDocumentID: input.sourceDocumentID,
+        cardGroupID: "",
         sequenceIndex: draft.sequenceIndex,
         page: draft.page,
         text: draft.text,
@@ -547,13 +958,18 @@ export const StudioService = {
         answerContent: createTextMathDocument(""),
         answerText: "",
         canonicalAnswer: "",
+        explanation: null,
         legendImages: draft.legendImages,
+        derivedFromCardID: null,
+        relationType: "primary",
+        originTask: null,
         sourceSelection: draft.sourceSelection,
         answerEvidence: defaultAnswerEvidence(),
         learningSnapshot: defaultLearningSnapshot(),
         createdAt: now,
         updatedAt: now,
       }
+      temp.cardGroupID = temp.id
       const mapped = buildAnswerEvidence(temp, sourcePackage)
       temp.canonicalAnswer = mapped.canonicalAnswer
       temp.answerEvidence = mapped.evidence
@@ -561,12 +977,20 @@ export const StudioService = {
       temp.answerText = mapped.canonicalAnswer
       return temp
     })
+    const removedCards = existingCards.filter((item) => input.replaceExisting)
     await StudioRepository.updateQuestionCards((state) => {
       state.items = state.items.filter(
         (item) => !(item.userID === input.userID && item.workroomID === input.workroomID && item.studioDocumentID === studioDocument.id),
       )
       state.items.push(...records)
     })
+    for (const removed of removedCards) {
+      await StudioQuestionsProjection.removeCard({
+        userID: input.userID,
+        studioCardID: removed.id,
+      })
+    }
+    await StudioQuestionsProjection.syncCards(records)
     for (const record of records) {
       await WorkroomService.upsertArtifact({
         userID: input.userID,
@@ -583,6 +1007,15 @@ export const StudioService = {
         },
       })
     }
+    await StudioEvents.publishChanged({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      studioDocumentID: studioDocument.id,
+      reason: "import",
+      cardIDs: records.map((item) => item.id),
+      anchorCardID: null,
+      position: null,
+    })
     return { studioDocument, questionCards: records, importedCount: records.length, reusedExisting: false }
   },
 

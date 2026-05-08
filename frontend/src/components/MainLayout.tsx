@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+﻿import React, { useEffect, useRef } from 'react'
 import { AppHeader } from './AppHeader'
 import { SourcePaneConnector } from './SourcePaneConnector'
 import { EditorConnector } from './EditorConnector'
@@ -83,7 +83,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   }, [appView, setIsAgentDrawerOpen])
 
   return (
-    <div className="bg-background-light text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col">
+    <div className="bg-[var(--ui-bg-app)] text-[var(--ui-text-primary)] font-display antialiased overflow-hidden h-screen flex flex-col">
       <AppHeader
         onExportClick={() => setIsExportDialogOpen(true)}
         rightOffset={!isMobileOrTablet && isAgentDrawerOpen ? agentDrawerWidth : 0}
@@ -122,7 +122,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {!isMobileOrTablet && appView !== 'favorites' && (
           <div
             onMouseDown={() => setIsResizing(true)}
-            className="w-1 cursor-col-resize bg-slate-200 hover:bg-slate-300 transition-colors"
+            className="w-1 cursor-col-resize bg-[var(--ui-border-default)] hover:bg-[var(--ui-border-strong)] transition-colors"
           />
         )}
 
@@ -166,3 +166,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     </div>
   )
 }
+
+
+

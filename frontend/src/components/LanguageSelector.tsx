@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon'
 
@@ -48,14 +48,14 @@ export const LanguageSelector: React.FC = () => {
 
   return (
     <div 
-      className={`group/container relative flex items-center bg-white border border-slate-200 rounded-full transition-all duration-700 ease-[cubic-bezier(0.2,1,0.2,1)] shadow-sm hover:shadow-md h-[44px] ${isOpen ? 'w-[160px]' : 'w-[44px]'}`}
+      className={`group/container relative flex items-center bg-[var(--ui-bg-panel)] border border-[var(--ui-border-default)] rounded-full transition-all duration-700 ease-[cubic-bezier(0.2,1,0.2,1)] shadow-sm hover:shadow-md h-[44px] ${isOpen ? 'w-[160px]' : 'w-[44px]'}`}
       onMouseEnter={() => setActiveMenu('linear')}
       onMouseLeave={() => setActiveMenu(null)}
       onClick={(e) => e.stopPropagation()}
     >
       {/* 触发器按钮 */}
       <div className="absolute left-[4px] top-[4px] w-[34px] h-[34px] pointer-events-none z-10">
-         <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden transition-all duration-500 border border-slate-50 ${!currentLang ? 'bg-slate-50 text-slate-400' : 'bg-white shadow-sm'}`}>
+         <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden transition-all duration-500 border border-slate-50 ${!currentLang ? 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]' : 'bg-[var(--ui-bg-panel)] shadow-sm'}`}>
           {!currentLang ? (
             <Icon name={"globe"} className={`text-[20px] transition-transform duration-700 ${isOpen ? 'rotate-180 scale-110' : ''}`} />
           ) : (
@@ -67,7 +67,7 @@ export const LanguageSelector: React.FC = () => {
       </div>
       
       <div className={`flex items-center absolute left-[44px] h-full transition-all duration-700 ${isOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8 pointer-events-none'}`}>
-        <div className="h-5 w-[1px] bg-slate-100" />
+        <div className="h-5 w-[1px] bg-[var(--ui-bg-panel-muted)]" />
         
         <div className="flex items-center gap-3 px-4">
           {languages.map(l => (
@@ -101,3 +101,5 @@ export const LanguageSelector: React.FC = () => {
     </div>
   );
 };
+
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 
 const NeonCircleComponent: React.FC = () => {
   const animations = `
@@ -37,7 +37,7 @@ const NeonCircleComponent: React.FC = () => {
   })
 
   return (
-    <div className="relative flex items-center justify-center w-8 h-8 bg-white overflow-visible">
+    <div className="relative flex items-center justify-center w-8 h-8 bg-[var(--ui-bg-panel)] overflow-visible">
       <style>{animations}</style>
 
       <svg className="absolute w-0 h-0" aria-hidden="true">
@@ -64,11 +64,11 @@ const NeonCircleComponent: React.FC = () => {
 
         <div className="relative flex items-center justify-center z-10">
           <div style={ringStyle('28px', '1.2px')}>
-            <div className="w-full h-full rounded-full bg-white" />
+            <div className="w-full h-full rounded-full bg-[var(--ui-bg-panel)]" />
           </div>
 
           <div style={ringStyle('18px', '1px')}>
-            <div className="w-full h-full rounded-full bg-white" />
+            <div className="w-full h-full rounded-full bg-[var(--ui-bg-panel)]" />
           </div>
         </div>
 
@@ -86,3 +86,5 @@ const NeonCircleComponent: React.FC = () => {
 }
 
 export default NeonCircleComponent
+
+

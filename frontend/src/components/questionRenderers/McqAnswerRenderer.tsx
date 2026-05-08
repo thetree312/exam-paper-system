@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+﻿import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MarkdownWithMath } from '../MarkdownWithMath'
 
@@ -130,7 +130,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                 key={idx}
                 src={src}
                 alt={t('question.legend.generic', { index: idx + 1 })}
-                className="max-w-full h-auto rounded border border-slate-200"
+                className="max-w-full h-auto rounded border border-[var(--ui-border-default)]"
               />
             ))}
           </div>
@@ -138,7 +138,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-slate-500">{t('question.mcq.heading')}</div>
+        <div className="text-xs font-semibold text-[var(--ui-text-primary)]">{t('question.mcq.heading')}</div>
         <div className="grid gap-2 sm:grid-cols-2">
           {optionMeta.map(({ option, images, textWithoutFigs, isImageOnly }) => {
             const isSelected = selected === option.label.toUpperCase()
@@ -150,7 +150,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                 className={`text-left rounded-xl border p-3 flex gap-3 items-start transition ${
                   isSelected
                     ? 'border-emerald-400 bg-emerald-50 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-400 bg-white'
+                    : 'border-[var(--ui-border-default)] hover:border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]'
                 } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                 onClick={() => handleToggle(option.label)}
               >
@@ -158,7 +158,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                   className={`mt-0.5 inline-flex items-center justify-center size-7 rounded-full border text-sm font-semibold ${
                     isSelected
                       ? 'border-emerald-500 bg-emerald-500 text-white'
-                      : 'border-slate-300 text-slate-600'
+                      : 'border-[var(--ui-border-strong)] text-[var(--ui-text-primary)]'
                   }`}
                 >
                   {option.label}
@@ -167,7 +167,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                   {!isImageOnly && textWithoutFigs && (
                     <MarkdownWithMath
                       compact
-                      className="text-sm text-slate-700 leading-relaxed"
+                      className="text-sm text-[var(--ui-text-primary)] leading-relaxed"
                     >
                       {textWithoutFigs}
                     </MarkdownWithMath>
@@ -182,7 +182,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
                             label: option.label,
                             index: idx + 1,
                           })}
-                          className="max-w-full h-auto rounded border border-slate-200"
+                          className="max-w-full h-auto rounded border border-[var(--ui-border-default)]"
                         />
                       ))}
                     </div>
@@ -192,7 +192,7 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
             )
           })}
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-[var(--ui-text-primary)]">
           {selected
             ? t('question.status.selected', { label: selected })
             : t('question.status.hint')}
@@ -201,3 +201,5 @@ export const McqAnswerRenderer: React.FC<McqAnswerRendererProps> = ({
     </div>
   )
 }
+
+

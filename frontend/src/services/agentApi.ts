@@ -367,12 +367,61 @@ function mapQuestionAsked(input: unknown): AgentQuestionAskedFact {
   }
 }
 
-function mapEventPayload(raw: unknown): AgentStreamEvent | null {
+function mapEventPayload(raw: unknown, depth = 0): AgentStreamEvent | null {
+  if (depth > 3) return null
   const event = asRecord(raw)
   if (!event) return null
   const type = asString(event.type)
   const properties = asRecord(event.properties) ?? {}
   if (!type) return null
+
+  if (type === 'RUN_FINISHED') {
+    return {
+      type: 'session_status',
+      status: 'idle',
+    }
+  }
+
+  if (type === 'RUN_ERROR') {
+    const message = asString(event.message)
+    const code = asString(event.code)
+    const cancelled = code === 'MessageAbortedError' || code === 'AbortError' || message?.toLowerCase() === 'aborted'
+    if (cancelled) {
+      return {
+        type: 'cancelled',
+        reason: message ?? 'Aborted',
+      }
+    }
+    return {
+      type: 'error',
+      error: message ?? 'Agent stream failed',
+    }
+  }
+
+  if (type === 'CUSTOM') {
+    const name = asString(event.name)
+    const value = asRecord(event.value) ?? {}
+    const customProperties = asRecord(value.properties) ?? value
+    if (name === 'permission.asked') {
+      return {
+        type: 'permission_asked',
+        request: mapPermissionAsked(customProperties),
+      }
+    }
+    if (name === 'question.asked') {
+      return {
+        type: 'question_asked',
+        request: mapQuestionAsked(customProperties),
+      }
+    }
+    return null
+  }
+
+  if (type === 'RAW') {
+    const nested = asRecord(event.event) ?? asRecord(event.rawEvent)
+    if (!nested) return null
+    return mapEventPayload(nested, depth + 1)
+  }
 
   if (type === 'server.connected' || type === 'server.heartbeat') return null
 

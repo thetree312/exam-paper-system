@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import Icon from '../../../components/Icon'
 
@@ -62,15 +62,15 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
 
   return (
     <div className="absolute inset-x-2 bottom-3 z-10 flex justify-center lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-4 lg:items-start">
-      <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-[22px] border border-slate-200 bg-white/92 px-2 py-2 shadow-lg backdrop-blur scrollbar-hidden lg:max-h-full lg:flex-col lg:items-center lg:gap-2 lg:overflow-x-visible lg:overflow-y-auto lg:rounded-[26px] lg:px-2 lg:py-2">
-        <div className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50/90 p-1.5 lg:flex-col lg:p-2">
+      <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-[22px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)]/92 px-2 py-2 shadow-lg backdrop-blur scrollbar-hidden lg:max-h-full lg:flex-col lg:items-center lg:gap-2 lg:overflow-x-visible lg:overflow-y-auto lg:rounded-[26px] lg:px-2 lg:py-2">
+        <div className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]/90 p-1.5 lg:flex-col lg:p-2">
           <button
             type="button"
             title={t('mindmap_toolbar.document_mode')}
             disabled={!canUseDocument}
             onClick={() => onModeChange('document')}
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-              mode === 'document' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+              mode === 'document' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]'
             } disabled:cursor-not-allowed disabled:opacity-30`}
           >
             <Icon name={"description"} className="text-[18px] leading-none" />
@@ -81,15 +81,15 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             disabled={!canUseFile}
             onClick={() => onModeChange('file')}
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-              mode === 'file' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+              mode === 'file' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]'
             } disabled:cursor-not-allowed disabled:opacity-30`}
           >
             <Icon name={"article"} className="text-[18px] leading-none" />
           </button>
         </div>
 
-        <div className="h-8 w-px shrink-0 bg-slate-200 lg:h-px lg:w-8" />
-        <div className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50/90 p-1.5 lg:flex-col lg:p-2">
+        <div className="h-8 w-px shrink-0 bg-[var(--ui-border-default)] lg:h-px lg:w-8" />
+        <div className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]/90 p-1.5 lg:flex-col lg:p-2">
           <button
             type="button"
             title={t('mindmap_toolbar.mode_knowledge_structure')}
@@ -98,7 +98,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             className={`inline-flex min-w-[72px] items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:h-9 lg:min-w-0 lg:px-2 ${
               mindmapMode === 'knowledge_structure'
                 ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]'
             }`}
           >
             <Icon name={"book_ribbon"} className="text-[14px] leading-none" />
@@ -110,7 +110,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             onClick={() => onMindmapModeChange('exam_review')}
             aria-label={t('mindmap_toolbar.mode_exam_review')}
             className={`inline-flex min-w-[72px] items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:h-9 lg:min-w-0 lg:px-2 ${
-              mindmapMode === 'exam_review' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              mindmapMode === 'exam_review' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]'
             }`}
           >
             <Icon name={"cognition_2"} className="text-[14px] leading-none" />
@@ -118,14 +118,14 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           </button>
         </div>
 
-        <div className="h-8 w-px shrink-0 bg-slate-200 lg:h-px lg:w-8" />
+        <div className="h-8 w-px shrink-0 bg-[var(--ui-border-default)] lg:h-px lg:w-8" />
 
         <button
           type="button"
           title={layoutTitle}
           onClick={onCycleLayout}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={layoutIcon} className="text-[16px] leading-none" />
         </button>
@@ -134,7 +134,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={refreshLabel}
           onClick={onRefresh}
           disabled={refreshDisabled}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"autorenew"} className="text-[16px] leading-none" />
         </button>
@@ -143,7 +143,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.undo')}
           onClick={onUndo}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"undo"} className="text-[16px] leading-none" />
         </button>
@@ -152,7 +152,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.redo')}
           onClick={onRedo}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"redo"} className="text-[16px] leading-none" />
         </button>
@@ -161,7 +161,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.fit_view')}
           onClick={onFitView}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"fit_screen"} className="text-[16px] leading-none" />
         </button>
@@ -170,7 +170,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.expand_all')}
           onClick={onExpandAll}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"unfold_more"} className="text-[16px] leading-none" />
         </button>
@@ -179,7 +179,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.collapse_all')}
           onClick={onCollapseAll}
           disabled={!canControlView}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"unfold_less"} className="text-[16px] leading-none" />
         </button>
@@ -188,7 +188,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           title={t('mindmap_toolbar.export_png')}
           onClick={onExportPng}
           disabled={!canControlView}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Icon name={"download"} className="text-[16px] leading-none" />
         </button>
@@ -198,7 +198,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             title={t('mindmap_toolbar.save_mindmap')}
             onClick={onSave}
             disabled={saveDisabled}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ui-text-primary)] transition-colors hover:text-[var(--ui-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Icon name={"save"} className="text-[16px] leading-none" />
           </button>
@@ -209,3 +209,5 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
 }
 
 export default MindMapToolbar
+
+

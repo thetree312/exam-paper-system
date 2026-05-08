@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import aliasMap from '../../scripts/icon-aliases.json'
 
 export interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -102,3 +102,5 @@ export const Icon: React.FC<IconProps> = ({ name, spin, filled, className, style
 }
 
 export default Icon
+
+

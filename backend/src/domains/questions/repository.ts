@@ -19,14 +19,16 @@ function ensureMigrated() {
 
   const tx = db.transaction(() => {
     for (const item of state.items) {
+      const studioDocumentID = item.studioDocumentID ?? (item as QuestionRecord & { documentID?: string }).documentID
+      if (!studioDocumentID) continue
       db.prepare(
         `
           INSERT OR REPLACE INTO questions (
-            id, user_id, workroom_id, document_id, studio_document_id, source_document_id, sequence_index, content, legend_images_json, page,
+            id, user_id, workroom_id, document_id, studio_document_id, studio_card_id, source_document_id, sequence_index, content, legend_images_json, page,
             student_answer, canonical_answer, explanation, grading_judgement, grading_predicted_answer,
             grading_reasoning, grading_confidence, created_at, updated_at
           ) VALUES (
-            @id, @user_id, @workroom_id, @document_id, @studio_document_id, @source_document_id, @sequence_index, @content, @legend_images_json, @page,
+            @id, @user_id, @workroom_id, @document_id, @studio_document_id, @studio_card_id, @source_document_id, @sequence_index, @content, @legend_images_json, @page,
             @student_answer, @canonical_answer, @explanation, @grading_judgement, @grading_predicted_answer,
             @grading_reasoning, @grading_confidence, @created_at, @updated_at
           )
@@ -35,8 +37,9 @@ function ensureMigrated() {
         id: item.id,
         user_id: item.userID,
         workroom_id: item.workroomID,
-        document_id: item.studioDocumentID,
-        studio_document_id: item.studioDocumentID,
+        document_id: studioDocumentID,
+        studio_document_id: studioDocumentID,
+        studio_card_id: item.studioCardID ?? null,
         source_document_id: item.sourceDocumentID ?? null,
         sequence_index: item.sequenceIndex,
         content: item.content,
@@ -67,6 +70,7 @@ async function readAll() {
     userID: String(row.user_id),
     workroomID: String(row.workroom_id),
     studioDocumentID: String(row.studio_document_id ?? row.document_id),
+    studioCardID: (row.studio_card_id as string | null) ?? null,
     sourceDocumentID: (row.source_document_id as string | null) ?? null,
     sequenceIndex: Number(row.sequence_index),
     content: String(row.content),
@@ -105,11 +109,11 @@ function writeAll(items: QuestionRecord[]) {
     const statement = db.prepare(
       `
         INSERT INTO questions (
-          id, user_id, workroom_id, document_id, studio_document_id, source_document_id, sequence_index, content, legend_images_json, page,
+          id, user_id, workroom_id, document_id, studio_document_id, studio_card_id, source_document_id, sequence_index, content, legend_images_json, page,
           student_answer, canonical_answer, explanation, grading_judgement, grading_predicted_answer,
           grading_reasoning, grading_confidence, created_at, updated_at
         ) VALUES (
-          @id, @user_id, @workroom_id, @document_id, @studio_document_id, @source_document_id, @sequence_index, @content, @legend_images_json, @page,
+          @id, @user_id, @workroom_id, @document_id, @studio_document_id, @studio_card_id, @source_document_id, @sequence_index, @content, @legend_images_json, @page,
           @student_answer, @canonical_answer, @explanation, @grading_judgement, @grading_predicted_answer,
           @grading_reasoning, @grading_confidence, @created_at, @updated_at
         )
@@ -122,6 +126,7 @@ function writeAll(items: QuestionRecord[]) {
         workroom_id: item.workroomID,
         document_id: item.studioDocumentID,
         studio_document_id: item.studioDocumentID,
+        studio_card_id: item.studioCardID ?? null,
         source_document_id: item.sourceDocumentID ?? null,
         sequence_index: item.sequenceIndex,
         content: item.content,
@@ -175,6 +180,18 @@ export const QuestionsRepository = {
         item.studioDocumentID === input.studioDocumentID &&
         item.sequenceIndex === input.sequenceIndex,
     )
+  },
+
+  async findByStudioCardID(input: { userID: string; studioCardID: string }) {
+    const items: QuestionRecord[] = await readAll()
+    return items.find((item) => item.userID === input.userID && item.studioCardID === input.studioCardID)
+  },
+
+  async listByStudioCardIDs(input: { userID: string; studioCardIDs: string[] }) {
+    const targetIDs = new Set(input.studioCardIDs)
+    if (targetIDs.size === 0) return []
+    const items: QuestionRecord[] = await readAll()
+    return items.filter((item) => item.userID === input.userID && item.studioCardID && targetIDs.has(item.studioCardID))
   },
 
   async listByDocument(input: { userID: string; documentID: string }) {

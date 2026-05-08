@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+﻿import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AggregatedOcrItem,
@@ -134,16 +134,16 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+    <div className="export-template-dialog fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-[var(--ui-bg-panel)] rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">{t('export.title')}</h3>
-            <p className="text-sm text-slate-500 mt-1">{t('export.subtitle')}</p>
+            <h3 className="text-lg font-semibold text-[var(--ui-text-primary)]">{t('export.title')}</h3>
+            <p className="text-sm text-[var(--ui-text-primary)] mt-1">{t('export.subtitle')}</p>
           </div>
           <button
             type="button"
-            className="size-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500"
+            className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] flex items-center justify-center text-[var(--ui-text-primary)]"
             onClick={onClose}
             disabled={isLoading}
           >
@@ -151,10 +151,10 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
           </button>
         </div>
 
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="block text-sm font-medium text-[var(--ui-text-primary)]">
           {t('export.template_label')}
           <select
-            className="mt-1 w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="mt-1 w-full h-10 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             value={selectedKey ?? ''}
             onChange={(e) => setSelectedKey(e.target.value || null)}
             disabled={isLoading}
@@ -171,7 +171,7 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
-            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="px-4 py-2 rounded-lg border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-50"
             onClick={onClose}
             disabled={isLoading}
           >
@@ -190,3 +190,5 @@ export const ExportTemplateDialog: React.FC<ExportTemplateDialogProps> = ({
     </div>
   )
 }
+
+

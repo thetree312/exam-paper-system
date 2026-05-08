@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+﻿import React, { useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
 import Icon from './Icon'
 
@@ -44,50 +44,50 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
   }
 
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col border-r border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-6 pb-4 pt-6">
+    <aside className="workroom-source-timeline flex w-[320px] shrink-0 flex-col border-r border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]">
+      <div className="border-b border-[var(--ui-border-default)] px-6 pb-4 pt-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-text-primary)]">
               Workroom
             </div>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-900">
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[var(--ui-text-primary)]">
               {workroom?.name || 'Current Workroom'}
             </h2>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
+            <p className="mt-2 text-xs leading-5 text-[var(--ui-text-primary)]">
               {workspaceName ? `${workspaceName} / Workroom` : 'Workroom under the current workspace'}
             </p>
           </div>
           <button
             type="button"
             onClick={onUploadClick}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--ui-border-default)] bg-slate-900 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
           >
             <Icon name={"upload_file"} className="text-[18px]" />
             Upload
           </button>
         </div>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
+        <p className="mt-3 text-sm leading-6 text-[var(--ui-text-primary)]">
           {workspaceTopic || 'This panel binds source files to the current workroom and will later connect them to the knowledge base.'}
         </p>
       </div>
 
       <div className="px-6 py-4">
-        <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
+        <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-[var(--ui-text-primary)]">
           <span>Knowledge Base</span>
           <span>{items.length}</span>
         </div>
       </div>
 
       <div className="relative flex-1 overflow-y-auto px-6 pb-8">
-        <div className="absolute bottom-8 left-[34px] top-0 w-px bg-slate-200" />
+        <div className="absolute bottom-8 left-[34px] top-0 w-px bg-[var(--ui-border-default)]" />
         {items.length === 0 ? (
-          <div className="relative z-10 mt-16 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm">
-              <Icon name={"folder_open"} className="text-4xl text-slate-300" />
+          <div className="relative z-10 mt-16 rounded-3xl border border-dashed border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-6 py-10 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ui-bg-panel)] shadow-sm">
+              <Icon name={"folder_open"} className="text-4xl text-[var(--ui-text-primary)]" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-900">No source files yet</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+            <h3 className="text-lg font-semibold text-[var(--ui-text-primary)]">No source files yet</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--ui-text-primary)]">
               Upload PDF, Word, or image files. They will bind to this workroom first and then enter the KB pipeline.
             </p>
           </div>
@@ -95,9 +95,9 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
           <div className="relative z-10 space-y-8">
             <div className="flex items-center gap-4">
               <div className="flex w-5 justify-center">
-                <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-white" />
+                <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-[var(--ui-bg-panel)]" />
               </div>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-text-primary)]">
                 Today
               </span>
             </div>
@@ -105,7 +105,7 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                  className="group rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   <div
                     className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${accentClass(
@@ -114,8 +114,8 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
                   >
                     source
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-slate-900">{item.title}</div>
-                  <div className="mt-1 text-sm text-slate-500">{item.subtitle}</div>
+                  <div className="mt-3 text-sm font-semibold text-[var(--ui-text-primary)]">{item.title}</div>
+                  <div className="mt-1 text-sm text-[var(--ui-text-primary)]">{item.subtitle}</div>
                 </div>
               ))}
             </div>
@@ -125,3 +125,5 @@ export const WorkroomSourceTimeline: React.FC<WorkroomSourceTimelineProps> = ({
     </aside>
   )
 }
+
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import BrandIcon from './BrandIcon'
 import Icon from './Icon'
@@ -23,17 +23,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       : undefined
   return (
     <header
-      className="flex h-[46px] items-center justify-between border-b border-slate-200 bg-white px-6 py-0"
+      className="flex h-[46px] items-center justify-between border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-6 py-0"
       style={headerStyle}
     >
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-3 text-slate-900">
+        <div className="flex items-center gap-3 text-[var(--ui-text-primary)]">
           <BrandIcon />
         </div>
       </div>
       <div className="flex items-center gap-3">
         <button
-          className="flex h-8 items-center gap-2 rounded-lg bg-slate-100 px-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-200"
+          className="flex h-8 items-center gap-2 rounded-lg bg-[var(--ui-bg-panel-muted)] px-4 text-sm font-bold text-[var(--ui-text-primary)] transition-colors hover:bg-[var(--ui-bg-panel-muted)]"
           type="button"
           onClick={onExportClick}
           title={t('app.buttons.export')}
@@ -45,3 +45,5 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     </header>
   )
 }
+
+

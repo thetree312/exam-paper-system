@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+﻿import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentSendPayload,
@@ -131,10 +131,10 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
 
   const contentShellClassName =
     activeStudioView === 'mindmap'
-      ? 'flex-1 overflow-hidden pb-20 pt-24 sm:pb-6 sm:pt-20 lg:pt-6'
+      ? 'flex-1 overflow-hidden pt-[42px] sm:pt-[42px] lg:pt-6'
       : activeStudioView === 'preview'
-        ? 'flex-1 overflow-hidden p-0 pb-8 pt-28'
-      : 'scrollbar-hidden flex-1 overflow-y-auto p-0 pb-8 pt-28 lg:p-6 lg:pt-28'
+        ? 'flex-1 overflow-hidden p-0 pt-[42px]'
+      : 'scrollbar-hidden flex-1 overflow-y-auto p-0 pt-[42px] lg:p-6 lg:pt-[42px]'
 
   useEffect(() => {
     const el = tabsScrollRef.current
@@ -324,13 +324,13 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
 
   return (
     <section
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background-light"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--ui-bg-app)]"
       style={{ marginRight: agentDrawerInset > 0 ? `${agentDrawerInset}px` : undefined, transition: 'margin-right 200ms ease' }}
     >
-      <div className="pointer-events-none absolute left-4 right-4 top-3 z-20 flex justify-center sm:top-4">
-        <div className="pointer-events-auto inline-flex max-w-full gap-1 overflow-x-auto rounded-full border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur scrollbar-hidden">
+      <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex justify-center">
+        <div className="pointer-events-auto inline-flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-1.5 shadow-none backdrop-blur scrollbar-hidden">
           <button
-          className="shrink-0 rounded-full p-2 text-slate-600"
+          className="shrink-0 rounded-full p-2 text-[var(--ui-text-primary)]"
           type="button"
           title={t('editor_workspace.text_button')}
           onClick={() => {
@@ -340,7 +340,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
           <Icon name={"title"} className="text-[18px] leading-none" />
         </button>
         <button
-          className={`shrink-0 rounded-full p-2 text-slate-600 ${activeStudioView === 'flashcard' ? 'bg-slate-200' : ''}`}
+          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'flashcard' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
           type="button"
           title={t('editor_workspace.flashcard_button')}
           onClick={() => onOpenStudioTab('flashcard')}
@@ -348,7 +348,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
           <Icon name={"image"} className="text-[18px] leading-none" />
         </button>
         <button
-          className={`shrink-0 rounded-full p-2 text-slate-600 ${activeStudioView === 'mindmap' ? 'bg-slate-200' : ''}`}
+          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'mindmap' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
           type="button"
           title={t('editor_workspace.mindmap_button')}
           onClick={() => onOpenStudioTab('mindmap')}
@@ -356,7 +356,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
           <Icon name={"account_tree"} className="text-[18px] leading-none" />
         </button>
         <button
-          className={`shrink-0 rounded-full p-2 text-slate-600 ${activeStudioView === 'editor' ? 'bg-slate-200' : ''}`}
+          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'editor' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
           type="button"
           title={t('editor_workspace.workspace_title')}
           onClick={() => onOpenStudioTab('editor')}
@@ -366,8 +366,8 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
         <button
           className={`shrink-0 rounded-full p-2 ${
             studioDataSourceMode === 'keep_workset'
-              ? 'bg-slate-900 text-white shadow-inner'
-              : 'text-slate-600'
+              ? 'bg-[var(--ui-btn-solid-bg)] text-white'
+              : 'text-[var(--ui-text-primary)]'
           }`}
           type="button"
           title={
@@ -388,7 +388,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
         </button>
         <button
           className={`flex shrink-0 items-center gap-1.5 rounded-full p-2 text-sm ${
-            isAnswerMode ? 'bg-slate-900 text-white shadow-inner' : 'text-slate-600'
+            isAnswerMode ? 'bg-[var(--ui-btn-solid-bg)] text-white' : 'text-[var(--ui-text-primary)]'
           }`}
           type="button"
           title={t('editor_workspace.answer_mode_button')}
@@ -396,7 +396,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
         >
           <Icon name={"edit_note"} className="text-[16px] leading-none" />
         </button>
-        <div className="mx-1 hidden w-px bg-slate-200 sm:block" />
+        <div className="mx-1 hidden w-px bg-[var(--ui-border-default)] sm:block" />
         <button
           className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-purple-600"
           type="button"
@@ -409,8 +409,8 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
         </div>
       </div>
 
-      <div className="absolute left-4 right-4 top-[72px] z-10 h-[34px] rounded-t-[8px] border border-[#D1D1D1] bg-[#E9EEF5] px-2">
-        <div ref={tabsScrollRef} className="scrollbar-hidden flex h-full items-end gap-1 overflow-x-auto pr-2">
+      <div className="absolute inset-x-0 top-0 z-10 h-[34px] border-y border-[var(--ui-border-default)] bg-[var(--ui-bg-tabbar)] px-0">
+        <div ref={tabsScrollRef} className="scrollbar-hidden flex h-full w-full items-end gap-0 overflow-x-auto pr-0">
           {studioTabs.map((tab, index) => {
             const isActive = tab.id === activeStudioTabId
             const prevActive = studioTabs[index - 1]?.id === activeStudioTabId
@@ -438,8 +438,8 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                   }}
                   className={`flex h-[32px] min-w-[120px] max-w-[220px] items-center gap-1.5 rounded-t-[6px] border-none pl-3 pr-2 text-[13px] transition-colors ${
                     isActive
-                      ? 'z-10 bg-white text-slate-800 shadow-[0_-1px_4px_rgba(0,0,0,0.04)]'
-                      : 'text-slate-600 hover:bg-[#DCE3ED]'
+                      ? 'z-10 bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] shadow-none'
+                      : 'text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
                   }`}
                   draggable
                   onDragStart={(event) => {
@@ -463,14 +463,14 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                   />
                   <span className="min-w-0 flex-1 truncate text-left" title={tab.title}>{tab.title}</span>
                   {tab.kind === 'preview' && tab.payload?.isDirty ? (
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-slate-500" title="未保存改动" />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--ui-text-primary)]" title="未保存改动" />
                   ) : null}
                   {tab.closable && (!(tab.kind === 'preview' && tab.payload?.isDirty && !isActive)) && (
                     <span
                       role="button"
                       tabIndex={0}
                       aria-label={t('file_tabs.close_label')}
-                      className={`rounded-sm p-0.5 transition-opacity hover:bg-slate-200 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      className={`rounded-sm p-0.5 transition-opacity hover:bg-[var(--ui-bg-panel-muted)] ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       onClick={(event) => {
                         event.stopPropagation()
                         onCloseStudioTab(tab.id)
@@ -483,11 +483,11 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                         }
                       }}
                     >
-                      <Icon name="close" className="text-[14px] leading-none text-slate-500" />
+                      <Icon name="close" className="text-[14px] leading-none text-[var(--ui-text-primary)]" />
                     </span>
                   )}
                 </button>
-                {showDivider && <div className="h-[16px] w-[1px] bg-[#C1C6CC]" />}
+                {showDivider && <div className="h-[16px] w-[1px] bg-[var(--ui-border-default)]" />}
               </div>
             )
           })}
@@ -546,7 +546,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                   setEditorContextMenu({ x: event.clientX, y: event.clientY })
                 }}
               >
-                <MarkdownWithMath className="markdown-body font-serif text-[15px] leading-7 text-slate-700">
+                <MarkdownWithMath className="markdown-body font-serif text-[15px] leading-7 text-[var(--ui-text-primary)]">
                   {activePreviewPayload?.draftContent ?? ''}
                 </MarkdownWithMath>
               </div>
@@ -554,13 +554,13 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div
                   ref={previewLineGutterRef}
-                  className="min-h-0 w-[56px] shrink-0 overflow-hidden border-r border-slate-200 bg-slate-50 px-2 py-2 text-right font-mono text-[12px] leading-7 text-slate-400 select-none"
+                  className="min-h-0 w-[56px] shrink-0 overflow-hidden border-r border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-2 py-2 text-right font-mono text-[12px] leading-7 text-[var(--ui-text-primary)] select-none"
                 >
                   <pre className="m-0 whitespace-pre">{previewLineNumberText}</pre>
                 </div>
                 <textarea
                   ref={previewTextareaRef}
-                  className="min-h-0 flex-1 resize-none overflow-auto whitespace-pre bg-transparent px-3 py-2 font-mono text-[15px] leading-7 text-slate-700 outline-none"
+                  className="min-h-0 flex-1 resize-none overflow-auto whitespace-pre bg-transparent px-3 py-2 font-mono text-[15px] leading-7 text-[var(--ui-text-primary)] outline-none"
                   spellCheck={false}
                   wrap="off"
                   value={activePreviewPayload?.draftContent ?? ''}
@@ -600,12 +600,12 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
             ) : null}
             {editorContextMenu && (
               <div
-                className="fixed z-[90] min-w-[180px] rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl"
+                className="fixed z-[90] min-w-[180px] rounded-md border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] py-1 text-sm shadow-xl"
                 style={{ left: editorContextMenu.x, top: editorContextMenu.y }}
               >
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)] disabled:text-[var(--ui-text-primary)] disabled:hover:bg-transparent"
                   disabled={activePreviewViewMode === 'markdown-read'}
                   onClick={async () => {
                     setEditorContextMenu(null)
@@ -622,7 +622,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)] disabled:text-[var(--ui-text-primary)] disabled:hover:bg-transparent"
                   disabled={activePreviewViewMode === 'markdown-read'}
                   onClick={() => document.execCommand('undo')}
                 >
@@ -630,7 +630,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)] disabled:text-[var(--ui-text-primary)] disabled:hover:bg-transparent"
                   disabled={activePreviewViewMode === 'markdown-read'}
                   onClick={() => document.execCommand('redo')}
                 >
@@ -638,18 +638,18 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)] disabled:text-[var(--ui-text-primary)] disabled:hover:bg-transparent"
                   disabled={activePreviewViewMode === 'markdown-read'}
                   onClick={() => document.execCommand('cut')}
                 >
                   剪切
                 </button>
-                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-slate-100" onClick={() => document.execCommand('copy')}>
+                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)]" onClick={() => document.execCommand('copy')}>
                   复制
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)] disabled:text-[var(--ui-text-primary)] disabled:hover:bg-transparent"
                   disabled={activePreviewViewMode === 'markdown-read'}
                   onClick={() => document.execCommand('paste')}
                 >
@@ -657,7 +657,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)]"
                   onClick={() => {
                     if (!activeStudioTab?.id.startsWith('preview:')) return
                     onUpdateStudioPreviewViewMode(
@@ -671,7 +671,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-[var(--ui-bg-panel-muted)]"
                   onClick={() => {
                     if (activePreviewViewMode === 'markdown-read') {
                       const selected = window.getSelection()
@@ -694,17 +694,17 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
             )}
           </div>
         ) : (
-          <div className="mx-auto flex min-h-[900px] w-full max-w-[800px] flex-col gap-6 rounded-sm border border-slate-200 bg-white p-12 shadow-sm">
-            <div className="border-b-2 border-slate-900 pb-6 text-center">
-              <h1 className="mb-2 text-3xl font-bold text-slate-900">{t('editor_workspace.workspace_title')}</h1>
-              <p className="font-medium text-slate-500">
+          <div className="mx-auto flex min-h-[900px] w-full max-w-[800px] flex-col gap-6 rounded-sm border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-12 shadow-sm">
+            <div className="border-b-2 border-[var(--ui-text-primary)] pb-6 text-center">
+              <h1 className="mb-2 text-3xl font-bold text-[var(--ui-text-primary)]">{t('editor_workspace.workspace_title')}</h1>
+              <p className="font-medium text-[var(--ui-text-primary)]">
                 {sessionId
                   ? t('editor_workspace.session_label', { sessionId })
                   : t('editor_workspace.session_not_started')}
               </p>
             </div>
 
-            <div className="mb-2 text-sm text-slate-500">{t('editor_workspace.recognition_results')}</div>
+            <div className="mb-2 text-sm text-[var(--ui-text-primary)]">{t('editor_workspace.recognition_results')}</div>
             <div className="space-y-6">
               <AgentWorkspacePanel
                 backendBaseUrl={backendBaseUrl}
@@ -743,3 +743,6 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
 }
 
 export const EditorWorkspaceShell = React.memo(EditorWorkspaceShellComponent)
+
+
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -109,18 +109,18 @@ const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?
     ),
     table: ({ children }) => (
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm border-collapse border border-slate-300">
+        <table className="w-full text-left text-sm border-collapse border border-[var(--ui-border-strong)]">
           {children}
         </table>
       </div>
     ),
     th: ({ children }) => (
-      <th className="border border-slate-300 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700">
+      <th className="border border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel-muted)] px-2 py-1 text-sm font-medium text-[var(--ui-text-primary)]">
         {children}
       </th>
     ),
     td: ({ children }) => (
-      <td className="border border-slate-300 px-2 py-1 text-sm text-slate-700 align-top">
+      <td className="border border-[var(--ui-border-strong)] px-2 py-1 text-sm text-[var(--ui-text-primary)] align-top">
         {children}
       </td>
     ),
@@ -191,3 +191,5 @@ export const MarkdownWithMath: React.FC<MarkdownWithMathProps & { disableMath?: 
     )
   },
 )
+
+

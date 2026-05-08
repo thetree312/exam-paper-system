@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react'
+﻿import React, { useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -120,7 +120,7 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
             key={`${keyPrefix}-fig-${localKey}`}
             src={src}
             alt={t('question.legend.generic', { index: idx + 1 })}
-            className="inline-block max-w-full h-auto align-middle mx-1 rounded border border-slate-200"
+            className="inline-block max-w-full h-auto align-middle mx-1 rounded border border-[var(--ui-border-default)]"
           />,
         )
       } else {
@@ -151,7 +151,7 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
   }
 
   return (
-    <div className="text-sm text-slate-700 w-full leading-relaxed">
+    <div className="text-sm text-[var(--ui-text-primary)] w-full leading-relaxed">
       {parsed.segments.map((segment, idx) => {
         if (segment.type === 'text') {
           if (!segment.text) {
@@ -197,3 +197,5 @@ export const FillBlankRenderer: React.FC<FillBlankRendererProps> = ({
     </div>
   )
 }
+
+

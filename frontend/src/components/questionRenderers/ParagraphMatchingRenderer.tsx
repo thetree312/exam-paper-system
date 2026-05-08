@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MarkdownWithMath } from '../MarkdownWithMath'
 import { parseMatchingAnswerMap, serializeAnswerMap } from './utils'
@@ -109,13 +109,13 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
   return (
     <div className="space-y-4">
       {data.instructions && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        <div className="rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] p-4 text-sm text-[var(--ui-text-primary)]">
           <MarkdownWithMath disableMath>{data.instructions}</MarkdownWithMath>
         </div>
       )}
       <div
         className={`grid gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(320px,1.2fr)] ${
-          isDesktop ? 'rounded-2xl border border-slate-200 bg-white/80 p-3' : ''
+          isDesktop ? 'rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-3' : ''
         }`}
         style={
           isDesktop
@@ -135,7 +135,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
               : ''
           }`}
         >
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="text-xs font-semibold text-[var(--ui-text-primary)] uppercase tracking-wide">
             {t('question.matching.paragraphs')}
           </div>
           {data.paragraphs.map((paragraph) => {
@@ -149,7 +149,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                   paragraphRefs.current[paragraph.id] = el
                 }}
                 className={`rounded-2xl border p-4 transition shadow-sm ${
-                  isHighlighted ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-white'
+                  isHighlighted ? 'border-sky-300 bg-sky-50' : 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]'
                 }`}
                 onMouseEnter={() => focusParagraph(paragraph.id, { scroll: false })}
                 onMouseLeave={() =>
@@ -168,7 +168,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                     </span>
                   )}
                 </div>
-                <MarkdownWithMath disableMath className="text-sm text-slate-700 leading-relaxed">
+                <MarkdownWithMath disableMath className="text-sm text-[var(--ui-text-primary)] leading-relaxed">
                   {paragraph.text}
                 </MarkdownWithMath>
               </div>
@@ -182,7 +182,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
               : ''
           }`}
         >
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="text-xs font-semibold text-[var(--ui-text-primary)] uppercase tracking-wide">
             {t('question.matching.statements')}
           </div>
           {data.statements.map((statement) => {
@@ -191,12 +191,12 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
               <div
                 key={statement.id}
                 className={`rounded-2xl border p-4 space-y-3 ${
-                  assigned ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'
+                  assigned ? 'border-emerald-300 bg-emerald-50' : 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center size-7 rounded-full border border-slate-300 text-xs font-semibold text-slate-600">
+                    <span className="inline-flex items-center justify-center size-7 rounded-full border border-[var(--ui-border-strong)] text-xs font-semibold text-[var(--ui-text-primary)]">
                       {statement.id}
                     </span>
                     {assigned ? (
@@ -204,19 +204,19 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                         {t('question.matching.selected_paragraph', { id: assigned })}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500">{t('question.matching.unselected')}</span>
+                      <span className="text-xs text-[var(--ui-text-primary)]">{t('question.matching.unselected')}</span>
                     )}
                   </div>
                   <button
                     type="button"
-                    className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-40"
+                    className="text-xs text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)] disabled:opacity-40"
                     onClick={() => handleClear(statement.id)}
                     disabled={disabled || !assigned}
                   >
                     {t('question.matching.clear')}
                   </button>
                 </div>
-                <MarkdownWithMath disableMath className="text-sm text-slate-700 leading-relaxed">
+                <MarkdownWithMath disableMath className="text-sm text-[var(--ui-text-primary)] leading-relaxed">
                   {statement.text}
                 </MarkdownWithMath>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -230,7 +230,7 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
                         className={`text-sm font-semibold rounded-xl border px-3 py-2 transition ${
                           isActive
                             ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                            : 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] hover:border-[var(--ui-border-strong)]'
                         }`}
                         onMouseEnter={() => focusParagraph(paragraph.id, { scroll: false })}
                         onMouseLeave={() =>
@@ -253,3 +253,5 @@ const ParagraphMatchingRendererComponent: React.FC<ParagraphMatchingRendererProp
 }
 
 export const ParagraphMatchingRenderer = React.memo(ParagraphMatchingRendererComponent)
+
+

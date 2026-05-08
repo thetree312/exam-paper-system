@@ -3,6 +3,7 @@ import { z } from "zod"
 import { QuestionGradingService } from "../domains/questions/grading-service"
 import { QuestionSplitService } from "../domains/questions/split-service"
 import { QuestionsService } from "../domains/questions/service"
+import { StudioService } from "../domains/studio/service"
 import { requireAuth } from "./auth-context"
 
 const createQuestionSchema = z.object({
@@ -176,6 +177,14 @@ questionsRoutes.get("/snapshot/:studioDocumentID", async (c) => {
     workroomID,
     studioDocumentID: c.req.param("studioDocumentID"),
   })
+  const studioCards = await StudioService.listQuestionCards({
+    userID: user.id,
+    workroomID,
+    studioDocumentID: c.req.param("studioDocumentID"),
+  })
+  const groupByStudioCardID = new Map(
+    studioCards.map((card: { id: string; cardGroupID: string }) => [card.id, card.cardGroupID || card.id]),
+  )
   return c.json({
     studio_document_id: snapshot.studioDocumentID,
     source_document_id: snapshot.sourceDocumentID ?? null,
@@ -183,13 +192,17 @@ questionsRoutes.get("/snapshot/:studioDocumentID", async (c) => {
     status: snapshot.status,
     questions: snapshot.questions.map((question) => ({
       id: question.id,
+      studioCardID: question.studioCardID ?? null,
       sequenceIndex: question.sequenceIndex,
-      groupId: null,
+      groupId:
+        (question.studioCardID ? groupByStudioCardID.get(question.studioCardID) : null) ??
+        question.sequenceIndex,
       page: question.page,
       content: question.content,
       legendImages: question.legendImages,
       studentAnswer: question.studentAnswer ?? null,
       canonicalAnswer: question.canonicalAnswer ?? null,
+      explanation: question.explanation ?? null,
       gradingJudgement: question.gradingJudgement ?? null,
       gradingPredictedAnswer: question.gradingPredictedAnswer ?? null,
       gradingReasoning: question.gradingReasoning ?? null,

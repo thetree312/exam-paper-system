@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { useFileUpload, useOcrManager } from '../hooks'
@@ -187,3 +187,5 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
     />
   )
 }
+
+

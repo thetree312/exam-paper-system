@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getFavorites, removeFavorite } from '../services/favoritesApi'
 import {
@@ -31,7 +31,7 @@ function formatDateTime(value?: string | null) {
 }
 
 function heatColor(intensity: number) {
-  if (intensity <= 0) return 'bg-slate-100'
+  if (intensity <= 0) return 'bg-[var(--ui-bg-panel-muted)]'
   if (intensity === 1) return 'bg-emerald-100'
   if (intensity === 2) return 'bg-emerald-200'
   if (intensity === 3) return 'bg-emerald-400'
@@ -78,9 +78,9 @@ function masteryLevelTone(level: string) {
   }
   if (level === 'good') {
     return {
-      ring: 'border-sky-500',
-      text: 'text-sky-600',
-      pill: 'bg-sky-50 text-sky-700',
+      ring: 'border-[var(--ui-accent)]',
+      text: 'text-[var(--ui-text-primary)]',
+      pill: 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]',
     }
   }
   if (level === 'basic') {
@@ -98,9 +98,9 @@ function masteryLevelTone(level: string) {
     }
   }
   return {
-    ring: 'border-slate-400',
-    text: 'text-slate-500',
-    pill: 'bg-slate-100 text-slate-600',
+    ring: 'border-[var(--ui-border-strong)]',
+    text: 'text-[var(--ui-text-primary)]',
+    pill: 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]',
   }
 }
 
@@ -177,7 +177,7 @@ function renderContentWithInlineFigures(
           key={`${keyPrefix}-fig-${idx}-${start}`}
           src={resolvedSrc}
           alt={`题目图例 ${idx + 1}`}
-          className="my-2 max-w-full h-auto rounded border border-slate-200 bg-white object-contain"
+          className="my-2 max-w-full h-auto rounded border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] object-contain"
         />,
       )
     }
@@ -211,7 +211,7 @@ function renderContentWithInlineFigures(
               key={`${keyPrefix}-fig-fallback-${idx}`}
               src={resolvedSrc}
               alt={`题目图例 ${idx + 1}`}
-              className="my-2 max-w-full h-auto rounded border border-slate-200 bg-white object-contain"
+              className="my-2 max-w-full h-auto rounded border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] object-contain"
             />
           )
         })}
@@ -228,7 +228,7 @@ function renderContentWithInlineFigures(
           key={`${keyPrefix}-fig-unused-${idx}`}
           src={resolvedSrc}
           alt={`题目图例 ${idx + 1}`}
-          className="my-2 max-w-full h-auto rounded border border-slate-200 bg-white object-contain"
+          className="my-2 max-w-full h-auto rounded border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] object-contain"
         />,
       )
     })
@@ -416,7 +416,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
   const masteryIconSrc = masteryLevelIcon(detail?.learningState?.mastery_level ?? 'unmastered')
 
   return (
-    <div className="h-full bg-[#f8fafc] p-6 overflow-y-auto relative">
+    <div className="favorites-page h-full bg-[var(--ui-bg-panel-muted)] p-6 overflow-y-auto relative">
       <div className="mx-auto w-full max-w-[1500px] relative">
       <main
         className="min-w-0 transition-[margin-right] duration-300"
@@ -425,25 +425,25 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">我的收藏</h1>
-            <p className="text-sm text-slate-500 mt-1">管理你收藏的题卡、题组与闪卡，集中回顾，巩固所学。</p>
+            <h1 className="text-3xl font-bold text-[var(--ui-text-primary)]">我的收藏</h1>
+            <p className="text-sm text-[var(--ui-text-primary)] mt-1">管理你收藏的题卡、题组与闪卡，集中回顾，巩固所学。</p>
           </div>
           {onBack && (
-            <button type="button" className="text-sm text-slate-500" onClick={onBack}>
+            <button type="button" className="text-sm text-[var(--ui-text-primary)]" onClick={onBack}>
               返回
             </button>
           )}
         </div>
         <input
-          className="w-full mb-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="w-full mb-4 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-3 py-2 text-sm"
           placeholder={t('favorites.search_placeholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         {isLoading ? (
-          <div className="py-10 text-center text-slate-500">加载中...</div>
+          <div className="py-10 text-center text-[var(--ui-text-primary)]">加载中...</div>
         ) : filteredFavorites.length === 0 ? (
-          <div className="py-10 text-center text-slate-500">暂无收藏</div>
+          <div className="py-10 text-center text-[var(--ui-text-primary)]">暂无收藏</div>
         ) : (
           <div className="space-y-3">
             {filteredFavorites.map((fav) => {
@@ -452,7 +452,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
               return (
                 <article
                   key={fav.id}
-                  className={`w-full text-left bg-white border rounded-xl p-4 transition ${isActive ? 'border-emerald-500 shadow-sm' : 'border-slate-200'}`}
+                  className={`w-full text-left bg-[var(--ui-bg-panel)] border rounded-xl p-4 transition ${isActive ? 'border-emerald-500 shadow-sm' : 'border-[var(--ui-border-default)]'}`}
                 >
                   <div
                     className="flex items-start justify-between gap-3 cursor-pointer"
@@ -472,13 +472,13 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                   >
                     <div className="min-w-0">
                       {fav.question.knowledge_title ? (
-                        <div className="text-base font-semibold text-slate-900">
+                        <div className="text-base font-semibold text-[var(--ui-text-primary)]">
                           <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
                             {fav.question.knowledge_title}
                           </MarkdownWithMath>
                         </div>
                       ) : null}
-                      <div className="mt-2 text-xs text-slate-600">
+                      <div className="mt-2 text-xs text-[var(--ui-text-primary)]">
                         {renderContentWithInlineFigures(
                           fav.question.content,
                           fav.question.legend_images,
@@ -486,13 +486,13 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                           true,
                         )}
                       </div>
-                      <div className="text-xs text-slate-400 mt-2">{formatDateTime(fav.created_at)}</div>
+                      <div className="text-xs text-[var(--ui-text-primary)] mt-2">{formatDateTime(fav.created_at)}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       {onAddToEditor && (
                         <button
                           type="button"
-                          className="text-blue-600"
+                          className="text-[var(--ui-text-primary)]"
                           onClick={(e) => {
                             e.stopPropagation()
                             onAddToEditor(fav.question_id)
@@ -518,52 +518,52 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
       </div>
       </main>
       <aside
-        className={`fixed right-0 top-0 z-40 h-screen w-[480px] overflow-y-auto border-l border-slate-200 bg-white transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-40 h-screen w-[480px] overflow-y-auto border-l border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] transition-transform duration-300 ${
           selectedID ? 'translate-x-0' : 'translate-x-[calc(100%+2rem)]'
         }`}
       >
         {selectedID && (
           <>
-            <div className="flex items-center justify-between mb-2 sticky top-0 bg-white z-10 px-8 pt-6">
-              <div className="text-sm text-slate-500">题卡</div>
+            <div className="flex items-center justify-between mb-2 sticky top-0 bg-[var(--ui-bg-panel)] z-10 px-8 pt-6">
+              <div className="text-sm text-[var(--ui-text-primary)]">题卡</div>
               <button type="button" onClick={() => setSelectedID(null)}>
-                <Icon name="close" className="text-slate-500" />
+                <Icon name="close" className="text-[var(--ui-text-primary)]" />
               </button>
             </div>
             <div className="px-8 pb-6">
             {detailLoading ? (
-              <div className="text-slate-500">详情加载中...</div>
+              <div className="text-[var(--ui-text-primary)]">详情加载中...</div>
             ) : !detail ? (
               <>
                 <div className="flex items-start justify-between">
-                  <div className="text-[20px] font-semibold text-slate-900 leading-tight">暂无题卡详情</div>
-                  <Icon name="star" className="text-slate-400" />
+                  <div className="text-[20px] font-semibold text-[var(--ui-text-primary)] leading-tight">暂无题卡详情</div>
+                  <Icon name="star" className="text-[var(--ui-text-primary)]" />
                 </div>
-                <div className="mt-2 text-xs text-slate-500">来源：-　　标签：-</div>
-                <div className="mt-3 text-[16px] font-semibold text-slate-900">内容预览</div>
-                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[14px] leading-7 text-slate-400">
+                <div className="mt-2 text-xs text-[var(--ui-text-primary)]">来源：-　　标签：-</div>
+                <div className="mt-3 text-[16px] font-semibold text-[var(--ui-text-primary)]">内容预览</div>
+                <div className="mt-2 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] p-3 text-[14px] leading-7 text-[var(--ui-text-primary)]">
                   暂无内容
                 </div>
               </>
             ) : (
               <>
                 <div className="flex items-start justify-between">
-                  <div className="text-[20px] font-semibold text-slate-900 leading-tight">
+                  <div className="text-[20px] font-semibold text-[var(--ui-text-primary)] leading-tight">
                     {selectedFavorite?.question?.knowledge_title ? (
                       <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
                         {selectedFavorite.question.knowledge_title}
                       </MarkdownWithMath>
                     ) : null}
                   </div>
-                  <Icon name="star" className="text-slate-400" />
+                  <Icon name="star" className="text-[var(--ui-text-primary)]" />
                 </div>
-                <div className="mt-2 text-xs text-slate-500">
+                <div className="mt-2 text-xs text-[var(--ui-text-primary)]">
                   来源：{detail.problemCard.source_document_title || '-'}　　标签：
                   {detail.weaknesses.slice(0, 3).map((w) => w.label).join('、') || detail.knowledgeProfile?.knowledge_points.slice(0, 3).join('、') || '-'}
                 </div>
 
-                <div className="mt-3 text-[16px] font-semibold text-slate-900">内容预览</div>
-                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[14px] leading-7 text-slate-700">
+                <div className="mt-3 text-[16px] font-semibold text-[var(--ui-text-primary)]">内容预览</div>
+                <div className="mt-2 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] p-3 text-[14px] leading-7 text-[var(--ui-text-primary)]">
                   {renderContentWithInlineFigures(
                     detail.problemCard.question_text,
                     selectedFavorite?.question?.legend_images,
@@ -572,31 +572,31 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                   )}
                 </div>
 
-                <div className="mt-3 text-[16px] font-semibold text-slate-900">掌握度</div>
+                <div className="mt-3 text-[16px] font-semibold text-[var(--ui-text-primary)]">掌握度</div>
                 <button
                   type="button"
-                  className="mt-2 w-full rounded-xl border border-slate-200 p-3 flex items-center gap-3 text-left hover:border-slate-300 transition"
+                  className="mt-2 w-full rounded-xl border border-[var(--ui-border-default)] p-3 flex items-center gap-3 text-left hover:border-[var(--ui-border-strong)] transition"
                   onClick={() => setIsMasteryModalOpen(true)}
                 >
-                  <div className={`h-14 w-14 rounded-full border-[5px] ${masteryTone.ring} flex items-center justify-center text-[14px] font-bold text-slate-900`}>
+                  <div className={`h-14 w-14 rounded-full border-[5px] ${masteryTone.ring} flex items-center justify-center text-[14px] font-bold text-[var(--ui-text-primary)]`}>
                     {masteryPercent(detail)}%
                   </div>
                   <div className="flex-1">
                     <div className={`text-[20px] font-semibold leading-tight ${masteryTone.text}`}>
                       {masteryLevelText(detail.learningState?.mastery_level ?? 'unknown')}
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-[var(--ui-text-primary)] mt-1">
                       {detail.learningState?.progress_summary?.trim() ||
                         `连续正确 ${detail.learningState?.consecutive_correct_count ?? 0} 次`}
                     </div>
                   </div>
-                  <Icon name="chevron_right" className="text-slate-400 text-[18px]" />
+                  <Icon name="chevron_right" className="text-[var(--ui-text-primary)] text-[18px]" />
                 </button>
 
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[16px] font-semibold text-slate-900">复习热力图</span>
-                    <span className="text-sm text-slate-700">过去 180 天</span>
+                    <span className="text-[16px] font-semibold text-[var(--ui-text-primary)]">复习热力图</span>
+                    <span className="text-sm text-[var(--ui-text-primary)]">过去 180 天</span>
                   </div>
                   {detail.reviewHeatmap180d.some((item) => item.intensity > 0) ? (
                     <div className="flex gap-1">
@@ -613,11 +613,11 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-400">暂无复习记录</div>
+                    <div className="text-xs text-[var(--ui-text-primary)]">暂无复习记录</div>
                   )}
                 </div>
 
-                <div className="mt-3 space-y-1.5 text-[13px] text-slate-700">
+                <div className="mt-3 space-y-1.5 text-[13px] text-[var(--ui-text-primary)]">
                   <div className="flex justify-between"><span>收藏时间</span><span>{formatDateTime(selectedFavorite?.created_at)}</span></div>
                   <div className="flex justify-between"><span>最近复习</span><span>{formatDateTime(detail.learningState?.last_review_at)}</span></div>
                   <div className="flex justify-between"><span>累计作答次数</span><span>{detail.attemptStats.total_attempts} 次</span></div>
@@ -625,9 +625,9 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </div>
 
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button type="button" onClick={handleOpenSelected} className="rounded-lg bg-slate-900 text-white py-2 text-sm">打开</button>
-                  <button type="button" onClick={() => void handleAddToReviewPlan()} className="rounded-lg border border-slate-300 py-2 text-sm">加入复习计划</button>
-                  <button type="button" onClick={() => void handleUnfavoriteSelected()} className="rounded-lg border border-slate-300 py-2 text-sm">取消收藏</button>
+                  <button type="button" onClick={handleOpenSelected} className="rounded-lg bg-[var(--ui-btn-solid-bg)] text-white py-2 text-sm hover:bg-[var(--ui-btn-solid-hover)]">打开</button>
+                  <button type="button" onClick={() => void handleAddToReviewPlan()} className="rounded-lg border border-[var(--ui-border-strong)] py-2 text-sm">加入复习计划</button>
+                  <button type="button" onClick={() => void handleUnfavoriteSelected()} className="rounded-lg border border-[var(--ui-border-strong)] py-2 text-sm">取消收藏</button>
                 </div>
               </>
             )}
@@ -643,28 +643,28 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
             className="absolute inset-0 bg-black/25"
             onClick={() => setIsMasteryModalOpen(false)}
           />
-          <div className="relative w-full max-w-[800px] rounded-[18px] border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100">
+          <div className="relative w-full max-w-[800px] rounded-[18px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] shadow-2xl">
+            <div className="flex items-start justify-between px-6 py-5 border-b border-[var(--ui-border-default)]">
               <div>
-                <div className="text-[22px] font-semibold text-slate-900">掌握度详情</div>
-                <div className="mt-1 text-[13px] text-slate-500">
+                <div className="text-[22px] font-semibold text-[var(--ui-text-primary)]">掌握度详情</div>
+                <div className="mt-1 text-[13px] text-[var(--ui-text-primary)]">
                   记录你的作答历史、错因分析与薄弱点修复轨迹
                 </div>
               </div>
               <button type="button" onClick={() => setIsMasteryModalOpen(false)}>
-                <Icon name="close" className="text-slate-500" />
+                <Icon name="close" className="text-[var(--ui-text-primary)]" />
               </button>
             </div>
             <div className="px-6 py-4 max-h-[76vh] overflow-y-auto space-y-4">
               <div className="relative">
                 <div className="flex flex-wrap gap-2 pr-24">
-                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-700">
+                  <div className="rounded-full bg-[var(--ui-bg-panel-muted)] px-3 py-1.5 text-xs text-[var(--ui-text-primary)]">
                     {detail.attemptStats.total_attempts} 次作答
                   </div>
-                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-700">
+                  <div className="rounded-full bg-[var(--ui-bg-panel-muted)] px-3 py-1.5 text-xs text-[var(--ui-text-primary)]">
                     {detail.weaknesses.length} 类错因
                   </div>
-                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-700">
+                  <div className="rounded-full bg-[var(--ui-bg-panel-muted)] px-3 py-1.5 text-xs text-[var(--ui-text-primary)]">
                     已修复 {detail.weaknesses.filter((item) => item.status === 'resolved').length} 项
                   </div>
                   <div className={`rounded-full px-3 py-1.5 text-xs ${masteryTone.pill}`}>
@@ -676,38 +676,38 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </div>
               </div>
 
-              <section className="bg-white">
+              <section className="bg-[var(--ui-bg-panel)]">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">1</div>
-                  <div className="text-[16px] font-semibold text-slate-900">作答时间线</div>
-                  <div className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{detail.attemptStats.total_attempts}次作答</div>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ui-btn-solid-bg)] text-xs font-semibold text-white">1</div>
+                  <div className="text-[16px] font-semibold text-[var(--ui-text-primary)]">作答时间线</div>
+                  <div className="ml-2 rounded-full bg-[var(--ui-bg-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]">{detail.attemptStats.total_attempts}次作答</div>
                   <div className={`rounded-full px-2 py-0.5 text-[11px] ${masteryTone.pill}`}>当前掌握度 {masteryPercent(detail)}%</div>
                 </div>
                 <div className="mt-3 pl-4">
                   {attemptTimeline.length === 0 ? (
-                    <div className="text-sm text-slate-400">暂无作答记录</div>
+                    <div className="text-sm text-[var(--ui-text-primary)]">暂无作答记录</div>
                   ) : (
                     <div className="relative space-y-2">
-                      <span className="absolute left-0 top-2 bottom-2 w-px bg-slate-200" />
+                      <span className="absolute left-0 top-2 bottom-2 w-px bg-[var(--ui-border-default)]" />
                       {attemptTimeline.map((item) => (
                         <div key={item.id} className="relative pl-4">
-                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-slate-400 bg-white" />
-                          <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]" />
+                          <div className="rounded-xl border border-[var(--ui-border-default)] px-3 py-2.5">
                             <div className="grid grid-cols-[1.2fr_0.75fr_0.65fr_0.8fr_0.65fr] items-center gap-2 text-[12px]">
-                              <div className="text-slate-500">{formatDateTime(item.time)}</div>
+                              <div className="text-[var(--ui-text-primary)]">{formatDateTime(item.time)}</div>
                               <div>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">{item.attemptType}</span>
+                                <span className="rounded-full bg-[var(--ui-bg-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]">{item.attemptType}</span>
                               </div>
-                              <div className="text-slate-500">{item.durationText}</div>
-                              <div className={item.masteryDelta == null ? 'text-slate-400' : item.masteryDelta >= 0 ? 'text-emerald-600' : 'text-rose-500'}>
+                              <div className="text-[var(--ui-text-primary)]">{item.durationText}</div>
+                              <div className={item.masteryDelta == null ? 'text-[var(--ui-text-primary)]' : item.masteryDelta >= 0 ? 'text-emerald-600' : 'text-rose-500'}>
                                 掌握度 {item.masteryDelta == null ? '—' : `${item.masteryDelta > 0 ? '+' : ''}${item.masteryDelta}%`}
                               </div>
-                              <div className={item.judgement === 'correct' ? 'text-emerald-600' : item.judgement === 'incorrect' ? 'text-rose-500' : 'text-slate-500'}>
+                              <div className={item.judgement === 'correct' ? 'text-emerald-600' : item.judgement === 'incorrect' ? 'text-rose-500' : 'text-[var(--ui-text-primary)]'}>
                                 结果：{item.resultText}
                               </div>
                             </div>
-                            <div className="mt-1.5 text-[12px] text-slate-600 whitespace-normal break-words">
-                              <span className="text-slate-600">较上次效果：</span>
+                            <div className="mt-1.5 text-[12px] text-[var(--ui-text-primary)] whitespace-normal break-words">
+                              <span className="text-[var(--ui-text-primary)]">较上次效果：</span>
                               <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
                                 {item.comparisonText}
                               </MarkdownWithMath>
@@ -720,28 +720,28 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </div>
               </section>
 
-              <section className="bg-white border-t border-slate-100 pt-3.5">
+              <section className="bg-[var(--ui-bg-panel)] border-t border-[var(--ui-border-default)] pt-3.5">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">2</div>
-                  <div className="text-[16px] font-semibold text-slate-900">错因记录</div>
-                  <div className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{detail.weaknesses.length}类高频错因</div>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ui-btn-solid-bg)] text-xs font-semibold text-white">2</div>
+                  <div className="text-[16px] font-semibold text-[var(--ui-text-primary)]">错因记录</div>
+                  <div className="ml-2 rounded-full bg-[var(--ui-bg-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]">{detail.weaknesses.length}类高频错因</div>
                 </div>
                 <div className="mt-3 pl-4">
                   {diagnosisSummary.length === 0 ? (
-                    <div className="text-sm text-slate-400">暂无诊断记录</div>
+                    <div className="text-sm text-[var(--ui-text-primary)]">暂无诊断记录</div>
                   ) : (
                     <div className="relative space-y-2">
-                      <span className="absolute left-0 top-2 bottom-2 w-px bg-slate-200" />
+                      <span className="absolute left-0 top-2 bottom-2 w-px bg-[var(--ui-border-default)]" />
                       {diagnosisSummary.map((item) => (
                         <div key={item.id} className="relative pl-4">
-                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-slate-400 bg-white" />
-                          <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]" />
+                          <div className="rounded-xl border border-[var(--ui-border-default)] px-3 py-2.5">
                             <div className="flex items-center gap-2 text-[12px]">
-                              <div className="text-slate-500">{item.date}</div>
-                              <div className="font-medium text-slate-800">{item.label}</div>
-                              <div className="text-[11px] text-slate-400">关联作答：{String(item.relatedAttempts ?? '-')}</div>
+                              <div className="text-[var(--ui-text-primary)]">{item.date}</div>
+                              <div className="font-medium text-[var(--ui-text-primary)]">{item.label}</div>
+                              <div className="text-[11px] text-[var(--ui-text-primary)]">关联作答：{String(item.relatedAttempts ?? '-')}</div>
                             </div>
-                            <div className="mt-1.5 text-[12px] text-slate-500 whitespace-normal break-words">
+                            <div className="mt-1.5 text-[12px] text-[var(--ui-text-primary)] whitespace-normal break-words">
                               <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
                                 {item.conclusion || '-'}
                               </MarkdownWithMath>
@@ -754,38 +754,38 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </div>
               </section>
 
-              <section className="bg-white border-t border-slate-100 pt-3.5">
+              <section className="bg-[var(--ui-bg-panel)] border-t border-[var(--ui-border-default)] pt-3.5">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">3</div>
-                  <div className="text-[16px] font-semibold text-slate-900">薄弱点修复轨迹</div>
-                  <div className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">已修复 {detail.weaknesses.filter((item) => item.status === 'resolved').length} 个</div>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ui-btn-solid-bg)] text-xs font-semibold text-white">3</div>
+                  <div className="text-[16px] font-semibold text-[var(--ui-text-primary)]">薄弱点修复轨迹</div>
+                  <div className="ml-2 rounded-full bg-[var(--ui-bg-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]">已修复 {detail.weaknesses.filter((item) => item.status === 'resolved').length} 个</div>
                 </div>
                 <div className="mt-3 pl-4">
                   {weaknessTracks.length === 0 ? (
-                    <div className="text-sm text-slate-400">暂无薄弱点记录</div>
+                    <div className="text-sm text-[var(--ui-text-primary)]">暂无薄弱点记录</div>
                   ) : (
                     <div className="relative space-y-2">
-                      <span className="absolute left-0 top-2 bottom-2 w-px bg-slate-200" />
+                      <span className="absolute left-0 top-2 bottom-2 w-px bg-[var(--ui-border-default)]" />
                       {weaknessTracks.map((item) => (
                         <div key={item.id} className="relative pl-4">
-                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-slate-400 bg-white" />
-                          <div className="rounded-xl border border-slate-200 px-3 py-2.5">
+                          <span className="absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full border border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]" />
+                          <div className="rounded-xl border border-[var(--ui-border-default)] px-3 py-2.5">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <div className="text-[12px] font-medium text-slate-800">
+                                <div className="text-[12px] font-medium text-[var(--ui-text-primary)]">
                                   <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
                                     {item.label}
                                   </MarkdownWithMath>
                                 </div>
-                                <div className="mt-1 text-[11px] text-slate-500">
+                                <div className="mt-1 text-[11px] text-[var(--ui-text-primary)]">
                                   首次发现 {formatDateTime(item.firstSeenAt)} · 最近出现 {formatDateTime(item.lastSeenAt)}
                                 </div>
                               </div>
-                              <div className="rounded-full bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                              <div className="rounded-full bg-[var(--ui-bg-panel)] px-2.5 py-1 text-[11px] text-[var(--ui-text-primary)]">
                                 {item.status}
                               </div>
                             </div>
-                            <div className="mt-1 text-[11px] text-slate-500">
+                            <div className="mt-1 text-[11px] text-[var(--ui-text-primary)]">
                               出现 {item.count} 次{item.resolvedAt ? ` · 修复于 ${formatDateTime(item.resolvedAt)}` : ''}
                             </div>
                           </div>
@@ -797,9 +797,9 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
               </section>
 
               {detail.knowledgeProfile && (
-                <section className="bg-white border-t border-slate-100 pt-3.5">
-                  <div className="text-[16px] font-semibold text-slate-900">题卡知识画像</div>
-                  <div className="mt-3 grid gap-2 text-[13px] text-slate-600">
+                <section className="bg-[var(--ui-bg-panel)] border-t border-[var(--ui-border-default)] pt-3.5">
+                  <div className="text-[16px] font-semibold text-[var(--ui-text-primary)]">题卡知识画像</div>
+                  <div className="mt-3 grid gap-2 text-[13px] text-[var(--ui-text-primary)]">
                     <div>
                       <span>知识点：</span>
                       <MarkdownWithMath compact transformMarkdown={normalizeFavoriteMarkdown}>
@@ -828,19 +828,19 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
                 </section>
               )}
             </div>
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--ui-border-default)]">
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={handleOpenSelected}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white"
+                  className="rounded-xl bg-[var(--ui-btn-solid-bg)] px-4 py-2 text-sm text-white hover:bg-[var(--ui-btn-solid-hover)]"
                 >
                   审题记录
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleAddToReviewPlan()}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                  className="rounded-xl border border-[var(--ui-border-strong)] px-4 py-2 text-sm text-[var(--ui-text-primary)]"
                 >
                   加入专项复习
                 </button>
@@ -848,7 +848,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMasteryModalOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                className="rounded-xl border border-[var(--ui-border-strong)] px-4 py-2 text-sm text-[var(--ui-text-primary)]"
               >
                 关闭
               </button>
@@ -859,3 +859,5 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
     </div>
   )
 }
+
+

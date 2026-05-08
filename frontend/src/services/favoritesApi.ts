@@ -13,7 +13,7 @@ export async function addFavorite(
   baseUrl: string,
   _tenantId: number,
   _userId: string | number,
-  questionId: number,
+  questionId: string | number,
   questionTypeId?: number | string | null,
   subjectId?: number | string | null,
   tagIds?: Array<number | string> | null,
@@ -36,7 +36,7 @@ export async function removeFavorite(
   baseUrl: string,
   _tenantId: number,
   _userId: string | number,
-  questionId: number,
+  questionId: string | number,
 ): Promise<RemoveFavoriteResponse> {
   const response = await apiFetch(`${baseUrl}/api/favorites/${questionId}`, {
     method: 'DELETE',
@@ -66,7 +66,7 @@ export async function checkFavorite(
   baseUrl: string,
   _tenantId: number,
   _userId: string | number,
-  questionId: number,
+  questionId: string | number,
 ): Promise<CheckFavoriteResponse> {
   return apiJson<CheckFavoriteResponse>(`${baseUrl}/api/favorites/${questionId}/check`, {
     method: 'GET',

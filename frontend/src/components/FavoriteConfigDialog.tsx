@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FavoriteConfig } from '../types'
 import { getQuestionTypes, createQuestionType } from '../services/questionTypesApi'
@@ -113,7 +113,7 @@ const SelectWithCustomEntry: React.FC<SelectWithCustomEntryProps> = ({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md text-left bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed flex items-center justify-between"
+        className="w-full px-3 py-2 border border-gray-300 rounded-md text-left bg-[var(--ui-bg-panel)] hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed flex items-center justify-between"
       >
         <span className="text-gray-900">
           {value || placeholder}
@@ -123,7 +123,7 @@ const SelectWithCustomEntry: React.FC<SelectWithCustomEntryProps> = ({
 
       {/* 下拉列表 */}
       {isOpen && !disabled && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-10">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--ui-bg-panel)] border border-gray-300 rounded-md shadow-lg z-10">
           <div className="max-h-48 overflow-y-auto">
             {/* 预设选项 */}
             {options.map((option) => (
@@ -322,9 +322,9 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-[var(--ui-bg-panel)] rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         {/* 标题 */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-[var(--ui-bg-panel)] border-b px-6 py-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t('favorite_config.title')}</h2>
           <button
             onClick={handleClose}
@@ -423,7 +423,7 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
         </div>
 
         {/* 底部按钮 */}
-        <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex gap-3 justify-end">
+        <div className="sticky bottom-0 bg-[var(--ui-bg-panel)] border-t px-6 py-4 flex gap-3 justify-end">
           <button
             type="button"
             onClick={handleClose}
@@ -445,3 +445,5 @@ export const FavoriteConfigDialog: React.FC<FavoriteConfigDialogProps> = ({
     </div>
   )
 }
+
+

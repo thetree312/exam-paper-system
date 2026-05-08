@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { z } from 'zod'
 import {
   BuiltinActionType,
@@ -92,11 +92,11 @@ const hitlField = defineComponent({
     if (kind === 'select') {
       return (
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">{label}</label>
+          <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>
           <select
             value={String(normalized)}
             onChange={(e) => setFieldValue(formName, kind, name, e.target.value, false)}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)]"
           >
             {optionValues.map((optValue, idx) => (
               <option key={`${name}-${optValue}-${idx}`} value={optValue}>
@@ -111,7 +111,7 @@ const hitlField = defineComponent({
     if (kind === 'radio') {
       return (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-slate-500">{label}</label>
+          <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>
           <div className="grid gap-1.5">
             {optionValues.map((optValue, idx) => {
               const checked = String(normalized) === optValue
@@ -119,7 +119,7 @@ const hitlField = defineComponent({
                 <label
                   key={`${name}-${optValue}-${idx}`}
                   className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition ${
-                    checked ? 'border-slate-500 bg-slate-50 text-slate-900' : 'border-slate-300 text-slate-700'
+                    checked ? 'border-slate-500 bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]' : 'border-[var(--ui-border-strong)] text-[var(--ui-text-primary)]'
                   }`}
                 >
                   <input
@@ -141,12 +141,12 @@ const hitlField = defineComponent({
     if (kind === 'textarea') {
       return (
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">{label}</label>
+          <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>
           <textarea
             value={String(normalized)}
             placeholder={placeholder || ''}
             onChange={(e) => setFieldValue(formName, kind, name, e.target.value, false)}
-            className="w-full min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full min-h-20 rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)]"
           />
         </div>
       )
@@ -155,14 +155,14 @@ const hitlField = defineComponent({
     if (kind === 'number') {
       return (
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">{label}</label>
+          <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>
           <input
             type="number"
             min={typeof min === 'number' ? min : undefined}
             max={typeof max === 'number' ? max : undefined}
             value={normalized === '' ? '' : Number(normalized)}
             onChange={(e) => setFieldValue(formName, kind, name, e.target.value === '' ? '' : Number(e.target.value), false)}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)]"
           />
         </div>
       )
@@ -170,13 +170,13 @@ const hitlField = defineComponent({
 
     return (
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-slate-500">{label}</label>
+        <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>
         <input
           type="text"
           value={String(normalized)}
           placeholder={placeholder || ''}
           onChange={(e) => setFieldValue(formName, kind, name, e.target.value, false)}
-          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+          className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)]"
         />
       </div>
     )
@@ -210,7 +210,7 @@ const hitlAction = defineComponent({
         className={
           isPrimary
             ? 'px-3 py-1.5 rounded-full text-xs bg-slate-900 text-white'
-            : 'px-3 py-1.5 rounded-full text-xs border border-slate-300 text-slate-500 hover:bg-slate-100 transition'
+            : 'px-3 py-1.5 rounded-full text-xs border border-[var(--ui-border-strong)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)] transition'
         }
       >
         {label}
@@ -231,8 +231,8 @@ const hitlForm = defineComponent({
   component: ({ props, renderNode }: ComponentRenderProps<HitlFormProps>) => {
     const { title, fields, actions } = props
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm px-4 py-3">
-        {title ? <div className="text-xs font-semibold text-slate-600 mb-2">{title}</div> : null}
+      <div className="rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] shadow-sm px-4 py-3">
+        {title ? <div className="text-xs font-semibold text-[var(--ui-text-primary)] mb-2">{title}</div> : null}
         <div className="space-y-3">{fields.map((field, idx) => <React.Fragment key={`field-${idx}`}>{renderNode(field)}</React.Fragment>)}</div>
         <div className="pt-2 flex justify-end gap-2">
           {actions.map((action, idx) => (
@@ -299,3 +299,5 @@ export function OpenUiHitlRenderer({
     />
   )
 }
+
+

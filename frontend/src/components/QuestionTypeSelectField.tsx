@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+﻿import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface QuestionTypeSelectFieldProps {
@@ -63,13 +63,13 @@ export const QuestionTypeSelectField: React.FC<QuestionTypeSelectFieldProps> = (
 
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-xs text-slate-500">{label}</label>}
+      {label && <label className="text-xs text-[var(--ui-text-primary)]">{label}</label>}
       <div className="space-y-2">
         <select
           value={selectValue}
           disabled={disabled}
           onChange={(e) => handleSelectChange(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+          className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)] disabled:bg-[var(--ui-bg-panel-muted)]"
         >
           <option value="">{finalPlaceholder}</option>
           {options.map((opt) => (
@@ -86,11 +86,13 @@ export const QuestionTypeSelectField: React.FC<QuestionTypeSelectFieldProps> = (
             disabled={disabled}
             onChange={(e) => handleCustomChange(e.target.value)}
             placeholder={t('question_type_select.custom_placeholder')}
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+            className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)] disabled:bg-[var(--ui-bg-panel-muted)]"
           />
         )}
       </div>
-      {isLoading && <span className="text-[11px] text-slate-400">{t('question_type_select.loading')}</span>}
+      {isLoading && <span className="text-[11px] text-[var(--ui-text-primary)]">{t('question_type_select.loading')}</span>}
       {error && <span className="text-[11px] text-red-500">{error}</span>}
     </div>
   )}
+
+

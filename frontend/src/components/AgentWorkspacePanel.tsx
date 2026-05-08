@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { QuestionEditor } from '../QuestionEditor'
 
 import { useAgentSync } from '../hooks/useAgentSync'
+import { listStudioQuestionCards } from '../services/studioApi'
 
 import { MarkdownWithMath } from './MarkdownWithMath'
 
 import { FavoriteButton } from './FavoriteButton'
 
-import type { AgentSendPayload, AgentSnapshotResponse, AggregatedOcrItem, GradingJudgement, QuestionVersionRecord, UserInfo } from '../types'
+import type { AgentSendPayload, AggregatedOcrItem, GradingJudgement, QuestionVersionRecord, UserInfo } from '../types'
 
 import { parseMultipleChoiceQuestion, parseParagraphMatching, parseReadingComprehension, stripChoiceBlockFromEditedText } from './questionRenderers/utils'
 
@@ -191,8 +192,6 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     flushPending,
 
-    loadSnapshot,
-
   } = useAgentSync({
 
     backendBaseUrl,
@@ -269,7 +268,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
       const sequenceIndex = item.questionMeta?.sequenceIndex
       if (typeof sequenceIndex !== 'number') return false
       const missingVersions = !Array.isArray(item.versions) || item.versions.length === 0
-      const missingQuestionId = typeof item.questionMeta?.questionId !== 'number'
+      const missingQuestionId =
+        typeof item.questionMeta?.questionId !== 'string' &&
+        typeof item.questionMeta?.questionId !== 'number'
       return missingVersions || missingQuestionId
     })
 
@@ -301,33 +302,14 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     ;(async () => {
 
-      const resp = await loadSnapshot(syncedStudioDocumentId)
+      const cards = await listStudioQuestionCards(backendBaseUrl, {
+        workroomID: String(workroomId),
+        studioDocumentID: String(syncedStudioDocumentId),
+      })
 
-      if (!resp || cancelled) return
-      const questionBySequence = new Map<number, AgentSnapshotResponse['questions'][number]>()
-      for (const question of resp.questions) {
-        if (typeof question.sequenceIndex === 'number') {
-          questionBySequence.set(question.sequenceIndex, question)
-        }
-      }
-
+      if (cancelled) return
+      const cardBySequence = new Map(cards.map((card) => [card.sequenceIndex, card]))
       const mapping: Record<number, QuestionVersionRecord[]> = {}
-
-      for (const q of resp.questions) {
-
-        if (typeof q.sequenceIndex !== 'number') continue
-
-        if (Array.isArray(q.versions) && q.versions.length) {
-
-          mapping[q.sequenceIndex] = q.versions.slice(0, 4)
-
-        } else {
-
-          mapping[q.sequenceIndex] = []
-
-        }
-
-      }
 
       if (!cancelled) {
 
@@ -335,21 +317,23 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         for (const item of items) {
           const sequenceIndex = item.questionMeta?.sequenceIndex
           if (typeof sequenceIndex !== 'number') continue
-          const snapshotQuestion = questionBySequence.get(sequenceIndex)
-          if (!snapshotQuestion) continue
-          const snapshotQuestionId = typeof snapshotQuestion.id === 'number' ? snapshotQuestion.id : null
+          const studioCard = cardBySequence.get(sequenceIndex)
+          const snapshotQuestionId = studioCard?.projectedQuestionID ?? null
           if (!snapshotQuestionId) continue
           const currentQuestionId = item.questionMeta?.questionId
-          if (typeof currentQuestionId === 'number' && currentQuestionId === snapshotQuestionId) continue
+          if (
+            (typeof currentQuestionId === 'string' || typeof currentQuestionId === 'number') &&
+            currentQuestionId === snapshotQuestionId
+          ) continue
           onUpdateItem(item.id, (prev) => ({
             ...prev,
             questionMeta: {
               questionId: snapshotQuestionId,
               sequenceIndex: prev.questionMeta?.sequenceIndex ?? sequenceIndex,
               groupId:
-                typeof prev.questionMeta?.groupId === 'number'
-                  ? prev.questionMeta.groupId
-                  : snapshotQuestion.groupId ?? prev.questionMeta?.sequenceIndex ?? sequenceIndex,
+                prev.questionMeta?.groupId ??
+                prev.questionMeta?.sequenceIndex ??
+                sequenceIndex,
             },
           }))
         }
@@ -366,7 +350,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     }
 
-  }, [syncedStudioDocumentId, isReady, items, loadSnapshot, localVersionMap, onUpdateItem])
+  }, [backendBaseUrl, isReady, items, localVersionMap, onUpdateItem, syncedStudioDocumentId, workroomId])
 
 
 
@@ -400,7 +384,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
       type CardItem = { item: AggregatedOcrItem; index: number }
 
-      type Card = { groupKey: string; groupId: number | null; items: CardItem[] }
+      type Card = { groupKey: string; groupId: string | number | null; items: CardItem[] }
 
 
 
@@ -414,11 +398,11 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
         const meta = item.questionMeta
 
-        const rawGroupId = (meta?.groupId ?? null) as number | null
+        const rawGroupId = (meta?.groupId ?? null) as string | number | null
 
         // 有 groupId 的题使用 groupId 分组；否则退化为每题一组，保持旧行为
 
-        const key = rawGroupId != null ? `g-${rawGroupId}` : `i-${index}`
+        const key = rawGroupId != null ? `g-${String(rawGroupId)}` : `i-${index}`
 
         let card = map.get(key)
 
@@ -638,7 +622,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
         // 避免重复创建题目或篡改其分组信息。
 
-        if (item.questionMeta?.questionId) continue
+        if (item.questionMeta?.questionId != null) continue
 
         if (item.createdAt <= cursor) continue
 
@@ -684,7 +668,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               // 否则将本题 id 作为默认分组 id。
 
-              groupId: prev.questionMeta?.groupId ?? resp.question.id,
+              groupId: prev.questionMeta?.groupId ?? resp.question.sequence_index,
 
             },
 
@@ -770,7 +754,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               // 与自动同步保持一致：已有 groupId 则保留，否则用自身 id 初始化分组
 
-              groupId: prev.questionMeta?.groupId ?? resp.question.id,
+              groupId: prev.questionMeta?.groupId ?? resp.question.sequence_index,
 
             },
 
@@ -858,7 +842,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     return (
 
-      <div className="text-slate-400 text-sm border border-dashed border-slate-200 rounded-lg p-4 text-center">
+      <div className="text-[var(--ui-text-primary)] text-sm border border-dashed border-[var(--ui-border-default)] rounded-lg p-4 text-center">
 
         {t('editor_workspace.no_content')}
 
@@ -884,7 +868,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     incorrect: { label: t('editor_workspace.grading_status.incorrect'), classes: 'border-rose-200 bg-rose-50', badge: 'bg-rose-100 text-rose-700 border border-rose-200', icon: 'close' },
 
-    skipped: { label: t('editor_workspace.grading_status.skipped'), classes: 'border-slate-200 bg-slate-50', badge: 'bg-slate-100 text-slate-600 border border-slate-200', icon: 'hourglass_empty' },
+    skipped: { label: t('editor_workspace.grading_status.skipped'), classes: 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]', badge: 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] border border-[var(--ui-border-default)]', icon: 'hourglass_empty' },
 
     uncertain: { label: t('editor_workspace.grading_status.uncertain'), classes: 'border-indigo-200 bg-indigo-50', badge: 'bg-indigo-100 text-indigo-700 border border-indigo-200', icon: 'help' },
 
@@ -896,13 +880,13 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
   return (
 
-    <div className="space-y-4">
+    <div className="agent-workspace-panel space-y-4">
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--ui-text-primary)]">
 
         <div className="flex items-center gap-2">
 
-          <span className="font-medium text-slate-600">{t('editor_workspace.sync_status')}</span>
+          <span className="font-medium text-[var(--ui-text-primary)]">{t('editor_workspace.sync_status')}</span>
 
           {statusText}
 
@@ -916,7 +900,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
             type="button"
 
-            className="px-3 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="px-3 py-1 rounded-md border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-50"
 
             onClick={handleManualSave}
 
@@ -1166,7 +1150,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
           ? statusMeta[item.grading!.status].classes
 
-          : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
+          : 'border-transparent hover:border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)]'
 
 
 
@@ -1236,7 +1220,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
         >
 
-          <div className="absolute left-[-24px] top-4 text-slate-300 group-hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute left-[-24px] top-4 text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
 
             <Icon name={"drag_indicator"} />
 
@@ -1248,9 +1232,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               <div className="flex items-center gap-2">
 
-                <span className="text-slate-500 text-sm font-medium">{t('editor_workspace.question_label', { index: index + 1 })}</span>
+                <span className="text-[var(--ui-text-primary)] text-sm font-medium">{t('editor_workspace.question_label', { index: index + 1 })}</span>
 
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] text-xs">
                   <Icon name="description" className="text-[14px]" />
                   {t('editor_workspace.page_label', { page: item.page ?? '-' })}
                 </span>
@@ -1266,17 +1250,17 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="flex flex-wrap items-center gap-2 text-[var(--ui-text-primary)]">
 
                 {totalPages > 1 && (
 
-                  <div className="flex items-center gap-1 text-xs text-slate-500 mr-1.5">
+                  <div className="flex items-center gap-1 text-xs text-[var(--ui-text-primary)] mr-1.5">
 
                     <button
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
+                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
 
                       onClick={() => handlePageChange(activePageIndex - 1)}
 
@@ -1288,7 +1272,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     </button>
 
-                    <span className="font-medium text-slate-600">
+                    <span className="font-medium text-[var(--ui-text-primary)]">
 
                       {t('editor_workspace.question_card', { current: activePageIndex + 1, total: totalPages })}
 
@@ -1298,7 +1282,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
+                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
 
                       onClick={() => handlePageChange(activePageIndex + 1)}
 
@@ -1316,13 +1300,13 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                 {totalVersions > 1 && (
 
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 text-xs text-[var(--ui-text-primary)]">
 
                     <button
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
+                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
 
                       onClick={() => handleVersionChange(activeVersionIndex - 1)}
 
@@ -1334,7 +1318,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     </button>
 
-                    <span className="font-medium text-slate-600">
+                    <span className="font-medium text-[var(--ui-text-primary)]">
 
                       {t('editor_workspace.version_label', { current: activeVersionIndex + 1, total: totalVersions })}
 
@@ -1344,7 +1328,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
+                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
 
                       onClick={() => handleVersionChange(activeVersionIndex + 1)}
 
@@ -1382,7 +1366,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     type="button"
 
-                    className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
+                    className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center transition"
 
                     title={t('editor_workspace.button_delete')}
 
@@ -1404,7 +1388,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       className={`size-8 rounded-full inline-flex items-center justify-center transition ${
 
-                        isSplitting ? 'bg-slate-100 cursor-default' : 'hover:bg-slate-100'
+                        isSplitting ? 'bg-[var(--ui-bg-panel-muted)] cursor-default' : 'hover:bg-[var(--ui-bg-panel-muted)]'
 
                       }`}
 
@@ -1434,7 +1418,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     type="button"
 
-                    className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
+                    className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center transition"
 
                     title={t('editor_workspace.button_send_to_copilot')}
 
@@ -1484,7 +1468,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                     type="button"
 
-                    className="size-8 rounded-full hover:bg-slate-100 inline-flex items-center justify-center transition"
+                    className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center transition"
 
                     title={t('editor_workspace.button_copy')}
 
@@ -1506,7 +1490,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
             {!isCurrentVersion && (
 
-              <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-2 py-1 inline-flex items-center gap-1">
+              <div className="text-[11px] text-[var(--ui-text-primary)] bg-[var(--ui-bg-panel-muted)] border border-[var(--ui-border-default)] rounded-md px-2 py-1 inline-flex items-center gap-1">
 
                 <Icon name={"history"} className="text-[14px]" />
 
@@ -1616,7 +1600,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
             ) : (
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] p-4 text-sm text-[var(--ui-text-primary)]">
 
                 <MarkdownWithMath>{viewingContent}</MarkdownWithMath>
 
@@ -1684,7 +1668,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
               ) : (
 
-                <label className="block text-xs font-medium text-slate-500">
+                <label className="block text-xs font-medium text-[var(--ui-text-primary)]">
 
                   我的答案
 
@@ -1696,7 +1680,7 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
                     aria-label="我的答案"
                   />
 
-                  <div className="mt-1 rounded-lg border border-slate-200 bg-white p-2">
+                  <div className="mt-1 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-2">
                     <RichMathComposer
                       value={renderedAnswerContent}
                       onChange={handleVersionAnswerChange}
@@ -1718,9 +1702,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
           {answerMode && displayGrading?.reasoning && (
 
-            <div className="mt-3 rounded-lg border border-slate-200 bg-white/70 p-3">
+            <div className="mt-3 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-3">
 
-              <div className="text-xs font-semibold text-slate-500 mb-1">AI 解析</div>
+              <div className="text-xs font-semibold text-[var(--ui-text-primary)] mb-1">AI 解析</div>
 
               <MarkdownWithMath>{displayGrading.reasoning}</MarkdownWithMath>
 
@@ -1762,6 +1746,9 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
         item.answerText === nextItem?.answerText &&
 
+        item.uiState?.shinyUntil === nextItem?.uiState?.shinyUntil &&
+        item.uiState?.variant === nextItem?.uiState?.variant &&
+
         prevQuestionId === nextQuestionId &&
 
         item.activeVersionIndex === nextItem?.activeVersionIndex &&
@@ -1781,6 +1768,8 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
   )
 
 })
+
+
 
 
 

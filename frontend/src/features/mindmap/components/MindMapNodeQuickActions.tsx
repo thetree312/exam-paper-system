@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import Icon from '../../../components/Icon'
 
 
@@ -26,8 +26,8 @@ const QuickButton: React.FC<{
     onClick={onClick}
     className={`flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors ${
       tone === 'danger'
-        ? 'border-rose-200 bg-white text-rose-600 hover:bg-rose-50'
-        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+        ? 'border-rose-300 bg-[var(--ui-bg-panel)] text-rose-500 hover:bg-[var(--ui-bg-panel-muted)]'
+        : 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
     }`}
   >
     <Icon name={icon} className="text-[18px] leading-none" />
@@ -53,7 +53,7 @@ const MindMapNodeQuickActions: React.FC<MindMapNodeQuickActionsProps> = ({
         transform: 'translate(10px, -10px)',
       }}
     >
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-2 py-2 shadow-[0_12px_28px_rgba(15,23,42,0.14)] backdrop-blur">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] px-2 py-2 shadow-none backdrop-blur">
         <QuickButton icon="edit_note" title="编辑节点" onClick={onEdit} />
         <QuickButton icon="account_tree" title="新增子节点" onClick={onAddChild} />
         <QuickButton icon="add_2" title="新增同级" onClick={onAddSibling} />
@@ -64,3 +64,5 @@ const MindMapNodeQuickActions: React.FC<MindMapNodeQuickActionsProps> = ({
 }
 
 export default MindMapNodeQuickActions
+
+

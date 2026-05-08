@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
@@ -145,3 +145,4 @@ export const TranslationBlock = Node.create({
     return ReactNodeViewRenderer(TranslationBlockComponent)
   },
 })
+

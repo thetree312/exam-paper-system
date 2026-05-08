@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthMode } from '../types'
 import { validateEmail, validatePassword, validateDisplayName } from '../utils/validation'
@@ -82,29 +82,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 sm:p-8 border border-slate-200">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--ui-bg-panel-muted)] px-4">
+      <div className="w-full max-w-md bg-[var(--ui-bg-panel)] shadow-xl rounded-2xl p-6 sm:p-8 border border-[var(--ui-border-default)]">
         <div className="flex items-center gap-3 mb-6">
           <div className="scale-110">
             <BrandIcon />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900">{t('auth.logo_title')}</h1>
-            <p className="text-xs text-slate-500 mt-1">{t('auth.logo_subtitle')}</p>
+            <h1 className="text-lg font-bold text-[var(--ui-text-primary)]">{t('auth.logo_title')}</h1>
+            <p className="text-xs text-[var(--ui-text-primary)] mt-1">{t('auth.logo_subtitle')}</p>
           </div>
         </div>
 
-        <div className="flex mb-4 rounded-full bg-slate-100 p-1 text-sm font-medium">
+        <div className="flex mb-4 rounded-full bg-[var(--ui-bg-panel-muted)] p-1 text-sm font-medium">
           <button
             type="button"
-            className={`flex-1 py-1.5 rounded-full ${authMode === 'login' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+            className={`flex-1 py-1.5 rounded-full ${authMode === 'login' ? 'bg-[var(--ui-bg-panel)] shadow text-[var(--ui-text-primary)]' : 'text-[var(--ui-text-primary)]'}`}
             onClick={() => onAuthModeChange('login')}
           >
             {t('auth.tabs.login')}
           </button>
           <button
             type="button"
-            className={`flex-1 py-1.5 rounded-full ${authMode === 'register' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+            className={`flex-1 py-1.5 rounded-full ${authMode === 'register' ? 'bg-[var(--ui-bg-panel)] shadow text-[var(--ui-text-primary)]' : 'text-[var(--ui-text-primary)]'}`}
             onClick={() => onAuthModeChange('register')}
           >
             {t('auth.tabs.register')}
@@ -113,11 +113,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
         <form className="space-y-4" onSubmit={handleFormSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('auth.fields.email')}</label>
+            <label className="block text-xs font-medium text-[var(--ui-text-primary)] mb-1">{t('auth.fields.email')}</label>
             <input
               type="email"
               required
-              className={`w-full h-9 px-3 rounded-lg border ${emailError ? 'border-red-500' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
+              className={`w-full h-9 px-3 rounded-lg border ${emailError ? 'border-red-500' : 'border-[var(--ui-border-default)]'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
               value={authEmail}
               onChange={(e) => onAuthEmailChange(e.target.value)}
               onBlur={handleEmailBlur}
@@ -127,11 +127,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('auth.fields.password')}</label>
+            <label className="block text-xs font-medium text-[var(--ui-text-primary)] mb-1">{t('auth.fields.password')}</label>
             <input
               type="password"
               required
-              className={`w-full h-9 px-3 rounded-lg border ${passwordError ? 'border-red-500' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
+              className={`w-full h-9 px-3 rounded-lg border ${passwordError ? 'border-red-500' : 'border-[var(--ui-border-default)]'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
               value={authPassword}
               onChange={(e) => onAuthPasswordChange(e.target.value)}
               onBlur={handlePasswordBlur}
@@ -143,10 +143,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
           {authMode === 'register' && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('auth.fields.display_name')}</label>
+              <label className="block text-xs font-medium text-[var(--ui-text-primary)] mb-1">{t('auth.fields.display_name')}</label>
               <input
                 type="text"
-                className={`w-full h-9 px-3 rounded-lg border ${displayNameError ? 'border-red-500' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
+                className={`w-full h-9 px-3 rounded-lg border ${displayNameError ? 'border-red-500' : 'border-[var(--ui-border-default)]'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
                 value={authDisplayName}
                 onChange={(e) => onAuthDisplayNameChange(e.target.value)}
                 onBlur={handleDisplayNameBlur}
@@ -171,9 +171,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 : t('auth.submit.register')}
           </button>
 
-          <p className="text-[11px] text-slate-400 mt-2">{t('auth.footnote')}</p>
+          <p className="text-[11px] text-[var(--ui-text-primary)] mt-2">{t('auth.footnote')}</p>
         </form>
       </div>
     </div>
   )
 }
+
+

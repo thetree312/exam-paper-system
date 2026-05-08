@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import { AgentChatPanel } from './AgentChatPanel'
 import { useAppStore } from '../store/appStore'
 import { useFileUpload, useOcrManager } from '../hooks'
@@ -59,3 +59,5 @@ export const AgentConnector: React.FC<AgentConnectorProps> = ({ backendBaseUrl }
     />
   )
 }
+
+

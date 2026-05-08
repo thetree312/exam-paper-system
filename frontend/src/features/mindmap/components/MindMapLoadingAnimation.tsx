@@ -1,4 +1,4 @@
-                
+﻿                
 
 import React from 'react'
 
@@ -298,12 +298,14 @@ export const MindMapLoadingAnimation: React.FC<MindMapLoadingAnimationProps> = (
       </div>
     </div>
     {(label || detail) && (
-      <div className="max-w-[420px] rounded-2xl border border-slate-200/80 bg-white/88 px-4 py-3 text-center shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur">
-        {label && <div className="text-sm font-semibold text-slate-900">{label}</div>}
-        {detail && <div className="mt-1 text-xs text-slate-500">{detail}</div>}
+      <div className="max-w-[420px] rounded-2xl border border-[var(--ui-border-default)]/80 bg-[var(--ui-bg-elevated)] px-4 py-3 text-center shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+        {label && <div className="text-sm font-semibold text-[var(--ui-text-primary)]">{label}</div>}
+        {detail && <div className="mt-1 text-xs text-[var(--ui-text-primary)]">{detail}</div>}
       </div>
     )}
   </div>
 )
 
 export default MindMapLoadingAnimation
+
+

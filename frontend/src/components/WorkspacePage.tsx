@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+﻿import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserInfo, WorkspaceInfo } from '../types'
 import BrandIcon from './BrandIcon'
@@ -67,68 +67,68 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   }
 
   return (
-    <div className="flex min-h-screen flex-col overflow-hidden bg-background-light font-display text-slate-800 antialiased">
-      <header className="z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8 py-4 shadow-sm">
+    <div className="workspace-page flex min-h-screen flex-col overflow-hidden bg-[var(--ui-bg-app)] font-display text-[var(--ui-text-primary)] antialiased">
+      <header className="z-20 flex h-16 shrink-0 items-center justify-between border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-8 py-4 shadow-sm">
         <div className="flex w-[30%] items-center gap-3 pr-8">
           <BrandIcon />
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">{t('workspace_page.header.title')}</h1>
+          <h1 className="text-lg font-bold tracking-tight text-[var(--ui-text-primary)]">{t('workspace_page.header.title')}</h1>
         </div>
 
-        <div className="flex h-8 w-[70%] items-center justify-between gap-6 border-l border-slate-200 pl-8">
+        <div className="flex h-8 w-[70%] items-center justify-between gap-6 border-l border-[var(--ui-border-default)] pl-8">
           <div className="relative w-full max-w-2xl">
-            <Icon name={"search"} className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
+            <Icon name={"search"} className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-[var(--ui-text-primary)]" />
             <input
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 transition-all focus:border-transparent focus:ring-2 focus:ring-slate-400"
+              className="w-full rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] py-2 pl-10 pr-4 text-sm text-[var(--ui-text-primary)] placeholder-[var(--ui-text-primary)] transition-all focus:border-transparent focus:ring-2 focus:ring-[var(--ui-border-strong)]"
               placeholder={t('workspace_page.header.search_placeholder')}
               type="text"
             />
           </div>
 
-          <div className="flex items-center gap-3 border-l border-slate-200 pl-6">
+          <div className="flex items-center gap-3 border-l border-[var(--ui-border-default)] pl-6">
             <div className="text-right">
-              <div className="text-sm font-medium text-slate-900">{user.display_name}</div>
-              <div className="text-xs text-slate-500">{user.email}</div>
+              <div className="text-sm font-medium text-[var(--ui-text-primary)]">{user.display_name}</div>
+              <div className="text-xs text-[var(--ui-text-primary)]">{user.email}</div>
             </div>
           </div>
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <aside className="flex w-[30%] flex-col border-r border-slate-200 bg-white">
+        <aside className="flex w-[30%] flex-col border-r border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]">
           <div className="px-8 pb-4 pt-8">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-xl font-bold tracking-tight text-slate-900">{t('workspace_page.knowledge_base.title')}</h2>
+              <h2 className="text-xl font-bold tracking-tight text-[var(--ui-text-primary)]">{t('workspace_page.knowledge_base.title')}</h2>
               <button
                 type="button"
                 onClick={() => void onCreateWorkspace()}
-                className="flex items-center gap-1 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+                className="flex items-center gap-1 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium text-[var(--ui-text-primary)] transition-colors hover:border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] hover:text-[var(--ui-text-primary)]"
               >
                 <Icon name={"create_new_folder"} className="text-[18px]" />
                 {t('workspace_page.actions.new_workspace')}
               </button>
             </div>
-            <p className="text-sm text-slate-500">{t('workspace_page.knowledge_base.subtitle')}</p>
+            <p className="text-sm text-[var(--ui-text-primary)]">{t('workspace_page.knowledge_base.subtitle')}</p>
           </div>
 
           <div className="flex-1 overflow-y-auto px-8 pb-8">
             <div className="relative">
-              <div className="absolute bottom-0 left-[19px] top-0 w-px bg-slate-200" />
+              <div className="absolute bottom-0 left-[19px] top-0 w-px bg-[var(--ui-border-default)]" />
 
               {workspaces.length === 0 ? (
                 <div className="space-y-4 pt-4">
                   <div className="mb-2 flex items-center gap-4">
-                    <div className="z-10 flex w-10 justify-center bg-white py-1">
-                      <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-white" />
+                    <div className="z-10 flex w-10 justify-center bg-[var(--ui-bg-panel)] py-1">
+                      <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-[var(--ui-bg-panel)]" />
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('workspace_page.timeline.today')}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-primary)]">{t('workspace_page.timeline.today')}</span>
                   </div>
                   <div className="pl-10">
-                    <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-6 py-8 text-center shadow-sm">
-                      <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full border border-slate-100 bg-white">
-                        <Icon name={"folder_open"} className="text-4xl text-slate-300" />
+                    <div className="rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]/80 px-6 py-8 text-center shadow-sm">
+                      <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]">
+                        <Icon name={"folder_open"} className="text-4xl text-[var(--ui-text-primary)]" />
                       </div>
-                      <h3 className="mb-2 text-lg font-semibold text-slate-900">{t('workspace_page.empty.title')}</h3>
-                      <p className="mx-auto mb-6 max-w-[260px] text-sm leading-relaxed text-slate-500">
+                      <h3 className="mb-2 text-lg font-semibold text-[var(--ui-text-primary)]">{t('workspace_page.empty.title')}</h3>
+                      <p className="mx-auto mb-6 max-w-[260px] text-sm leading-relaxed text-[var(--ui-text-primary)]">
                         {t('workspace_page.empty.description')}
                       </p>
                       <button
@@ -146,10 +146,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                 <div className="space-y-8">
                   <div className="relative">
                     <div className="mb-4 flex items-center gap-4">
-                      <div className="z-10 flex w-10 justify-center bg-white py-1">
-                        <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-white" />
+                      <div className="z-10 flex w-10 justify-center bg-[var(--ui-bg-panel)] py-1">
+                        <div className="h-3 w-3 rounded-full border-2 border-slate-900 bg-[var(--ui-bg-panel)]" />
                       </div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('workspace_page.timeline.today')}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-primary)]">{t('workspace_page.timeline.today')}</span>
                     </div>
                     <div className="space-y-3 pl-10">
                       {todayItems.map((workspace, index) => (
@@ -168,20 +168,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                           <button
                             type="button"
                             onClick={() => onOpenWorkspace(workspace)}
-                            className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-slate-200 hover:bg-slate-50 group-hover/item:translate-x-10"
+                            className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] group-hover/item:translate-x-10"
                           >
                             <div className={`shrink-0 rounded-md border p-2 ${folderAccentClass(index)}`}>
                               <Icon name={"folder"} className="text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-slate-900">
+                              <p className="truncate text-sm font-semibold text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]">
                                 {workspace.name}
                               </p>
-                              <p className="mt-0.5 truncate text-xs text-slate-500">
+                              <p className="mt-0.5 truncate text-xs text-[var(--ui-text-primary)]">
                                 {workspace.topic || t('workspace_page.workspace.open_hint')}
                               </p>
                             </div>
-                            <Icon name={"chevron_right"} className="text-[18px] text-slate-300 group-hover:text-slate-400" />
+                            <Icon name={"chevron_right"} className="text-[18px] text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]" />
                           </button>
                         </div>
                       ))}
@@ -191,10 +191,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                   {yesterdayItems.length > 0 && (
                     <div className="relative">
                       <div className="mb-4 flex items-center gap-4">
-                        <div className="z-10 flex w-10 justify-center bg-white py-1">
-                          <div className="h-3 w-3 rounded-full border-2 border-slate-300 bg-white" />
+                        <div className="z-10 flex w-10 justify-center bg-[var(--ui-bg-panel)] py-1">
+                          <div className="h-3 w-3 rounded-full border-2 border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]" />
                         </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t('workspace_page.timeline.yesterday')}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-primary)]">{t('workspace_page.timeline.yesterday')}</span>
                       </div>
                       <div className="space-y-3 pl-10">
                         {yesterdayItems.map((workspace, index) => (
@@ -213,20 +213,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                             <button
                               type="button"
                               onClick={() => onOpenWorkspace(workspace)}
-                              className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-slate-200 hover:bg-slate-50 group-hover/item:translate-x-10"
+                              className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] group-hover/item:translate-x-10"
                             >
                               <div className={`shrink-0 rounded-md border p-2 ${folderAccentClass(index + 3)}`}>
                                 <Icon name={"folder"} className="text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-slate-900">
+                                <p className="truncate text-sm font-semibold text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]">
                                   {workspace.name}
                                 </p>
-                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                <p className="mt-0.5 truncate text-xs text-[var(--ui-text-primary)]">
                                   {workspace.topic || t('workspace_page.workspace.open_hint')}
                                 </p>
                               </div>
-                              <Icon name={"chevron_right"} className="text-[18px] text-slate-300 group-hover:text-slate-400" />
+                              <Icon name={"chevron_right"} className="text-[18px] text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]" />
                             </button>
                           </div>
                         ))}
@@ -237,10 +237,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                   {olderItems.length > 0 && (
                     <div className="relative">
                       <div className="mb-4 flex items-center gap-4">
-                        <div className="z-10 flex w-10 justify-center bg-white py-1">
-                          <div className="h-3 w-3 rounded-full border-2 border-slate-300 bg-white" />
+                        <div className="z-10 flex w-10 justify-center bg-[var(--ui-bg-panel)] py-1">
+                          <div className="h-3 w-3 rounded-full border-2 border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel)]" />
                         </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t('workspace_page.timeline.earlier')}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-primary)]">{t('workspace_page.timeline.earlier')}</span>
                       </div>
                       <div className="space-y-3 pl-10">
                         {olderItems.map((workspace, index) => (
@@ -259,20 +259,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                             <button
                               type="button"
                               onClick={() => onOpenWorkspace(workspace)}
-                              className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-slate-200 hover:bg-slate-50 group-hover/item:translate-x-10"
+                              className="group -ml-3 flex w-full translate-x-0 items-center gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-300 hover:border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] group-hover/item:translate-x-10"
                             >
                               <div className={`shrink-0 rounded-md border p-2 ${folderAccentClass(index + 6)}`}>
                                 <Icon name={"folder"} className="text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-slate-900">
+                                <p className="truncate text-sm font-semibold text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]">
                                   {workspace.name}
                                 </p>
-                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                <p className="mt-0.5 truncate text-xs text-[var(--ui-text-primary)]">
                                   {workspace.topic || t('workspace_page.workspace.open_hint')}
                                 </p>
                               </div>
-                              <Icon name={"chevron_right"} className="text-[18px] text-slate-300 group-hover:text-slate-400" />
+                              <Icon name={"chevron_right"} className="text-[18px] text-[var(--ui-text-primary)] group-hover:text-[var(--ui-text-primary)]" />
                             </button>
                           </div>
                         ))}
@@ -285,11 +285,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
           </div>
         </aside>
 
-        <section className="flex w-[70%] flex-col overflow-hidden bg-[#f8fafc]">
+        <section className="flex w-[70%] flex-col overflow-hidden bg-[var(--ui-bg-panel-muted)]">
           <div className="shrink-0 px-8 pb-6 pt-8">
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900">{t('workspace_page.saved_questions.title')}</h2>
-              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-bold text-slate-600 shadow-sm">
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--ui-text-primary)]">{t('workspace_page.saved_questions.title')}</h2>
+              <span className="rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-2.5 py-0.5 text-xs font-bold text-[var(--ui-text-primary)] shadow-sm">
                 {workspaces.length}
               </span>
             </div>
@@ -301,7 +301,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                 key={`card-${workspace.id}`}
                 type="button"
                 onClick={() => onOpenWorkspace(workspace)}
-                className="group relative flex w-full flex-col gap-6 rounded-xl border border-slate-200 bg-white p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-slate-200/50 sm:flex-row"
+                className="group relative flex w-full flex-col gap-6 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-slate-200/50 sm:flex-row"
               >
                 <div className="flex flex-1 flex-col justify-between gap-4">
                   <div>
@@ -311,25 +311,25 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
                       >
                         {t('workspace_page.saved_questions.workspace_badge')}
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('workspace_page.saved_questions.topic_badge')}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--ui-text-primary)]">{t('workspace_page.saved_questions.topic_badge')}</span>
                     </div>
-                    <h3 className="text-lg font-bold leading-snug text-slate-900 transition-colors group-hover:text-slate-700">
+                    <h3 className="text-lg font-bold leading-snug text-[var(--ui-text-primary)] transition-colors group-hover:text-[var(--ui-text-primary)]">
                       {workspace.name}
                     </h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-slate-600">
+                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--ui-text-primary)]">
                       {workspace.topic ||
                         t('workspace_page.saved_questions.default_topic')}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
+                  <div className="flex items-center gap-4 text-xs font-medium text-[var(--ui-text-primary)]">
                     <span>{t('workspace_page.saved_questions.workspace_id', { id: workspace.id })}</span>
                     <span className="h-1 w-1 rounded-full bg-slate-300" />
-                    <span className="text-slate-500">{workspace.status}</span>
+                    <span className="text-[var(--ui-text-primary)]">{workspace.status}</span>
                   </div>
                 </div>
 
-                <div className="flex aspect-video items-center justify-center rounded-lg border border-slate-200 bg-slate-100 shadow-sm sm:w-48">
-                  <Icon name={"school"} className="text-4xl text-slate-300" />
+                <div className="flex aspect-video items-center justify-center rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] shadow-sm sm:w-48">
+                  <Icon name={"school"} className="text-4xl text-[var(--ui-text-primary)]" />
                 </div>
               </button>
             ))}
@@ -339,16 +339,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       {pendingDeleteWorkspace && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-slate-900">{t('workspace_page.delete_modal.title')}</h3>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-[var(--ui-text-primary)]">{t('workspace_page.delete_modal.title')}</h3>
+            <p className="mt-3 text-sm leading-relaxed text-[var(--ui-text-primary)]">
               {t('workspace_page.delete_modal.description', { name: pendingDeleteWorkspace.name })}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setPendingDeleteWorkspace(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-[var(--ui-border-default)] px-4 py-2 text-sm font-medium text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
               >
                 {t('workspace_page.delete_modal.cancel')}
               </button>
@@ -366,3 +366,5 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     </div>
   )
 }
+
+

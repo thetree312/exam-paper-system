@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react'
+﻿import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { addFavorite, checkFavorite, removeFavorite } from '../services/favoritesApi'
 import { FavoriteConfigDialog } from './FavoriteConfigDialog'
@@ -9,7 +9,7 @@ interface FavoriteButtonProps {
   backendBaseUrl: string
   tenantId: number
   userId: string | number
-  questionId: number | undefined
+  questionId: string | number | undefined
   onToast?: (message: string, type: 'info' | 'success' | 'error') => void
   isFromFavorite?: boolean
 }
@@ -177,3 +177,5 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     </>
   )
 }
+
+

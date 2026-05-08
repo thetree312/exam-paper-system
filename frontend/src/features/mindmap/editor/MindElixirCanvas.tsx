@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import MindElixir, {
   LEFT,
   RIGHT,
@@ -297,6 +297,10 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   onViewStateChange,
   onSelectionStateChange,
 }) => {
+  const [themeMode, setThemeMode] = React.useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light'
+    return window.document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+  })
   const hostRef = React.useRef<HTMLDivElement | null>(null)
   const instanceRef = React.useRef<MindElixirInstance | null>(null)
   const latestDocumentRef = React.useRef(document)
@@ -330,6 +334,17 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   onControllerReadyRef.current = onControllerReady
   onViewStateChangeRef.current = onViewStateChange
   onSelectionStateChangeRef.current = onSelectionStateChange
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const root = window.document.documentElement
+    const observer = new MutationObserver(() => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+      setThemeMode(next)
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
 
   const fitDocumentToViewport = React.useCallback((instance: MindElixirInstance) => {
     const run = () => {
@@ -453,6 +468,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
 
     let instance!: MindElixirInstance
 
+    const isDark = themeMode === 'dark'
     instance = new MindElixir({
       el: hostRef.current,
       direction: SIDE,
@@ -460,17 +476,17 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
         ...THEME,
         cssVar: {
           ...THEME.cssVar,
-          '--bgcolor': '#f8fafc',
-          '--panel-bgcolor': '#ffffff',
-          '--panel-color': '#334155',
-          '--panel-border-color': '#dbe2ea',
-          '--root-bgcolor': '#ffffff',
-          '--root-color': '#0f172a',
-          '--root-border-color': '#cbd5e1',
-          '--main-bgcolor': '#eef4ff',
-          '--main-color': '#334155',
-          '--color': '#334155',
-          '--selected': '#2563eb',
+          '--bgcolor': isDark ? '#1f2329' : '#f8fafc',
+          '--panel-bgcolor': isDark ? '#252526' : '#ffffff',
+          '--panel-color': isDark ? '#d4d4d4' : '#334155',
+          '--panel-border-color': isDark ? '#3a3d41' : '#dbe2ea',
+          '--root-bgcolor': isDark ? '#2d2d30' : '#ffffff',
+          '--root-color': isDark ? '#e6edf3' : '#0f172a',
+          '--root-border-color': isDark ? '#45494f' : '#cbd5e1',
+          '--main-bgcolor': isDark ? '#1f2937' : '#eef4ff',
+          '--main-color': isDark ? '#c9d1d9' : '#334155',
+          '--color': isDark ? '#c9d1d9' : '#334155',
+          '--selected': isDark ? '#4f9cff' : '#2563eb',
           '--map-padding': '48px',
         },
       },
@@ -904,6 +920,7 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
   }, [
     document.id,
     document.version,
+    themeMode,
     fitDocumentToViewport,
     flushSnapshot,
     emitNodeAnchor,
@@ -979,7 +996,12 @@ export const MindElixirCanvas: React.FC<MindElixirCanvasProps> = ({
           }
         `}
       </style>
-      <div ref={hostRef} className="mindmap-canvas-host h-full min-h-0 min-w-0 w-full overflow-hidden bg-slate-50" />
+      <div
+        ref={hostRef}
+        className={`mindmap-canvas-host h-full min-h-0 min-w-0 w-full overflow-hidden ${themeMode === 'dark' ? 'bg-[#1f2329]' : 'bg-[var(--ui-bg-panel-muted)]'}`}
+      />
     </>
   )
 }
+
+

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 
 export interface ContextMenuAction {
   key: string
@@ -38,21 +38,21 @@ export const ContextMenuList: React.FC<ContextMenuListProps> = ({ actions, onClo
   return (
     <div
       ref={menuRef}
-      className={`fixed z-[220] min-w-[240px] rounded-md border border-slate-200 bg-white py-1 text-sm shadow-xl ${className ?? ''}`}
+      className={`fixed z-[220] min-w-[240px] rounded-md border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] py-1 text-sm shadow-xl ${className ?? ''}`}
       style={{ left: position.x, top: position.y }}
     >
       {actions.map((action) => (
         <React.Fragment key={action.key}>
-          {action.separatorBefore ? <div className="my-1 h-px bg-slate-100" /> : null}
+          {action.separatorBefore ? <div className="my-1 h-px bg-[var(--ui-bg-panel-muted)]" /> : null}
           <button
             type="button"
             disabled={action.disabled}
             className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left ${
               action.disabled
-                ? 'cursor-not-allowed text-slate-300'
+                ? 'cursor-not-allowed text-[var(--ui-text-primary)]'
                 : action.danger
                   ? 'text-rose-600 hover:bg-rose-50'
-                  : 'text-slate-700 hover:bg-slate-100'
+                  : 'text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
             }`}
             onClick={async () => {
               if (action.disabled) return
@@ -61,10 +61,12 @@ export const ContextMenuList: React.FC<ContextMenuListProps> = ({ actions, onClo
             }}
           >
             <span>{action.label}</span>
-            <span className="text-xs text-slate-400">{action.shortcut ?? ''}</span>
+            <span className="text-xs text-[var(--ui-text-primary)]">{action.shortcut ?? ''}</span>
           </button>
         </React.Fragment>
       ))}
     </div>
   )
 }
+
+

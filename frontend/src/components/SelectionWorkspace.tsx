@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentCitationFocus,
@@ -79,7 +79,7 @@ const AuthenticatedPreviewImage: React.FC<{
 
   if (loadFailed) {
     return (
-      <div className="w-full min-h-40 flex items-center justify-center bg-slate-100 text-slate-400">
+      <div className="w-full min-h-40 flex items-center justify-center bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]">
         <Icon name={"broken_image"} className="text-[28px]" />
       </div>
     )
@@ -87,7 +87,7 @@ const AuthenticatedPreviewImage: React.FC<{
 
   if (!resolvedSrc) {
     return (
-      <div className="w-full min-h-40 flex items-center justify-center bg-slate-50 text-slate-300">
+      <div className="w-full min-h-40 flex items-center justify-center bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]">
         <Icon name={"image"} className="text-[28px] animate-pulse" />
       </div>
     )
@@ -294,7 +294,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
             }}
             className="relative mb-4 last:mb-0"
           >
-            <div className="absolute top-3 left-3 z-10 bg-white/80 backdrop-blur rounded-full px-3 py-1 text-xs font-medium text-slate-700 flex items-center gap-2 shadow">
+            <div className="absolute top-3 left-3 z-10 bg-[var(--ui-bg-elevated)] backdrop-blur rounded-full px-3 py-1 text-xs font-medium text-[var(--ui-text-primary)] flex items-center gap-2 shadow">
               <Icon name={"description"} className="text-[16px]" />
               {t('selection.page_label', { page })}
             </div>
@@ -384,7 +384,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
     if (hasActiveFile) {
       if (activeStatus === 'pending' || activeStatus === 'processing') {
         return (
-          <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
+          <div className="flex flex-col items-center justify-center h-[500px] text-[var(--ui-text-primary)] gap-3">
             <Icon name={"sync"} className="text-[40px] animate-spin" />
             <p className="text-sm font-medium">{t('selection.preview.loading')}</p>
           </div>
@@ -402,7 +402,7 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
     }
 
     return (
-      <div className="flex flex-col items-center justify-center h-[500px] text-slate-400 gap-3">
+      <div className="flex flex-col items-center justify-center h-[500px] text-[var(--ui-text-primary)] gap-3">
         <Icon name={"upload_file"} className="text-[40px]" />
         <p className="text-sm font-medium">
           {previewType === null ? t('selection.preview.unsupported') : t('selection.preview.no_file')}
@@ -413,3 +413,5 @@ export const SelectionWorkspace: React.FC<SelectionWorkspaceProps> = ({
 
   return <>{renderPages()}</>
 }
+
+

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { buildWorkroomPath, buildWorkspaceIndexPath, parseAppRoute } from './appRoutes'
 import { AppHeader } from './components/AppHeader'
@@ -27,6 +27,8 @@ import { fetchWorkroomFile, saveWorkroomFile } from './services/workroomTreeApi'
 import { createDocumentPreviewAssetRefs } from './services/documentPreviewAsset'
 import { createTextMathDocument } from './lib/mathContent'
 import { useAppStore } from './store/appStore'
+import { buildOcrItemFromStudioQuestionCard } from './utils/studioQuestionCards'
+import { applyThemeToDocument } from './lib/theme'
 import type {
   AggregatedOcrItem,
   AgentCitationAnchor,
@@ -91,7 +93,7 @@ function normalizeStudioTabs(
       const kind = (entry as Record<string, unknown>).kind
       if (!id || (kind !== 'editor' && kind !== 'mindmap' && kind !== 'flashcard' && kind !== 'preview')) continue
       const payload = (entry as Record<string, unknown>).payload
-      const previewPayload =
+      const previewPayload: StudioWorkspaceTab['payload'] =
         kind === 'preview' && payload && typeof payload === 'object'
           ? {
               path: typeof (payload as Record<string, unknown>).path === 'string' ? String((payload as Record<string, unknown>).path) : '',
@@ -329,6 +331,8 @@ const App: React.FC = () => {
   const storeLeftWidth = useAppStore((state) => state.leftWidth)
   const storeIsPreviewCollapsed = useAppStore((state) => state.isPreviewCollapsed)
   const storeAppView = useAppStore((state) => state.appView)
+  const theme = useAppStore((state) => state.theme)
+  const setTheme = useAppStore((state) => state.setTheme)
 
   const [routePath, setRoutePath] = useState(() => window.location.pathname)
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
@@ -791,6 +795,10 @@ const App: React.FC = () => {
   }, [activeStudioTabId, saveStudioPreviewTab, studioAutoSaveMode, studioTabs])
 
   useEffect(() => {
+    applyThemeToDocument(theme)
+  }, [theme])
+
+  useEffect(() => {
     const hasDirty = studioTabs.some((tab) => tab.kind === 'preview' && tab.payload?.isDirty)
     if (!hasDirty) return
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -1083,11 +1091,9 @@ const App: React.FC = () => {
     if (!user?.id || !workroom?.id) return
 
     const sourceDocumentID = currentFile?.fileId != null ? String(currentFile.fileId) : null
-    if (studioDataSourceMode === 'keep_workset') {
-      if (activeStudioDocumentId !== null || !sourceDocumentID) {
-        return
-      }
-    }
+    // keep_workset means the studio document is pinned by workset context (or explicit operations),
+    // and must not be auto-switched by preview tab changes.
+    if (studioDataSourceMode === 'keep_workset') return
 
     if (!sourceDocumentID) {
       if (activeStudioDocumentId !== null) {
@@ -1155,28 +1161,10 @@ const App: React.FC = () => {
         if (cancelled) return
         const activeTab = activeTabIndex >= 0 ? fileTabs[activeTabIndex] ?? null : null
         const restoredItems: AggregatedOcrItem[] = cards.map((card) => ({
-          id: card.id,
-          region_index: card.sequenceIndex,
-          text: card.text,
-          sessionId: card.sourceDocumentID,
-          fileId: card.sourceDocumentID,
-          fileName: activeTab?.name ?? '题卡集',
-          page: card.page ?? 1,
-          createdAt: new Date(card.createdAt).getTime(),
-          legendImages: card.legendImages ?? [],
-          originalText: card.originalText ?? card.text,
-          answerContent: card.answerContent ?? createTextMathDocument(card.answerText ?? ''),
-          answerText: card.answerText ?? '',
-          canonicalAnswer: card.canonicalAnswer ?? '',
-          documentContext: {
-            studioDocumentID: card.studioDocumentID,
-            sourceDocumentID: card.sourceDocumentID ?? null,
-          },
-          questionMeta: {
-            questionId: undefined,
-            sequenceIndex: card.sequenceIndex,
-            groupId: card.sequenceIndex,
-          },
+          ...buildOcrItemFromStudioQuestionCard({
+            card,
+            fileName: activeTab?.name ?? '题卡集',
+          }),
         }))
         setOcrItems(restoredItems)
         restoredSnapshotKeyRef.current = restoreKey
@@ -1401,29 +1389,12 @@ const App: React.FC = () => {
 
       setActiveStudioDocumentId(studioDocument.id)
       setOcrItems(
-        cards.map((card) => ({
-          id: card.id,
-          region_index: card.sequenceIndex,
-          text: card.text,
-          sessionId: card.sourceDocumentID,
-          fileId: card.sourceDocumentID,
-          fileName: currentFile.name,
-          page: card.page ?? 1,
-          createdAt: new Date(card.createdAt).getTime(),
-          legendImages: card.legendImages ?? [],
-          originalText: card.originalText ?? card.text,
-          answerContent: card.answerContent ?? createTextMathDocument(card.answerText ?? ''),
-          answerText: card.answerText ?? '',
-          canonicalAnswer: card.canonicalAnswer ?? '',
-          documentContext: {
-            studioDocumentID: studioDocument.id,
-            sourceDocumentID: card.sourceDocumentID ?? null,
-          },
-          questionMeta: {
-            sequenceIndex: card.sequenceIndex,
-            groupId: card.sequenceIndex,
-          },
-        })),
+        cards.map((card) =>
+          buildOcrItemFromStudioQuestionCard({
+            card,
+            fileName: currentFile.name,
+          }),
+        ),
       )
 
       setStatusMessage('glm_done')
@@ -1681,7 +1652,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className="bg-background-light text-slate-900 font-display antialiased overflow-hidden h-screen flex flex-col"
+      className="bg-background-light text-[var(--ui-text-primary)] font-display antialiased overflow-hidden h-screen flex flex-col"
       data-workspace-id={activeWorkspace?.id ?? ''}
     >
       <AppHeader
@@ -1690,38 +1661,38 @@ const App: React.FC = () => {
       />
 
         {isWorkroomLoading || !workroom ? (
-          <div className="flex flex-1 items-center justify-center bg-slate-50">
+          <div className="flex flex-1 items-center justify-center bg-[var(--ui-bg-panel-muted)]">
             {isWorkroomNotFound ? (
-              <div className="rounded-3xl border border-slate-200 bg-white px-10 py-12 text-center shadow-sm">
-                <div className="text-5xl font-black tracking-tight text-slate-900">404</div>
-                <div className="mt-3 text-xl font-semibold text-slate-900">Workspace Not Found</div>
-                <div className="mt-2 text-sm text-slate-500">{workroomErrorMeta?.description}</div>
+              <div className="rounded-3xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-10 py-12 text-center shadow-sm">
+                <div className="text-5xl font-black tracking-tight text-[var(--ui-text-primary)]">404</div>
+                <div className="mt-3 text-xl font-semibold text-[var(--ui-text-primary)]">Workspace Not Found</div>
+                <div className="mt-2 text-sm text-[var(--ui-text-primary)]">{workroomErrorMeta?.description}</div>
                 <button
                   type="button"
                   onClick={() => navigate(buildWorkspaceIndexPath())}
-                  className="mt-6 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="mt-6 rounded-xl border border-[var(--ui-border-default)] px-4 py-2 text-sm font-medium text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
                 >
                   返回 Workspace 列表
                 </button>
               </div>
             ) : (
-              <div className="rounded-3xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
-                <div className="text-lg font-semibold text-slate-900">
+              <div className="rounded-3xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-8 py-10 text-center shadow-sm">
+                <div className="text-lg font-semibold text-[var(--ui-text-primary)]">
                   {isWorkroomLoading ? '正在打开工作台' : '工作台尚未就绪'}
                 </div>
-                <div className="mt-2 text-sm text-slate-500">
+                <div className="mt-2 text-sm text-[var(--ui-text-primary)]">
                   {isWorkroomLoading
                     ? '正在为当前 workspace 加载对应的 workroom。'
                     : workroomErrorMeta?.title ?? '加载失败'}
                 </div>
                 {!isWorkroomLoading && workroomErrorMeta && (
-                  <div className="mt-2 text-sm text-slate-500">{workroomErrorMeta.description}</div>
+                  <div className="mt-2 text-sm text-[var(--ui-text-primary)]">{workroomErrorMeta.description}</div>
                 )}
                 {!isWorkroomLoading && (
                   <button
                     type="button"
                     onClick={() => navigate(buildWorkspaceIndexPath())}
-                    className="mt-5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="mt-5 rounded-xl border border-[var(--ui-border-default)] px-4 py-2 text-sm font-medium text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
                   >
                     返回 Workspace
                   </button>
@@ -1776,6 +1747,8 @@ const App: React.FC = () => {
                 setIsUserMenuOpen(false)
                 setIsAiModelSettingsOpen(true)
               }}
+              theme={theme}
+              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               onLogout={handleAppLogout}
               onOpenWorkroomFile={handleOpenWorkroomFile}
               onRequestSaveOpenFile={handleRequestSaveOpenFile}
@@ -1789,7 +1762,7 @@ const App: React.FC = () => {
             {!isMobileOrTablet && appView !== 'favorites' && (
               <div
                 onMouseDown={startResize}
-                className="w-1 cursor-col-resize bg-slate-200 hover:bg-slate-300 transition-colors"
+                className="w-1 cursor-col-resize bg-[var(--ui-border-default)] hover:bg-[var(--ui-border-strong)] transition-colors"
               />
             )}
 
@@ -1847,7 +1820,7 @@ const App: React.FC = () => {
           </main>
         )}
 
-        {workroom && !isAiModelSettingsOpen && (
+        {workroom && (
           <MemoizedAgentChatPanel
             backendBaseUrl={backendBaseUrl}
             user={user}
@@ -1887,6 +1860,8 @@ const App: React.FC = () => {
           onLogout={handleAppLogout}
           studioAutoSaveMode={studioAutoSaveMode}
           onStudioAutoSaveModeChange={setStudioAutoSaveMode}
+          theme={theme}
+          onThemeChange={setTheme}
           onSaved={() => {
             setModelSettingsRevision((prev) => prev + 1)
           }}
@@ -1908,13 +1883,13 @@ const App: React.FC = () => {
       )}
       {unsavedConfirmState && (
         <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/35 px-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="text-base font-semibold text-slate-900">{unsavedConfirmState.title}</div>
-            <div className="mt-2 text-sm text-slate-600">{unsavedConfirmState.message}</div>
+          <div className="w-full max-w-md rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-5 shadow-2xl">
+            <div className="text-base font-semibold text-[var(--ui-text-primary)]">{unsavedConfirmState.title}</div>
+            <div className="mt-2 text-sm text-[var(--ui-text-primary)]">{unsavedConfirmState.message}</div>
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-[var(--ui-border-default)] px-3 py-1.5 text-sm text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
                 onClick={() => {
                   unsavedConfirmState.resolve('cancel')
                   setUnsavedConfirmState(null)
@@ -1924,7 +1899,7 @@ const App: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-[var(--ui-border-default)] px-3 py-1.5 text-sm text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
                 onClick={() => {
                   unsavedConfirmState.resolve('discard')
                   setUnsavedConfirmState(null)
@@ -1951,4 +1926,7 @@ const App: React.FC = () => {
 }
 
 export default App
+
+
+
 

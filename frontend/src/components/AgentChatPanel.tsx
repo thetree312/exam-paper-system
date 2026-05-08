@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentChat } from '../hooks/useAgentChat'
 import { useConversation } from '../hooks'
@@ -160,31 +160,27 @@ function toolStatusMeta(status: AgentAssistantToolBlock['status']) {
   switch (status) {
     case 'success':
       return {
-        icon: '✓',
+        icon: 'check_circle',
         label: '成功',
         tone: 'text-emerald-600',
-        useSymbol: true,
       }
     case 'fail':
       return {
-        icon: '✖',
+        icon: 'error',
         label: '失败',
         tone: 'text-rose-600',
-        useSymbol: true,
       }
     case 'running':
       return {
         icon: 'progress_activity',
         label: '',
         tone: 'text-amber-600',
-        useSymbol: false,
       }
     default:
       return {
         icon: 'schedule',
         label: '',
-        tone: 'text-slate-500',
-        useSymbol: false,
+        tone: 'text-[var(--ui-text-tool-call)]',
       }
   }
 }
@@ -312,6 +308,9 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
   const wasRunningRef = useRef(block.status === 'running' || block.status === 'pending')
   const isRunning = block.status === 'running' || block.status === 'pending'
   const shouldExpand = manualExpanded ?? isRunning
+  const detailViewportClass = 'h-44 overflow-auto'
+  const diffViewportClass = 'h-72 overflow-auto'
+  const detailPreClass = 'min-w-max whitespace-pre text-[12px] leading-6 text-[var(--ui-text-tool-call)] font-mono'
 
   useEffect(() => {
     if (isRunning) {
@@ -348,7 +347,7 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
   })()
 
   const renderDiff = (diff: string, fileLabel: string, stats?: { additions?: number; deletions?: number }) => {
-    const lines = diff.split('\n').slice(0, 80)
+    const lines = diff.split('\n')
     const additions =
       typeof stats?.additions === 'number'
         ? stats.additions
@@ -358,27 +357,29 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
         ? stats.deletions
         : lines.filter((line) => line.startsWith('-') && !line.startsWith('---')).length
     return (
-      <div className="rounded-[12px] border border-slate-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-3 py-2 text-[12px] text-slate-500 border-b border-slate-200">
+      <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 text-[12px] text-[var(--ui-text-tool-call)] border-b border-[var(--ui-border-default)]">
           <span className="truncate">{fileLabel}</span>
           <span className="shrink-0">{additions} additions / {deletions} deletions</span>
         </div>
-        <pre className="max-h-80 overflow-auto px-3 py-2 text-[12px] leading-6 bg-slate-50 text-slate-700">
-          {lines.map((line, index) => (
-            <div
-              key={`${index}-${line}`}
-              className={
-                line.startsWith('+') && !line.startsWith('+++')
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : line.startsWith('-') && !line.startsWith('---')
-                    ? 'bg-rose-50 text-rose-700'
-                    : 'text-slate-600'
-              }
-            >
-              {line || ' '}
-            </div>
-          ))}
-        </pre>
+        <div className={`${diffViewportClass} bg-[var(--ui-bg-panel)]`}>
+          <pre className={`${detailPreClass} px-3 py-2`}>
+            {lines.map((line, index) => (
+              <div
+                key={`${index}-${line}`}
+                style={
+                  line.startsWith('+') && !line.startsWith('+++')
+                    ? { background: 'var(--ui-diff-add-bg)', color: 'var(--ui-diff-add-text)' }
+                    : line.startsWith('-') && !line.startsWith('---')
+                      ? { background: 'var(--ui-diff-del-bg)', color: 'var(--ui-diff-del-text)' }
+                      : undefined
+                }
+              >
+                {line || ' '}
+              </div>
+            ))}
+          </pre>
+        </div>
       </div>
     )
   }
@@ -401,8 +402,8 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
               )
             }
             return (
-              <div key={`${label}-${index}`} className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
-                <div className="text-[12px] text-slate-500">{label}</div>
+              <div key={`${label}-${index}`} className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-3 py-2">
+                <div className="text-[12px] text-[var(--ui-text-tool-call)]">{label}</div>
               </div>
             )
           })}
@@ -427,25 +428,21 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
 
     const fileLabel = shortenPathLike(String(block.metadata?.relativePath ?? block.metadata?.filepath ?? toolTitle(block)))
     return (
-      <div className="rounded-[12px] border border-slate-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
+      <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--ui-border-default)] px-3 py-2">
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-slate-700">{fileLabel}</div>
-            <div className="text-[12px] text-slate-400">
+            <div className="truncate text-[13px] font-medium text-[var(--ui-text-tool-call)]">{fileLabel}</div>
+            <div className="text-[12px] text-[var(--ui-text-tool-call)]">
               {block.metadata?.exists === false ? '新建文件' : '写入文件'}
             </div>
           </div>
           <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${status.tone}`}>
-            {status.useSymbol ? (
-              <span className="text-[16px] leading-none">{status.icon}</span>
-            ) : (
-              <Icon name={status.icon} className={`text-[14px] leading-none ${block.status === 'running' ? 'animate-spin' : ''}`} />
-            )}
+            <Icon name={status.icon} className={`text-[16px] leading-none ${block.status === 'running' ? 'animate-spin' : ''}`} />
           </span>
         </div>
         {(outputText || inputText) && (
-          <div className="px-3 py-2">
-            <pre className="whitespace-pre-wrap text-[12px] leading-6 text-slate-700 font-mono">{outputText || inputText}</pre>
+          <div className={detailViewportClass}>
+            <pre className={`${detailPreClass} px-3 py-2`}>{outputText || inputText}</pre>
           </div>
         )}
       </div>
@@ -481,8 +478,10 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
     if (!content) return null
 
     return (
-      <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-2">
-        <pre className="whitespace-pre-wrap text-[12px] leading-6 text-slate-700 font-mono">{content}</pre>
+      <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]">
+        <div className={detailViewportClass}>
+          <pre className={`${detailPreClass} px-3 py-2`}>{content}</pre>
+        </div>
       </div>
     )
   }
@@ -492,47 +491,55 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
       <button
         type="button"
         onClick={() => setManualExpanded((prev) => (prev == null ? !shouldExpand : !prev))}
-        className="flex w-full items-center justify-between gap-3 py-1 text-left"
+        className="group flex w-full items-center justify-between gap-3 py-1 text-left"
         aria-expanded={shouldExpand}
       >
-        <div className="inline-flex min-w-0 items-center gap-2 text-[13px] text-slate-500">
-          <Icon name={"chevron_right"} className={`text-[16px] leading-none transition-transform ${shouldExpand ? 'rotate-90' : ''}`} />
+        <div className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-[13px] text-[var(--ui-text-tool-call)]">
           <Icon name={toolKindIcon(block)} className="text-[16px] leading-none" />
-          <span className={`font-medium text-slate-600 ${isRunning ? 'tool-running-shiny-text' : ''}`}>{collapsedTitle}</span>
-          {detailSummary ? <span className="truncate text-[12px] text-slate-400">· {detailSummary}</span> : null}
+          <span
+            className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-[var(--ui-text-tool-call)] ${isRunning ? 'tool-running-shiny-text' : ''}`}
+            title={collapsedTitle}
+          >
+            {collapsedTitle}
+          </span>
+          {detailSummary ? <span className="truncate text-[12px] text-[var(--ui-text-tool-call)]">· {detailSummary}</span> : null}
         </div>
         <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${status.tone}`}>
-          {status.useSymbol ? (
-            <span className="text-[16px] leading-none">{status.icon}</span>
-          ) : (
-            <Icon name={status.icon} className={`text-[14px] leading-none ${block.status === 'running' ? 'animate-spin' : ''}`} />
-          )}
+          <Icon name={status.icon} className={`text-[16px] leading-none ${block.status === 'running' ? 'animate-spin' : ''}`} />
+          <Icon
+            name={"chevron_right"}
+            className={`text-[16px] leading-none text-[var(--ui-text-tool-call)] transition-all ${shouldExpand ? 'rotate-90' : ''} opacity-0 group-hover:opacity-100`}
+          />
         </span>
       </button>
 
       {shouldExpand && (
-        <div className="ml-6 mt-1 border-l border-slate-200 pl-4 space-y-3">
+        <div className="ml-6 mt-1 border-l border-[var(--ui-border-default)] pl-4 space-y-3">
           {block.displayKind === 'command' && renderCommandBlock()}
 
           {block.displayKind === 'file_edit' && renderFileEditBlock()}
 
           {block.displayKind === 'search_read' && searchPreview && (
-            <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-2">
-              <pre className="whitespace-pre-wrap text-[12px] leading-6 text-slate-700 font-mono">{searchPreview}</pre>
+            <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]">
+              <div className={detailViewportClass}>
+                <pre className={`${detailPreClass} px-3 py-2`}>{searchPreview}</pre>
+              </div>
             </div>
           )}
 
           {block.displayKind === 'web' && (inputText || outputText) && (
-            <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-2">
-              <pre className="whitespace-pre-wrap text-[12px] leading-6 text-slate-700 font-mono">{outputText || inputText}</pre>
+            <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]">
+              <div className={detailViewportClass}>
+                <pre className={`${detailPreClass} px-3 py-2`}>{outputText || inputText}</pre>
+              </div>
             </div>
           )}
 
           {block.displayKind === 'task_stage' && (
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[12px] text-slate-600">{block.toolName}</span>
+              <span className="inline-flex rounded-full bg-[var(--ui-bg-panel)] px-2.5 py-1 text-[12px] text-[var(--ui-text-tool-call)]">{block.toolName}</span>
               {Object.entries(block.input ?? {}).slice(0, 3).map(([key, value]) => (
-                <span key={key} className="inline-flex rounded-full bg-slate-50 px-2.5 py-1 text-[12px] text-slate-500">
+                <span key={key} className="inline-flex rounded-full bg-[var(--ui-bg-panel)] px-2.5 py-1 text-[12px] text-[var(--ui-text-tool-call)]">
                   {key}: {String(value)}
                 </span>
               ))}
@@ -540,8 +547,10 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
           )}
 
           {block.displayKind === 'generic' && (inputText || outputText) && (
-            <div className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-2">
-              <pre className="whitespace-pre-wrap text-[12px] leading-6 text-slate-700 font-mono">{outputText || inputText}</pre>
+            <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]">
+              <div className={detailViewportClass}>
+                <pre className={`${detailPreClass} px-3 py-2`}>{outputText || inputText}</pre>
+              </div>
             </div>
           )}
 
@@ -586,7 +595,7 @@ const AssistantNaturalFlow: React.FC<{
               return <ToolEvidenceBlock key={block.id ?? `tool-${index}`} block={block} />
             }
             return (
-              <div key={block.id ?? `text-${index}`} className="prose prose-slate max-w-none text-[15px] leading-relaxed">
+              <div key={block.id ?? `text-${index}`} className="max-w-none text-[15px] leading-relaxed text-[var(--ui-text-primary)]">
                 <InlineCitationMarkdown
                   content={normalizeAiMarkdown(block.text)}
                   citations={Array.isArray(msg.citations) ? msg.citations : []}
@@ -597,7 +606,7 @@ const AssistantNaturalFlow: React.FC<{
           })}
 
           {visibleBlocks.length === 0 && fallbackContent.trim() && (
-            <div className="prose prose-slate max-w-none text-[15px] leading-relaxed">
+            <div className="max-w-none text-[15px] leading-relaxed text-[var(--ui-text-primary)]">
               <InlineCitationMarkdown
                 content={normalizeAiMarkdown(fallbackContent)}
                 citations={Array.isArray(msg.citations) ? msg.citations : []}
@@ -607,10 +616,10 @@ const AssistantNaturalFlow: React.FC<{
           )}
 
           {msg.isStreaming && visibleBlocks.length === 0 && !fallbackContent.trim() && (
-            <div className="flex items-center gap-1.5 text-slate-400" aria-label="thinking animation">
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '120ms' }} />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+            <div className="flex items-center gap-1.5 text-[var(--ui-text-primary)]" aria-label="thinking animation">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--ui-text-primary)] animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--ui-text-primary)] animate-bounce" style={{ animationDelay: '120ms' }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--ui-text-primary)] animate-bounce" style={{ animationDelay: '240ms' }} />
             </div>
           )}
         </div>
@@ -731,7 +740,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     onDocumentResolved,
   })
   const deferredMessages = useDeferredValue(messages)
-
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
@@ -1203,11 +1211,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
         return (
           <div className="group flex gap-3 flex-row-reverse">
-            <div className="h-9 w-9 rounded-full shrink-0 inline-flex items-center justify-center bg-slate-200 text-slate-600">
+            <div className="h-9 w-9 rounded-full shrink-0 inline-flex items-center justify-center bg-[var(--ui-border-default)] text-[var(--ui-text-primary)]">
               {user.display_name?.slice(0, 1) || t('agent_chat.user_default_name')}
             </div>
             <div className="relative max-w-[72%]">
-              <div className="rounded-2xl px-4 py-3 bg-slate-100 text-slate-800 shadow-sm text-left">
+              <div className="rounded-2xl px-4 py-3 bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] shadow-sm text-left">
                 {textContent.trim() ? <MarkdownWithMath>{textContent}</MarkdownWithMath> : null}
                 {attachments.length > 0 && (
                   <div className={`${textContent.trim() ? 'mt-3' : ''} flex flex-wrap gap-1.5`}>
@@ -1217,10 +1225,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                       return (
                         <span
                           key={`${name}-${index}`}
-                          className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                          className="inline-flex max-w-full items-center rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]"
                           title={name}
                         >
-                          <Icon name={'description'} className="text-[12px] mr-1 text-slate-500" />
+                          <Icon name={'description'} className="text-[12px] mr-1 text-[var(--ui-text-primary)]" />
                           <span className="truncate max-w-[220px]">{name}</span>
                         </span>
                       )
@@ -1233,7 +1241,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                 aria-label={t('agent_chat.copy_message')}
                 title={t('agent_chat.copy_message')}
                 onClick={handleCopy}
-                className="absolute -right-6 bottom-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-700"
+                className="absolute -right-6 bottom-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)]"
               >
                 <Icon name={copied ? 'check' : 'content_copy'} className="text-[16px] leading-none" />
               </button>
@@ -1298,7 +1306,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           backendBaseUrl={backendBaseUrl}
           userId={user.id}
         />
-        {error && !isBottom && <div className="mt-3 text-sm text-red-500 text-center">{error}</div>}
+        {error && !isBottom && <div className="mt-3 text-sm text-rose-500 text-center">{error}</div>}
       </form>
     )
   },
@@ -1306,9 +1314,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   )
 
   return (
-    <div className="fixed inset-0 z-40 pointer-events-none">
+    <div className="agent-chat-panel fixed inset-0 z-40 pointer-events-none">
       <aside
-        className={`fixed top-0 right-0 h-full bg-white flex flex-col transition-transform duration-300 pointer-events-auto ${
+        className={`fixed top-0 right-0 h-full bg-[var(--ui-bg-agent)] flex flex-col transition-transform duration-300 pointer-events-auto ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         ref={drawerRef}
@@ -1320,16 +1328,16 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* 顶部工具栏：标题下拉 + 新建按钮 */}
-          <div className="relative h-[46px] flex items-center justify-between px-6 border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
+          <div className="relative h-[46px] flex items-center justify-between px-6 border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-agent)] backdrop-blur-sm">
             <button
               onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-              className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+              className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1.5 rounded-lg hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
             >
-              <span className="text-sm font-semibold text-neutral-900 truncate">
+              <span className="text-sm font-semibold text-[var(--ui-text-primary)] truncate">
                 {(activeConversation?.title && activeConversation.title !== '新的会话') ? activeConversation.title : t('agent_chat.new_conversation')}
               </span>
               <svg
-                className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 text-[var(--ui-text-primary)] transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -1340,7 +1348,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             </button>
             <button
               onClick={handleStartNewConversation}
-              className="text-neutral-400 hover:text-neutral-900 p-2 hover:bg-neutral-100 rounded-full transition-colors"
+              className="text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)] p-2 hover:bg-[var(--ui-bg-panel-muted)] rounded-full transition-colors"
               aria-label={t('agent_chat.new_conversation_aria')}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1363,11 +1371,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               />
             ) : null}
 
-            <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${!isHistoryOpen ? 'border-t border-neutral-200' : ''}`}>
+            <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${!isHistoryOpen ? 'border-t border-[var(--ui-border-default)]' : ''}`}>
               {hasMessages ? (
                 <>
-                  <div className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-neutral-200' : ''}`}>
-                    <div className="flex flex-col gap-4 text-sm text-slate-700 min-h-[340px]">
+                  <div className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-[var(--ui-border-default)]' : ''}`}>
+                    <div className="flex flex-col gap-4 text-sm text-[var(--ui-text-primary)] min-h-[340px]">
                       {deferredMessages.map((msg, idx) => {
                         const key = `${msg.role}-${idx}`
                         const isAssistant = msg.role === 'assistant'
@@ -1379,11 +1387,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                             {shouldShowHitlForm && (
                               <div className="flex gap-3">
                                 <div className="flex-1 min-w-0">
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
+                                <div className="text-[11px] uppercase tracking-wide text-[var(--ui-text-primary)] mb-2">
                                   {t('agent_chat.form_title')}
                                 </div>
-                                <div className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm px-4 py-3">
-                                  <div className="text-xs font-semibold text-slate-600 mb-2">
+                                <div className="rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] shadow-sm px-4 py-3">
+                                  <div className="text-xs font-semibold text-[var(--ui-text-primary)] mb-2">
                                     {pendingInteraction?.kind === 'permission'
                                       ? `Approval required: ${pendingInteraction.request.permission}`
                                       : 'Agent requires input'}
@@ -1391,8 +1399,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                   {pendingInteraction?.kind === 'permission' &&
                                     Array.isArray(pendingInteraction.request.patterns) &&
                                     pendingInteraction.request.patterns.length > 0 && (
-                                      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
-                                        <div className="font-medium text-slate-700 mb-1">Requested paths</div>
+                                      <div className="mb-3 rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-3 py-2 text-[12px] text-[var(--ui-text-primary)]">
+                                        <div className="font-medium text-[var(--ui-text-primary)] mb-1">Requested paths</div>
                                         <div className="space-y-1">
                                           {pendingInteraction.request.patterns.map((pattern) => (
                                             <div key={pattern} className="break-all font-mono">
@@ -1406,7 +1414,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                     {pendingInteraction?.kind === 'permission' ? (
                                       <>
                                         <div className="flex flex-col gap-1.5">
-                                          <label className="text-xs text-slate-500">Decision</label>
+                                          <label className="text-xs text-[var(--ui-text-primary)]">Decision</label>
                                           <div className="grid gap-1.5">
                                             {[
                                               { value: 'once', label: 'Allow once' },
@@ -1419,8 +1427,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                                   key={opt.value}
                                                   className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition ${
                                                     checked
-                                                      ? 'border-slate-500 bg-slate-50 text-slate-900'
-                                                      : 'border-slate-300 text-slate-700'
+                                                      ? 'border-[var(--ui-border-strong)] bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]'
+                                                      : 'border-[var(--ui-border-strong)] text-[var(--ui-text-primary)]'
                                                   }`}
                                                 >
                                                   <input
@@ -1438,13 +1446,13 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                           </div>
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                          <label className="text-xs text-slate-500">Message</label>
+                                          <label className="text-xs text-[var(--ui-text-primary)]">Message</label>
                                           <textarea
                                             value={String(hitlFormValues.message ?? '')}
                                             disabled={isSubmittingHitlForm}
                                             placeholder="Optional feedback"
                                             onChange={(e) => handleHitlFieldChange('message', e.target.value)}
-                                            className="w-full min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+                                            className="w-full min-h-20 rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)] disabled:bg-[var(--ui-bg-panel-muted)]"
                                           />
                                         </div>
                                       </>
@@ -1455,25 +1463,25 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                         if (question.multiple || question.custom) {
                                           return (
                                             <div key={fieldId} className="flex flex-col gap-1">
-                                              <label className="text-xs text-slate-500">{question.header || question.question}</label>
+                                              <label className="text-xs text-[var(--ui-text-primary)]">{question.header || question.question}</label>
                                               <textarea
                                                 value={String(value)}
                                                 disabled={isSubmittingHitlForm}
                                                 placeholder={question.multiple ? 'One answer per line' : ''}
                                                 onChange={(e) => handleHitlFieldChange(fieldId, e.target.value)}
-                                                className="w-full min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+                                                className="w-full min-h-20 rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)] disabled:bg-[var(--ui-bg-panel-muted)]"
                                               />
                                             </div>
                                           )
                                         }
                                         return (
                                           <div key={fieldId} className="flex flex-col gap-1">
-                                            <label className="text-xs text-slate-500">{question.header || question.question}</label>
+                                            <label className="text-xs text-[var(--ui-text-primary)]">{question.header || question.question}</label>
                                             <select
                                               value={String(value)}
                                               disabled={isSubmittingHitlForm}
                                               onChange={(e) => handleHitlFieldChange(fieldId, e.target.value)}
-                                              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-100"
+                                              className="w-full rounded-md border border-[var(--ui-border-strong)] px-2 py-1.5 text-sm bg-[var(--ui-bg-panel)] focus:outline-none focus:ring-1 focus:ring-[var(--ui-border-strong)] disabled:bg-[var(--ui-bg-panel-muted)]"
                                             >
                                               {question.options.map((opt) => (
                                                 <option key={opt.label} value={opt.label}>
@@ -1488,7 +1496,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                     <div className="pt-1 flex justify-end gap-2">
                                         <button
                                           type="button"
-                                          className="px-3 py-1.5 rounded-full text-xs border border-slate-300 text-slate-500 hover:bg-slate-100 transition disabled:opacity-50"
+                                          className="px-3 py-1.5 rounded-full text-xs border border-[var(--ui-border-strong)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)] transition disabled:opacity-50"
                                           onClick={handleHitlCancel}
                                           disabled={isSubmittingHitlForm}
                                         >
@@ -1497,7 +1505,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                         <button
                                           type="submit"
                                           disabled={isSubmittingHitlForm}
-                                          className="px-3 py-1.5 rounded-full text-xs bg-slate-900 text-white disabled:opacity-60"
+                                          className="px-3 py-1.5 rounded-full text-xs bg-[var(--ui-btn-solid-bg)] text-white hover:bg-[var(--ui-btn-solid-hover)] disabled:opacity-60"
                                         >
                                           {isSubmittingHitlForm ? t('agent_chat.submitting') : t('agent_chat.confirm')}
                                         </button>
@@ -1512,7 +1520,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                       })}
                     </div>
 
-                    {error && <div className="mt-3 text-sm text-red-500">{error}</div>}
+                    {error && <div className="mt-3 text-sm text-rose-500">{error}</div>}
                   </div>
                   {renderComposer('bottom')}
                 </>
@@ -1527,8 +1535,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                         className="h-28 w-40 drop-shadow-[0_10px_30px_rgba(15,23,42,0.15)]"
                       />
                     </div>
-                    <h2 className="text-xl font-semibold text-slate-900">{greeting.title}</h2>
-                    <blockquote className="mt-3 text-left text-[15px] text-slate-500 italic leading-relaxed border-l-4 border-slate-200 pl-4">
+                    <h2 className="text-xl font-semibold text-[var(--ui-text-primary)]">{greeting.title}</h2>
+                    <blockquote className="mt-3 text-left text-[15px] text-[var(--ui-text-primary)] italic leading-relaxed border-l-4 border-[var(--ui-border-default)] pl-4">
                       {greeting.subtitle}
                     </blockquote>
                   </div>
@@ -1541,7 +1549,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
         {onResize && (
           <div
-            className="absolute top-0 left-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-slate-200/60 transition-colors"
+            className="absolute top-0 left-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--ui-border-default)]/60 transition-colors"
             onMouseDown={(e) => {
               e.preventDefault()
               const startX = e.clientX
@@ -1596,14 +1604,17 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #d1d1d6;
+          background: var(--scroll-thumb, #d1d1d6);
           border-radius: 10px;
-          border: 1px solid white;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #a2a2a7;
+          background: var(--scroll-thumb-hover, #a2a2a7);
         }
       `}</style>
     </div>
   )
 }
+
+
+
+

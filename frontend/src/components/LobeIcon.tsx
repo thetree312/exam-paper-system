@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import Icon from './Icon'
 
 export interface LobeIconProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -54,3 +54,5 @@ export const LobeIcon: React.FC<LobeIconProps> = ({
 }
 
 export default LobeIcon
+
+

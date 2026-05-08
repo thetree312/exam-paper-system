@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import Icon from './Icon'
 import LobeIcon from './LobeIcon'
@@ -181,6 +181,35 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
             #ffffff 70%,
             #d1d1d6 85%,
             #a2a2a7 100%);
+          --metal-card-bg: #ffffff;
+          --metal-soft-bg: #f2f2f7;
+          --metal-text: #1c1c1e;
+          --metal-text-muted: #8e8e93;
+          --metal-popover-bg: rgba(255, 255, 255, 0.98);
+          --metal-send-bg: #1c1c1e;
+          --metal-send-hover: #000000;
+          --metal-send-disabled: #d1d1d6;
+        }
+
+        [data-theme='dark'] {
+          --polished-metal: linear-gradient(135deg,
+            #3a3d41 0%,
+            #5b6168 12%,
+            #9aa0a6 22%,
+            #3f444c 34%,
+            #aab2bb 46%,
+            #30343a 58%,
+            #8f98a1 70%,
+            #3a3f46 84%,
+            #272b31 100%);
+          --metal-card-bg: #252526;
+          --metal-soft-bg: #2f3136;
+          --metal-text: #d4d4d4;
+          --metal-text-muted: #9aa4af;
+          --metal-popover-bg: rgba(37, 37, 38, 0.98);
+          --metal-send-bg: #111214;
+          --metal-send-hover: #191b1e;
+          --metal-send-disabled: #3d4248;
         }
 
         @keyframes reflectRotate {
@@ -200,7 +229,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
         }
 
         .metal-inner-card {
-          background: #ffffff;
+          background: var(--metal-card-bg);
           border-radius: 18px;
           display: flex;
           flex-direction: column;
@@ -260,7 +289,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
           border-radius: 8px;
           border: none;
           background: transparent;
-          color: #8e8e93;
+          color: var(--metal-text-muted);
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -269,8 +298,8 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
         }
 
         .tool-btn:hover {
-          background: #f2f2f7;
-          color: #1c1c1e;
+          background: var(--metal-soft-bg);
+          color: var(--metal-text);
         }
 
         .model-capsule {
@@ -284,15 +313,15 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
           gap: 4px;
           cursor: pointer;
           transition: all 0.2s;
-          color: #8e8e93;
+          color: var(--metal-text-muted);
           min-width: 0;
           max-width: 168px;
           flex: 0 1 168px;
         }
 
         .model-capsule:hover {
-          background: #f2f2f7;
-          color: #1c1c1e;
+          background: var(--metal-soft-bg);
+          color: var(--metal-text);
         }
 
         .model-label {
@@ -312,7 +341,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
 
         .metal-send-btn {
           border: none;
-          background: #1c1c1e;
+          background: var(--metal-send-bg);
           border-radius: 10px;
           cursor: pointer;
           display: flex;
@@ -322,12 +351,12 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
         }
 
         .metal-send-btn:hover:not(:disabled) {
-          background: #000000;
+          background: var(--metal-send-hover);
           transform: scale(1.02);
         }
 
         .metal-send-btn:disabled {
-          background: #d1d1d6;
+          background: var(--metal-send-disabled);
           cursor: not-allowed;
         }
 
@@ -336,7 +365,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
           bottom: 100%;
           left: 0;
           margin-bottom: 8px;
-          background: rgba(255, 255, 255, 0.98);
+          background: var(--metal-popover-bg);
           border-radius: 16px;
           box-shadow: 0 10px 30px rgba(0,0,0,0.15);
           padding: 6px;
@@ -355,13 +384,13 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
           display: flex;
           align-items: center;
           gap: 10px;
-          color: #1c1c1e;
+          color: var(--metal-text);
           white-space: nowrap;
           min-width: 0;
         }
 
         .menu-row:hover {
-          background: #f2f2f7;
+          background: var(--metal-soft-bg);
         }
 
         .menu-option-text {
@@ -381,10 +410,10 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
               {attachedFileNames.map((name) => (
                 <span
                   key={name}
-                  className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600"
+                  className="inline-flex max-w-full items-center rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--ui-text-primary)]"
                   title={name}
                 >
-                  <Icon name={"description"} className="text-[12px] mr-1 text-slate-500" />
+                  <Icon name={"description"} className="text-[12px] mr-1 text-[var(--ui-text-primary)]" />
                   <span className="truncate max-w-[200px]">{name}</span>
                 </span>
               ))}
@@ -425,7 +454,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
                         fileInputRef.current?.click()
                       }}
                     >
-                      <Icon name={"upload_file"} className="text-[16px] leading-none text-slate-500" />
+                      <Icon name={"upload_file"} className="text-[16px] leading-none text-[var(--ui-text-primary)]" />
                       上传文档（md/txt）
                     </div>
                     <div
@@ -435,7 +464,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
                         onOpenMcpSettings?.()
                       }}
                     >
-                      <Icon name={"build_circle"} className="text-[16px] leading-none text-slate-500" />
+                      <Icon name={"build_circle"} className="text-[16px] leading-none text-[var(--ui-text-primary)]" />
                       MCP
                     </div>
                     <div
@@ -445,7 +474,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
                         onOpenSkillSettings?.()
                       }}
                     >
-                      <Icon name={"blur_on"} className="text-[16px] leading-none text-slate-500" />
+                      <Icon name={"blur_on"} className="text-[16px] leading-none text-[var(--ui-text-primary)]" />
                       Skill
                     </div>
                   </div>
@@ -496,7 +525,7 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
                         </div>
                       ))
                     ) : (
-                      <div className="menu-row text-slate-400" style={{ cursor: 'default' }}>
+                      <div className="menu-row text-[var(--ui-text-primary)]" style={{ cursor: 'default' }}>
                         暂无可选模型
                       </div>
                     )}
@@ -543,3 +572,5 @@ export const MetalInputBox: React.FC<MetalInputBoxProps> = ({
     </>
   )
 }
+
+

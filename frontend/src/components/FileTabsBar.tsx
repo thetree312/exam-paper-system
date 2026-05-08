@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+﻿import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UploadedFileTab } from '../types'
 import Icon from './Icon'
@@ -43,7 +43,7 @@ const renderOfficeIcon = (type: UploadedFileTab['previewType']) => {
       )
     default:
       return (
-        <Icon name={"insert_drive_file"} className="text-[16px] text-slate-500 mr-2" />
+        <Icon name={"insert_drive_file"} className="text-[16px] text-[var(--ui-text-primary)] mr-2" />
       )
   }
 }
@@ -81,16 +81,16 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
   const addButtonContent = useMemo(
     () =>
       isUploading ? (
-        <Icon name={"progress_activity"} className="text-[18px] text-gray-400 animate-spin" />
+        <Icon name={"progress_activity"} className="text-[18px] text-[var(--ui-text-primary)] animate-spin" />
       ) : (
-        <Icon name={"add"} className="text-[18px] text-gray-600" />
+        <Icon name={"add"} className="text-[18px] text-[var(--ui-text-primary)]" />
       ),
     [isUploading],
   )
 
   return (
     <div
-      className="bg-[#E9EEF5] px-2 border-b border-[#D1D1D1] h-[34px] flex items-end"
+      className="file-tabs-bar bg-[var(--ui-bg-tabbar)] px-2 border-b border-[var(--ui-border-default)] h-[34px] flex items-end"
     >
       <div className="flex items-center gap-2 w-full">
         <div ref={scrollRef} className="flex items-end gap-1 overflow-x-auto no-scrollbar pr-2 flex-1 h-full">
@@ -105,8 +105,8 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                   onClick={() => onTabSelect(index)}
                   className={`relative min-w-[140px] max-w-[210px] h-[32px] flex items-center pl-3 pr-2 cursor-default transition-all duration-150 border-none ${
                     isActive
-                      ? 'bg-white text-gray-800 z-10 rounded-t-[6px] shadow-[0_-1px_4px_rgba(0,0,0,0.04)]'
-                      : 'text-gray-600 hover:bg-[#DCE3ED] rounded-t-[6px]'
+                      ? 'bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] z-10 rounded-t-[6px] shadow-[0_-1px_4px_rgba(0,0,0,0.04)]'
+                      : 'text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)] rounded-t-[6px]'
                   }`}
                 >
                   {renderOfficeIcon(tab.previewType)}
@@ -117,7 +117,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                     role="button"
                     tabIndex={0}
                     aria-label={t('file_tabs.close_label')}
-                    className={`ml-1 rounded-sm p-0.5 transition-opacity hover:bg-gray-200 [&:focus-visible]:ring-2 [&:focus-visible]:ring-offset-1 [&:focus-visible]:ring-slate-400 ${
+                    className={`ml-1 rounded-sm p-0.5 transition-opacity hover:bg-[var(--ui-bg-panel-muted)] [&:focus-visible]:ring-2 [&:focus-visible]:ring-offset-1 [&:focus-visible]:ring-slate-400 ${
                       isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
                     onClick={(event) => {
@@ -132,10 +132,10 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
                       }
                     }}
                   >
-                    <Icon name="close" className="text-[14px] leading-none text-slate-500" />
+                    <Icon name="close" className="text-[14px] leading-none text-[var(--ui-text-primary)]" />
                   </span>
                 </button>
-                {showDivider && <div className="h-[16px] w-[1px] bg-[#C1C6CC] self-center" />}
+                {showDivider && <div className="h-[16px] w-[1px] bg-[var(--ui-border-default)] self-center" />}
               </div>
             )
           })}
@@ -143,7 +143,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
           <button
             type="button"
             onClick={onAddTab}
-            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-[#DCE3ED] mb-[3px] ml-1 cursor-pointer transition-colors"
+            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] mb-[3px] ml-1 cursor-pointer transition-colors"
             disabled={isUploading}
           >
             {addButtonContent}
@@ -153,7 +153,7 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
         {onToggleFileTree && (
           <button
             type="button"
-            className="flex-shrink-0 inline-flex items-center justify-center px-1.5 h-8 text-[#647185] hover:text-[#4c586d] mr-[-8px]"
+            className="flex-shrink-0 inline-flex items-center justify-center px-1.5 h-8 text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)] mr-[-8px]"
             onClick={onToggleFileTree}
             title={isFileTreeOpen ? t('file_tabs.toggle_preview') : t('file_tabs.toggle_workroom_files')}
           >
@@ -164,3 +164,6 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
     </div>
   )
 }
+
+
+

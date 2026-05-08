@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 
 import {
   createTextMathDocument,
@@ -41,7 +41,7 @@ export const RichMathComposer: React.FC<RichMathComposerProps> = ({
       placeholder={placeholder}
       disabled={disabled}
       rows={Math.max(minRows, 4)}
-      className="w-full resize-none border-0 bg-transparent px-0 py-0 text-sm text-slate-800 outline-none"
+      className="w-full resize-none border-0 bg-transparent px-0 py-0 text-sm text-[var(--ui-text-primary)] outline-none"
       style={{ minHeight: Math.max(minRows * 28, 112) }}
     />
   )
@@ -50,3 +50,5 @@ export const RichMathComposer: React.FC<RichMathComposerProps> = ({
 export function coerceMathComposerValue(value: unknown, fallbackText = ''): MathContentDocument {
   return ensureMathContentDocument(value, fallbackText) ?? createTextMathDocument(fallbackText)
 }
+
+

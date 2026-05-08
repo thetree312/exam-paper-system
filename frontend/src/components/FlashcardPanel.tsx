@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+﻿import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FlashcardItem, FlashcardMasteryStats, UserInfo } from '../types'
 import { MarkdownWithMath } from './MarkdownWithMath'
@@ -20,7 +20,7 @@ interface FlashcardPanelProps {
 }
 
 const MASTERY_COLORS: Record<string, string> = {
-  new: 'bg-slate-100 text-slate-600 border-slate-200',
+  new: 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] border-[var(--ui-border-default)]',
   struggling: 'bg-rose-50 text-rose-700 border-rose-200',
   reviewing: 'bg-amber-50 text-amber-700 border-amber-200',
   mastered: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -311,15 +311,15 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
   // ── 渲染 ──────────────────────────────────────────
 
   return (
-    <div className="h-full w-full rounded-xl bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.08),_transparent_60%)] backdrop-blur flex flex-col">
+    <div className="flashcard-panel h-full w-full rounded-xl bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.08),_transparent_60%)] backdrop-blur flex flex-col">
       {/* ── 顶栏 ── */}
       <div className="flex items-center justify-between px-6 py-4">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('flashcard.header.badge')}</div>
-          <h2 className="text-xl font-semibold text-slate-900">{docTitle}</h2>
+          <div className="text-xs uppercase tracking-[0.2em] text-[var(--ui-text-primary)]">{t('flashcard.header.badge')}</div>
+          <h2 className="text-xl font-semibold text-[var(--ui-text-primary)]">{docTitle}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-full border border-slate-200 overflow-hidden text-xs">
+          <div className="flex rounded-full border border-[var(--ui-border-default)] overflow-hidden text-xs">
             <button
               type="button"
               onClick={() => {
@@ -331,7 +331,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
               className={`px-3 py-1.5 transition-colors ${
                 mode === 'all'
                   ? 'bg-slate-900 text-white'
-                  : 'bg-transparent text-slate-500 hover:bg-slate-50'
+                  : 'bg-transparent text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
               }`}
             >
               {t('flashcard.mode.all')}
@@ -347,7 +347,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
               className={`px-3 py-1.5 transition-colors ${
                 mode === 'due'
                   ? 'bg-slate-900 text-white'
-                  : 'bg-transparent text-slate-500 hover:bg-slate-50'
+                  : 'bg-transparent text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
               }`}
             >
               {t('flashcard.mode.due')}
@@ -356,7 +356,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
           <button
             type="button"
             onClick={onBack}
-            className="px-4 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-slate-300 text-sm"
+            className="px-4 py-1.5 rounded-full border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:border-[var(--ui-border-strong)] text-sm"
           >
             {t('flashcard.header.back')}
           </button>
@@ -366,7 +366,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
       {/* ── 掌握统计条 ── */}
       {stats && stats.total > 0 && (
         <div className="px-6 pb-3 flex flex-wrap items-center gap-3 text-xs">
-          <span className="text-slate-500">{t('flashcard.stats.total', { count: stats.total })}</span>
+          <span className="text-[var(--ui-text-primary)]">{t('flashcard.stats.total', { count: stats.total })}</span>
           <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
             {t('flashcard.stats.mastered', { count: stats.mastered })}
           </span>
@@ -376,7 +376,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
           <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
             {t('flashcard.stats.struggling', { count: stats.struggling })}
           </span>
-          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+          <span className="px-2 py-0.5 rounded-full bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)] border border-[var(--ui-border-default)]">
             {t('flashcard.stats.new_cards', { count: stats.neverReviewed })}
           </span>
           <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
@@ -389,7 +389,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
       <div className="flex-1 px-6 py-4 overflow-y-auto">
         {/* 空态 / 加载 / 错误 */}
         {!documentId && !loading ? (
-          <div className="flex flex-col items-center justify-center text-center gap-4 text-slate-500 text-sm py-20 border border-dashed border-slate-200 rounded-lg">
+          <div className="flex flex-col items-center justify-center text-center gap-4 text-[var(--ui-text-primary)] text-sm py-20 border border-dashed border-[var(--ui-border-default)] rounded-lg">
             <p>{t('flashcard.messages.need_document')}</p>
             <button
               type="button"
@@ -401,9 +401,9 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
             </button>
           </div>
         ) : loading ? (
-          <div className="text-center text-slate-500 text-sm py-20">{generating ? t('flashcard.messages.generating_in_progress') : t('flashcard.states.loading')}</div>
+          <div className="text-center text-[var(--ui-text-primary)] text-sm py-20">{generating ? t('flashcard.messages.generating_in_progress') : t('flashcard.states.loading')}</div>
         ) : !loading && items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center gap-4 text-slate-500 text-sm py-20 border border-dashed border-slate-200 rounded-lg">
+          <div className="flex flex-col items-center justify-center text-center gap-4 text-[var(--ui-text-primary)] text-sm py-20 border border-dashed border-[var(--ui-border-default)] rounded-lg">
             <p>{generating ? t('flashcard.messages.generating_in_progress') : error ?? t('flashcard.messages.no_items')}</p>
             <button
               type="button"
@@ -429,30 +429,30 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
         ) : currentItem ? (
           <div className="h-full flex flex-col items-center justify-between gap-6">
             {/* 导航 */}
-            <div className="flex items-center gap-4 text-sm text-slate-500">
-              <button type="button" onClick={goPrev} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
+            <div className="flex items-center gap-4 text-sm text-[var(--ui-text-primary)]">
+              <button type="button" onClick={goPrev} className="p-2 rounded-full border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:border-[var(--ui-border-strong)]">
                 <Icon name={"chevron_left"} className="text-[18px]" />
               </button>
-              <span className="text-slate-700 font-semibold">{currentIndex + 1}/{items.length}</span>
-              <button type="button" onClick={goNext} className="p-2 rounded-full border border-slate-200 text-slate-600 hover:border-slate-400">
+              <span className="text-[var(--ui-text-primary)] font-semibold">{currentIndex + 1}/{items.length}</span>
+              <button type="button" onClick={goNext} className="p-2 rounded-full border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] hover:border-[var(--ui-border-strong)]">
                 <Icon name={"chevron_right"} className="text-[18px]" />
               </button>
             </div>
 
             {/* 卡片 */}
             <div className="relative w-full max-w-3xl flex-1 flex items-center justify-center">
-              <div className="absolute inset-0 scale-95 translate-y-6 blur-2xl bg-white/40 rounded-[32px]" />
-              <div className="relative w-full bg-white border border-slate-200 rounded-[32px] shadow-2xl px-10 py-8 flex flex-col gap-5">
+              <div className="absolute inset-0 scale-95 translate-y-6 blur-2xl bg-[var(--ui-bg-panel)]/40 rounded-[32px]" />
+              <div className="relative w-full bg-[var(--ui-bg-panel)] border border-[var(--ui-border-default)] rounded-[32px] shadow-2xl px-10 py-8 flex flex-col gap-5">
                 {/* 卡头：知识点标签 + 掌握状态 */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-1">
                     <span className={`inline-block w-fit px-3 py-0.5 text-xs rounded-full border ${MASTERY_COLORS[currentItem.masteryState]}`}>
                       {t(`flashcard.mastery.${currentItem.masteryState}`)}
                     </span>
-                    <h3 className="text-lg font-semibold text-slate-900">{currentItem.conceptTag}</h3>
+                    <h3 className="text-lg font-semibold text-[var(--ui-text-primary)]">{currentItem.conceptTag}</h3>
                   </div>
                   {currentItem.confidence != null && (
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-[var(--ui-text-primary)]">
                       {t('flashcard.card.confidence', { value: Math.round(currentItem.confidence * 100) })}
                     </span>
                   )}
@@ -460,7 +460,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
 
                 {/* CUE（正面） */}
                 <div className="min-h-[80px]">
-                  <div className="text-xs uppercase tracking-[0.15em] text-slate-400 mb-2">{t('flashcard.card.cue_label')}</div>
+                  <div className="text-xs uppercase tracking-[0.15em] text-[var(--ui-text-primary)] mb-2">{t('flashcard.card.cue_label')}</div>
                   <MarkdownWithMath className="text-base leading-relaxed" compact>
                     {currentItem.cue || t('flashcard.states.empty_front')}
                   </MarkdownWithMath>
@@ -471,7 +471,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => setRevealed(true)}
-                    className="self-center px-6 py-2 rounded-full border border-slate-300 text-slate-600 hover:border-slate-500 text-sm font-medium transition-colors"
+                    className="self-center px-6 py-2 rounded-full border border-[var(--ui-border-strong)] text-[var(--ui-text-primary)] hover:border-slate-500 text-sm font-medium transition-colors"
                   >
                     {t('flashcard.buttons.show_answer')}
                   </button>
@@ -480,7 +480,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
                 {/* ANSWER（背面） */}
                 <div className={`transition-all duration-500 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none h-0 overflow-hidden'}`}>
                   <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 shadow-inner">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-300 mb-2">{t('flashcard.card.answer_label')}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--ui-text-primary)] mb-2">{t('flashcard.card.answer_label')}</div>
                     <MarkdownWithMath className="text-base leading-relaxed text-white" compact>
                       {currentItem.answer || t('flashcard.states.empty_answer')}
                     </MarkdownWithMath>
@@ -542,7 +542,7 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
                 type="button"
                 onClick={() => void loadCards()}
                 disabled={loading}
-                className="px-4 py-2 rounded-full border border-slate-200 text-slate-600 text-sm hover:border-slate-400 disabled:opacity-60"
+                className="px-4 py-2 rounded-full border border-[var(--ui-border-default)] text-[var(--ui-text-primary)] text-sm hover:border-[var(--ui-border-strong)] disabled:opacity-60"
               >
                 {t('flashcard.buttons.refresh')}
               </button>
@@ -553,3 +553,5 @@ export const FlashcardPanel: React.FC<FlashcardPanelProps> = ({
     </div>
   )
 }
+
+

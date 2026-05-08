@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import Icon from '../../../components/Icon'
 
 
@@ -75,11 +75,11 @@ const MindMapRadialMenu: React.FC<MindMapRadialMenuProps> = ({ anchor, visible, 
         height: 0,
       }}
     >
-      <div className="absolute -left-6 -top-6 flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-white/96 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.18)] backdrop-blur">
+      <div className="absolute -left-6 -top-6 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] text-[var(--ui-text-primary)] shadow-none backdrop-blur">
         <button
           type="button"
           title={labels.close}
-          className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
           onClick={() => onClose?.()}
         >
           <Icon name={"close"} className="text-[18px] leading-none" />
@@ -102,12 +102,12 @@ const MindMapRadialMenu: React.FC<MindMapRadialMenuProps> = ({ anchor, visible, 
               action.onClick()
             }}
             disabled={action.disabled}
-            className={`pointer-events-auto absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition-transform ${
+            className={`pointer-events-auto absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border shadow-none transition-transform ${
               action.disabled ? 'cursor-not-allowed opacity-45' : 'hover:scale-105'
             } ${
               action.tone === 'danger'
-                ? 'border-rose-200 bg-white text-rose-600 hover:bg-rose-50'
-                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                ? 'border-rose-300 bg-[var(--ui-bg-panel)] text-rose-500 hover:bg-[var(--ui-bg-panel-muted)]'
+                : 'border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]'
             }`}
             style={{
               left: offsetX,
@@ -123,3 +123,5 @@ const MindMapRadialMenu: React.FC<MindMapRadialMenuProps> = ({ anchor, visible, 
 }
 
 export default MindMapRadialMenu
+
+

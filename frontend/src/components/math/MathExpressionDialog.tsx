@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { MathfieldElement } from 'mathlive'
 import 'mathlive/static.css'
 
@@ -34,7 +34,7 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
     ;(field as any).setOptions?.({
       virtualKeyboardMode: 'manual',
     })
-    field.className = 'w-full min-h-[56px] rounded-xl border border-slate-200 bg-white px-3 py-3 text-lg'
+    field.className = 'w-full min-h-[56px] rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-3 py-3 text-lg'
     hostRef.current.appendChild(field)
     mathfieldRef.current = field
     queueMicrotask(() => field.focus())
@@ -50,16 +50,16 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
 
     return (
       <div className="fixed inset-0 z-[90] bg-slate-950/35 flex items-center justify-center px-4">
-        <div className="w-full max-w-xl rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="w-full max-w-xl rounded-3xl bg-[var(--ui-bg-panel)] shadow-2xl border border-[var(--ui-border-default)] overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--ui-border-default)]">
             <div>
-              <div className="text-sm font-semibold text-slate-900">插入公式</div>
-              <div className="text-xs text-slate-500">使用 MathLive 编辑 LaTeX 公式</div>
+              <div className="text-sm font-semibold text-[var(--ui-text-primary)]">插入公式</div>
+              <div className="text-xs text-[var(--ui-text-primary)]">使用 MathLive 编辑 LaTeX 公式</div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100"
+              className="rounded-lg px-3 py-1.5 text-sm text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
             >
               关闭
             </button>
@@ -70,7 +70,7 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
                 type="button"
                 onClick={() => setMode('inline')}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                  mode === 'inline' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                  mode === 'inline' ? 'bg-blue-600 text-white' : 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]'
                 }`}
               >
                 行内公式
@@ -79,7 +79,7 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
                 type="button"
                 onClick={() => setMode('block')}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                  mode === 'block' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                  mode === 'block' ? 'bg-blue-600 text-white' : 'bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]'
                 }`}
               >
                 块级公式
@@ -87,11 +87,11 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
             </div>
             <div ref={hostRef} />
           </div>
-          <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50">
+          <div className="flex justify-end gap-2 px-5 py-4 border-t border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)]">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600"
+              className="rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-4 py-2 text-sm text-[var(--ui-text-primary)]"
             >
               取消
             </button>
@@ -118,3 +118,5 @@ export const MathExpressionDialog: React.FC<MathExpressionDialogProps> = ({
 
   return dialog
 }
+
+

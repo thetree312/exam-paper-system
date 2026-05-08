@@ -1,5 +1,6 @@
 import path from "node:path"
 import { getLocalSqlite, parseJsonText, readJsonFileIfExists } from "../../lib/local-sqlite"
+import { createLogger } from "../../lib/logger"
 import { EMPTY_MATH_DOCUMENT, ensureMathContentDocument, mathContentToPromptText } from "../../lib/math-content"
 import type {
   QuestionCardAttemptRecord,
@@ -32,6 +33,52 @@ type QuestionCardWeaknessState = {
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const backendRoot = path.join(repoRoot, "backend")
 let migrated = false
+const logger = createLogger({ domain: "studio-repository" })
+
+function captureCallerStack(maxLines = 8) {
+  const raw = new Error().stack ?? ""
+  return raw
+    .split("\n")
+    .slice(2)
+    .map((line) => line.trim())
+    .filter((line) => !line.includes("repository.ts"))
+    .slice(0, maxLines)
+}
+
+function summarizeCardDelta(before: StudioQuestionCardRecord[], after: StudioQuestionCardRecord[]) {
+  const beforeByID = new Map(before.map((item) => [item.id, item]))
+  const afterByID = new Map(after.map((item) => [item.id, item]))
+  const created: string[] = []
+  const removed: string[] = []
+  const touched: string[] = []
+  for (const item of after) {
+    const prev = beforeByID.get(item.id)
+    if (!prev) {
+      created.push(item.id)
+      continue
+    }
+    if (
+      prev.sequenceIndex !== item.sequenceIndex ||
+      prev.text !== item.text ||
+      prev.updatedAt !== item.updatedAt ||
+      prev.cardGroupID !== item.cardGroupID
+    ) {
+      touched.push(item.id)
+    }
+  }
+  for (const item of before) {
+    if (!afterByID.has(item.id)) removed.push(item.id)
+  }
+  const studioDocumentIDs = Array.from(new Set(after.map((item) => item.studioDocumentID))).sort((a, b) => a.localeCompare(b))
+  return {
+    beforeCount: before.length,
+    afterCount: after.length,
+    created,
+    removed,
+    touched,
+    studioDocumentIDs,
+  }
+}
 
 function defaultAnswerEvidence(): StudioQuestionCardRecord["answerEvidence"] {
   return { status: "missing" }
@@ -96,12 +143,16 @@ function ensureMigrated() {
         `
           INSERT OR REPLACE INTO studio_question_cards (
             id, user_id, workroom_id, studio_document_id, source_document_id, sequence_index,
-            page, text, original_text, answer_content_json, answer_text, canonical_answer,
-            legend_images_json, source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
+            card_group_id,
+            page, text, original_text, answer_content_json, answer_text, canonical_answer, explanation,
+            legend_images_json, derived_from_card_id, relation_type, origin_task_json,
+            source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
           ) VALUES (
             @id, @user_id, @workroom_id, @studio_document_id, @source_document_id, @sequence_index,
-            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer,
-            @legend_images_json, @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
+            @card_group_id,
+            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer, @explanation,
+            @legend_images_json, @derived_from_card_id, @relation_type, @origin_task_json,
+            @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
           )
         `,
       ).run({
@@ -110,6 +161,7 @@ function ensureMigrated() {
         workroom_id: item.workroomID,
         studio_document_id: item.studioDocumentID,
         source_document_id: item.sourceDocumentID ?? null,
+        card_group_id: (item as any).cardGroupID ?? item.id,
         sequence_index: item.sequenceIndex,
         page: item.page,
         text: item.text,
@@ -117,7 +169,11 @@ function ensureMigrated() {
         answer_content_json: JSON.stringify(ensureMathContentDocument((item as any).answerContent, item.answerText ?? "")),
         answer_text: mathContentToPromptText(ensureMathContentDocument((item as any).answerContent, item.answerText ?? "")),
         canonical_answer: item.canonicalAnswer ?? "",
+        explanation: item.explanation ?? null,
         legend_images_json: JSON.stringify(item.legendImages ?? []),
+        derived_from_card_id: item.derivedFromCardID ?? null,
+        relation_type: item.relationType ?? null,
+        origin_task_json: JSON.stringify(item.originTask ?? null),
         source_selection_json: JSON.stringify(item.sourceSelection ?? { regions: [], legends: [] }),
         answer_evidence_json: JSON.stringify((item as any).answerEvidence ?? defaultAnswerEvidence()),
         learning_snapshot_json: JSON.stringify((item as any).learningSnapshot ?? defaultLearningSnapshot()),
@@ -195,6 +251,7 @@ export const StudioRepository = {
         workroomID: String(row.workroom_id),
         studioDocumentID: String(row.studio_document_id),
         sourceDocumentID: (row.source_document_id as string | null) ?? null,
+        cardGroupID: String((row.card_group_id as string | null) ?? row.id),
         sequenceIndex: Number(row.sequence_index),
         page: Number(row.page),
         text: String(row.text),
@@ -205,7 +262,11 @@ export const StudioRepository = {
         ),
         answerText: String(row.answer_text),
         canonicalAnswer: String(row.canonical_answer ?? ""),
+        explanation: (row.explanation as string | null) ?? null,
         legendImages: parseJsonText<string[]>(String(row.legend_images_json ?? "[]"), []),
+        derivedFromCardID: (row.derived_from_card_id as string | null) ?? null,
+        relationType: (row.relation_type as StudioQuestionCardRecord["relationType"]) ?? null,
+        originTask: parseJsonText<StudioQuestionCardRecord["originTask"]>(String(row.origin_task_json ?? "null"), null),
         sourceSelection: parseJsonText<StudioQuestionCardRecord["sourceSelection"]>(String(row.source_selection_json ?? "{}"), {
           regions: [],
           legends: [],
@@ -228,19 +289,40 @@ export const StudioRepository = {
     ensureMigrated()
     const db = getLocalSqlite()
     const current = await this.readQuestionCards()
+    const callerStack = captureCallerStack()
+    logger.info("update question cards invoked", {
+      before_count: current.items.length,
+      caller_stack: callerStack,
+    })
     const next = (mutate(current) ?? current) as StudioQuestionCardState
+    const delta = summarizeCardDelta(current.items, next.items)
+    logger.info("update question cards mutation summary", {
+      before_count: delta.beforeCount,
+      after_count: delta.afterCount,
+      created_count: delta.created.length,
+      removed_count: delta.removed.length,
+      touched_count: delta.touched.length,
+      created_card_ids: delta.created,
+      removed_card_ids: delta.removed,
+      touched_card_ids: delta.touched,
+      studio_document_ids: delta.studioDocumentIDs,
+    })
     const tx = db.transaction((state: StudioQuestionCardState) => {
       db.prepare(`DELETE FROM studio_question_cards`).run()
       const statement = db.prepare(
         `
           INSERT INTO studio_question_cards (
             id, user_id, workroom_id, studio_document_id, source_document_id, sequence_index,
-            page, text, original_text, answer_content_json, answer_text, canonical_answer,
-            legend_images_json, source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
+            card_group_id,
+            page, text, original_text, answer_content_json, answer_text, canonical_answer, explanation,
+            legend_images_json, derived_from_card_id, relation_type, origin_task_json,
+            source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
           ) VALUES (
             @id, @user_id, @workroom_id, @studio_document_id, @source_document_id, @sequence_index,
-            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer,
-            @legend_images_json, @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
+            @card_group_id,
+            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer, @explanation,
+            @legend_images_json, @derived_from_card_id, @relation_type, @origin_task_json,
+            @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
           )
         `,
       )
@@ -252,6 +334,7 @@ export const StudioRepository = {
           workroom_id: item.workroomID,
           studio_document_id: item.studioDocumentID,
           source_document_id: item.sourceDocumentID ?? null,
+          card_group_id: item.cardGroupID ?? item.id,
           sequence_index: item.sequenceIndex,
           page: item.page,
           text: item.text,
@@ -259,7 +342,11 @@ export const StudioRepository = {
           answer_content_json: JSON.stringify(answerContent),
           answer_text: mathContentToPromptText(answerContent),
           canonical_answer: item.canonicalAnswer ?? "",
+          explanation: item.explanation ?? null,
           legend_images_json: JSON.stringify(item.legendImages ?? []),
+          derived_from_card_id: item.derivedFromCardID ?? null,
+          relation_type: item.relationType ?? null,
+          origin_task_json: JSON.stringify(item.originTask ?? null),
           source_selection_json: JSON.stringify(item.sourceSelection ?? { regions: [], legends: [] }),
           answer_evidence_json: JSON.stringify(item.answerEvidence ?? defaultAnswerEvidence()),
           learning_snapshot_json: JSON.stringify(item.learningSnapshot ?? defaultLearningSnapshot()),
@@ -269,6 +356,12 @@ export const StudioRepository = {
       }
     })
     tx(next)
+    logger.info("update question cards persisted", {
+      after_count: next.items.length,
+      studio_document_ids: Array.from(new Set(next.items.map((item) => item.studioDocumentID))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    })
     return next
   },
 

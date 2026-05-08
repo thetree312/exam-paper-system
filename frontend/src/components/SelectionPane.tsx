@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+﻿import React, { useEffect } from 'react'
 import { SelectionWorkspace } from './SelectionWorkspace'
 import { useSelectionInteraction } from '../hooks/useSelectionInteraction'
 import type {
@@ -110,7 +110,7 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
   return (
     <div
       ref={previewScrollRef}
-      className="relative flex-1 overflow-y-auto bg-slate-100 p-2 sm:p-2.5 lg:p-3 scrollbar-hidden"
+      className="relative flex-1 overflow-y-auto bg-[var(--ui-bg-panel-muted)] p-2 sm:p-2.5 lg:p-3 scrollbar-hidden"
       onPointerDown={handlePointerDown}
     >
       <SelectionWorkspace
@@ -138,3 +138,5 @@ export const SelectionPane: React.FC<SelectionPaneProps> = ({
     </div>
   )
 }
+
+

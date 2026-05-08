@@ -18,16 +18,25 @@ import { requestGrading, requestSplitQuestions } from '../services/agentApi'
 import { submitProblemCardAnswer } from '../services/problemCardsApi'
 import {
   deleteStudioQuestionCard,
+  listStudioQuestionCardsWithRevision,
   recognizeStudioSelection,
   updateStudioQuestionCard,
 } from '../services/studioApi'
 import { createTextMathDocument, mathContentToPromptText, type MathContentDocument } from '../lib/mathContent'
+import { buildOcrItemFromStudioQuestionCard } from '../utils/studioQuestionCards'
+import { getAuthToken } from '../utils/secureStorage'
 
 type SelectionSnapshot = {
   selection: SelectionBox | null
   buildRegionsPayload: () => RegionPayload[] | null
   buildLegendsPayload: () => LegendRegionPayload[] | null
   clearSelection?: () => void
+}
+
+type PendingStudioHighlight = {
+  cardIDs: string[]
+  variant: 'insert'
+  expiresAt: number
 }
 
 type MaybeWrappedAgUiEvent = AgUiEvent | { type?: string; event?: AgUiEvent }
@@ -86,10 +95,218 @@ export const useOcrManager = (
 
   const ocrItemsRef = useRef<AggregatedOcrItem[]>([])
   const selectionSnapshotRef = useRef<SelectionSnapshot | null>(null)
+  const revisionByStudioDocumentRef = useRef<Record<string, number>>({})
+  const pendingHighlightsByStudioDocumentRef = useRef<Record<string, PendingStudioHighlight[]>>({})
+  const shinyClearTimersRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
     ocrItemsRef.current = storeOcrItems
   }, [storeOcrItems])
+
+  useEffect(() => {
+    if (!workroom?.id) return
+    const token = getAuthToken()
+    if (!token) return
+
+    const url = `${backendBaseUrl}/api/studio/events?workroom_id=${encodeURIComponent(String(workroom.id))}&access_token=${encodeURIComponent(token)}`
+    const eventSource = new EventSource(url)
+    console.info('[studio.events] subscribe', {
+      workroomID: String(workroom.id),
+      studioDocumentId,
+      url,
+    })
+
+    const refreshForDocument = (targetStudioDocumentID: string, minRevision?: number) => {
+      if (!targetStudioDocumentID) return
+      if (studioDocumentId && studioDocumentId !== targetStudioDocumentID) {
+        console.info('[studio.events] skip refresh due to active studioDocument mismatch', {
+          activeStudioDocumentID: studioDocumentId,
+          targetStudioDocumentID,
+        })
+        return
+      }
+      console.info('[studio.events] refresh cards start', {
+        targetStudioDocumentID,
+        activeStudioDocumentID: studioDocumentId ?? null,
+        minRevision: minRevision ?? null,
+      })
+      void listStudioQuestionCardsWithRevision(backendBaseUrl, {
+        workroomID: String(workroom.id),
+        studioDocumentID: targetStudioDocumentID,
+      })
+        .then((snapshot) => {
+          const cards = snapshot.items ?? []
+          const revision = snapshot.revision ?? 0
+          const knownRevision = revisionByStudioDocumentRef.current[targetStudioDocumentID] ?? 0
+          if (typeof minRevision === 'number' && revision < minRevision) {
+            console.info('[studio.events] snapshot older than expected revision, ignore update', {
+              targetStudioDocumentID,
+              receivedRevision: revision,
+              minRevision,
+              knownRevision,
+            })
+            return
+          }
+          revisionByStudioDocumentRef.current[targetStudioDocumentID] = Math.max(knownRevision, revision)
+          const fallbackFileName =
+            ocrItemsRef.current.find((item) => item.documentContext?.studioDocumentID === targetStudioDocumentID)?.fileName ?? '题卡集'
+          const existingByID = new Map(
+            ocrItemsRef.current
+              .filter((item) => item.documentContext?.studioDocumentID === targetStudioDocumentID)
+              .map((item) => [item.id, item]),
+          )
+          const now = Date.now()
+          const pendingHighlights = (pendingHighlightsByStudioDocumentRef.current[targetStudioDocumentID] ?? []).filter(
+            (item) => item.expiresAt > now,
+          )
+          const pendingHighlightByCardID = new Map<string, PendingStudioHighlight['variant']>()
+          for (const pending of pendingHighlights) {
+            for (const cardID of pending.cardIDs) {
+              pendingHighlightByCardID.set(cardID, pending.variant)
+            }
+          }
+          pendingHighlightsByStudioDocumentRef.current[targetStudioDocumentID] = pendingHighlights
+          setStoreOcrItems(
+            cards
+              .sort((a, b) => a.sequenceIndex - b.sequenceIndex)
+              .map((card) => {
+                const existing = existingByID.get(card.id)
+                const pendingVariant = pendingHighlightByCardID.get(card.id)
+                const mapped = buildOcrItemFromStudioQuestionCard({
+                  card,
+                  fileName: existing?.fileName ?? fallbackFileName,
+                })
+                const existingShinyUntil =
+                  existing?.uiState?.shinyUntil && existing.uiState.shinyUntil > now
+                    ? existing.uiState.shinyUntil
+                    : undefined
+                const existingVariant = existing?.uiState?.variant
+                const nextShinyUntil = pendingVariant ? now + 2600 : existingShinyUntil
+                return {
+                  ...mapped,
+                  uiState:
+                    nextShinyUntil || existingVariant
+                      ? {
+                          shinyUntil: nextShinyUntil,
+                          variant: pendingVariant ?? existingVariant,
+                        }
+                      : undefined,
+                }
+              }),
+          )
+          if (pendingHighlightByCardID.size > 0) {
+            pendingHighlightsByStudioDocumentRef.current[targetStudioDocumentID] = []
+            const highlightedCardIDs = [...pendingHighlightByCardID.keys()]
+            for (const cardID of highlightedCardIDs) {
+              const timerKey = `${targetStudioDocumentID}:${cardID}`
+              const existingTimer = shinyClearTimersRef.current[timerKey]
+              if (existingTimer) {
+                window.clearTimeout(existingTimer)
+              }
+              shinyClearTimersRef.current[timerKey] = window.setTimeout(() => {
+                console.info('[studio.events] clearing legacy question-card shiny effect', {
+                  targetStudioDocumentID,
+                  cardID,
+                })
+                setStoreOcrItems((prev) =>
+                  prev.map((item) => {
+                    if (item.id !== cardID || item.documentContext?.studioDocumentID !== targetStudioDocumentID) {
+                      return item
+                    }
+                    if (!item.uiState) return item
+                    return {
+                      ...item,
+                      uiState: undefined,
+                    }
+                  }),
+                )
+                delete shinyClearTimersRef.current[timerKey]
+              }, 2800)
+            }
+          }
+          console.info('[studio.events] applied legacy question-card shiny effect', {
+            targetStudioDocumentID,
+            highlightedCardIDs: [...pendingHighlightByCardID.keys()],
+          })
+          console.info('[studio.events] refresh cards completed', {
+            targetStudioDocumentID,
+            revision,
+            cardCount: cards.length,
+          })
+        })
+        .catch((error) => {
+          console.error('[studio.events] failed to refresh cards', error)
+        })
+    }
+
+    if (studioDocumentId) {
+      refreshForDocument(studioDocumentId)
+    }
+
+    eventSource.addEventListener('studio.cards.changed', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data ?? '{}') as {
+          studioDocumentID?: string
+          revision?: number
+          reason?: string
+          cardIDs?: string[]
+        }
+        console.info('[studio.events] received studio.cards.changed', payload)
+        if (!payload?.studioDocumentID) return
+        if (
+          (payload.reason === 'insert' || payload.reason === 'create') &&
+          Array.isArray(payload.cardIDs) &&
+          payload.cardIDs.length > 0
+        ) {
+          const nextPending = pendingHighlightsByStudioDocumentRef.current[payload.studioDocumentID] ?? []
+          nextPending.push({
+            cardIDs: payload.cardIDs.map((item) => String(item)),
+            variant: 'insert',
+            expiresAt: Date.now() + 10000,
+          })
+          pendingHighlightsByStudioDocumentRef.current[payload.studioDocumentID] = nextPending
+          console.info('[studio.events] queued legacy question-card shiny effect', {
+            studioDocumentID: payload.studioDocumentID,
+            reason: payload.reason,
+            cardIDs: payload.cardIDs,
+          })
+        }
+        const changedRevision = typeof payload.revision === 'number' && Number.isFinite(payload.revision) ? payload.revision : undefined
+        if (changedRevision != null) {
+          const knownRevision = revisionByStudioDocumentRef.current[payload.studioDocumentID] ?? 0
+          revisionByStudioDocumentRef.current[payload.studioDocumentID] = Math.max(knownRevision, changedRevision)
+          if (knownRevision >= changedRevision) {
+            console.info('[studio.events] revision already applied, skip refresh', {
+              studioDocumentID: payload.studioDocumentID,
+              knownRevision,
+              changedRevision,
+            })
+            return
+          }
+        }
+        refreshForDocument(payload.studioDocumentID, changedRevision)
+      } catch (error) {
+        console.error('[studio.events] invalid event payload', error)
+      }
+    })
+
+    eventSource.onerror = () => {
+      console.warn('[studio.events] event source error, browser will retry')
+      // let browser retry automatically
+    }
+
+    return () => {
+      console.info('[studio.events] unsubscribe', {
+        workroomID: String(workroom.id),
+        studioDocumentId,
+      })
+      for (const timer of Object.values(shinyClearTimersRef.current)) {
+        window.clearTimeout(timer)
+      }
+      shinyClearTimersRef.current = {}
+      eventSource.close()
+    }
+  }, [backendBaseUrl, workroom?.id, studioDocumentId, setStoreOcrItems])
 
   const handleSelectionSnapshotChange = useCallback((snapshot: SelectionSnapshot) => {
     selectionSnapshotRef.current = snapshot
@@ -515,7 +732,7 @@ export const useOcrManager = (
           }
           const next = [...prev]
           let idx = -1
-          if (typeof questionId === 'number') {
+          if (typeof questionId === 'string' || typeof questionId === 'number') {
             idx = next.findIndex((item) => item.questionMeta?.questionId === questionId)
           }
           if (idx === -1 && typeof sequenceIndex === 'number') {
@@ -657,7 +874,7 @@ export const useOcrManager = (
         }
       }
     },
-    [],
+    [backendBaseUrl, workroom?.id, setStoreOcrItems],
   )
 
   return {

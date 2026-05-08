@@ -3,6 +3,7 @@ export type QuestionRecord = {
   userID: string
   workroomID: string
   studioDocumentID: string
+  studioCardID?: string | null
   sourceDocumentID?: string | null
   sequenceIndex: number
   content: string

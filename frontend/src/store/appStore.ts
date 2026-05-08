@@ -10,6 +10,7 @@ import type {
   WorkroomSourceBinding,
   WorkroomArtifact,
 } from '../types'
+import { readStoredTheme, writeStoredTheme, type UITheme } from '../lib/theme'
 
 interface AppState {
   // 用户认证
@@ -74,6 +75,8 @@ interface AppState {
   setViewportWidth: (width: number) => void
   workroomTreeRevealRequest: { path: string; id: number } | null
   requestWorkroomTreeReveal: (path: string) => void
+  theme: UITheme
+  setTheme: (theme: UITheme) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -160,4 +163,9 @@ export const useAppStore = create<AppState>((set) => ({
         id: Date.now(),
       },
     }),
+  theme: readStoredTheme(),
+  setTheme: (theme) => {
+    writeStoredTheme(theme)
+    set({ theme })
+  },
 }))

@@ -8,10 +8,12 @@ import { requireAuth } from "./auth-context"
 import { AgentSkillSettingsService } from "../domains/agent-skill-settings/service"
 import { AgentSessionModelSelectionService } from "../domains/agent/session-model-selection"
 import {
+  buildStudioQuestionCardsCommandGuide,
   buildWorkroomSessionPermission,
   getDisabledSkillNames,
   loadAgentRuntimeModules,
   resolveAgentModel,
+  STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION,
   syncAgentUserSettings,
   withAgentScope,
 } from "../domains/agent/service"
@@ -193,6 +195,7 @@ function shouldUpgradeLegacyWorkroomPermission(permission: unknown) {
 }
 
 const runtimeStreamSubscribers = new Map<string, Set<(event: AgentStreamEnvelope) => void>>()
+const studioGuideVersionBySessionID = new Map<string, string>()
 
 function subscribeRuntimeStream(sessionID: string, listener: (event: AgentStreamEnvelope) => void) {
   const bucket = runtimeStreamSubscribers.get(sessionID) ?? new Set<(event: AgentStreamEnvelope) => void>()
@@ -271,6 +274,56 @@ function toRuntimeStreamEnvelope(event: any): AgentStreamEnvelope | null {
     default:
       return null
   }
+}
+
+function toAgUiCompatibleEvent(input: Record<string, unknown>, sessionID: string) {
+  const type = typeof input.type === "string" ? input.type : ""
+  const timestamp = Date.now()
+  if (type === "session.idle") {
+    return {
+      type: "RUN_FINISHED",
+      timestamp,
+      threadId: sessionID,
+      runId: sessionID,
+      rawEvent: input,
+    }
+  }
+  if (type === "session.error") {
+    const properties =
+      input.properties && typeof input.properties === "object" ? (input.properties as Record<string, unknown>) : {}
+    const err =
+      properties.error && typeof properties.error === "object" ? (properties.error as Record<string, unknown>) : {}
+    return {
+      type: "RUN_ERROR",
+      timestamp,
+      message:
+        (typeof err.message === "string" && err.message) ||
+        (typeof err.name === "string" && err.name) ||
+        "Unknown agent runtime error",
+      code: typeof err.name === "string" ? err.name : undefined,
+      rawEvent: input,
+    }
+  }
+  if (type === "permission.asked" || type === "question.asked") {
+    return {
+      type: "CUSTOM",
+      timestamp,
+      name: type,
+      value: input,
+      rawEvent: input,
+    }
+  }
+  return {
+    type: "RAW",
+    timestamp,
+    source: "opencode-runtime",
+    event: input,
+    rawEvent: input,
+  }
+}
+
+function encodeAgUiEvent(input: Record<string, unknown>, sessionID: string) {
+  return JSON.stringify(toAgUiCompatibleEvent(input, sessionID))
 }
 
 function deriveMcpAuthStatus(
@@ -630,6 +683,7 @@ agentRoutes.delete("/session/:sessionID", async (c) => {
     workroomID,
     sessionID: c.req.param("sessionID"),
   })
+  studioGuideVersionBySessionID.delete(c.req.param("sessionID"))
 
   return c.json(true)
 })
@@ -676,6 +730,24 @@ agentRoutes.post("/session/:sessionID/prompt_async", async (c) => {
 
   void withAgentScope({ userID: user.id, workroomID: body.workroomID, syncUserSettings: false }, async () => {
     const sessionInfo = await AppRuntime.runPromise(Session.Service.use((svc: any) => svc.get(sessionID)))
+    const sessionIDText = String(sessionID)
+    const existingGuideVersion = studioGuideVersionBySessionID.get(sessionIDText)
+    const shouldInjectStudioGuide = existingGuideVersion !== STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION
+    const effectiveSystem = [
+      body.system?.trim() ? body.system.trim() : "",
+      shouldInjectStudioGuide
+        ? buildStudioQuestionCardsCommandGuide({
+            userID: user.id,
+            workroomID: body.workroomID,
+            workroomRootDirectory: sessionInfo?.directory ?? "",
+          })
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+    if (shouldInjectStudioGuide) {
+      studioGuideVersionBySessionID.set(sessionIDText, STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION)
+    }
     logger.info("agent prompt runtime session loaded", {
       user_id: user.id,
       workroom_id: body.workroomID,
@@ -706,7 +778,7 @@ agentRoutes.post("/session/:sessionID/prompt_async", async (c) => {
           sessionID,
           agent: body.agent,
           model: model ?? undefined,
-          system: body.system,
+          system: effectiveSystem,
           parts,
           stream: {
             onEvent(event: any) {
@@ -846,29 +918,36 @@ agentRoutes.get("/event", async (c) => {
       }
 
       queue.push(
-        JSON.stringify({
+        encodeAgUiEvent(
+          {
           type: "server.connected",
           properties: {},
-        }),
+          },
+          query.session_id,
+        ),
       )
 
       const heartbeat = setInterval(() => {
         queue.push(
-          JSON.stringify({
+          encodeAgUiEvent(
+            {
             type: "server.heartbeat",
             properties: {},
-          }),
+            },
+            query.session_id,
+          ),
         )
       }, 3_000)
 
       const unsubscribe = Bus.subscribeAll((event: any) => {
         if (closed) return
         if (eventSessionID(event as Record<string, unknown>) !== query.session_id) return
-        queue.push(JSON.stringify(event))
+        if (!event || typeof event !== "object") return
+        queue.push(encodeAgUiEvent(event as Record<string, unknown>, query.session_id))
       })
       const unsubscribeRuntime = subscribeRuntimeStream(query.session_id, (event) => {
         if (closed) return
-        queue.push(JSON.stringify(event))
+        queue.push(encodeAgUiEvent(event, query.session_id))
       })
 
       stream.onAbort(stop)

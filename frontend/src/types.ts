@@ -306,9 +306,9 @@ export interface AggregatedOcrItem extends OcrResult {
     sourceDocumentID?: string | null
   } | null
   questionMeta?: {
-    questionId?: number
+    questionId?: string | number
     sequenceIndex?: number
-    groupId?: number | null
+    groupId?: string | number | null
   }
   versions?: QuestionVersionRecord[]
   activeVersionIndex?: number
@@ -372,14 +372,16 @@ export interface DocumentPreviewAssetRef {
 }
 
 export interface AgentQuestion {
-  id: number
+  id: string | number
+  studioCardID?: string | null
   sequenceIndex: number
-  groupId?: number | null
+  groupId?: string | number | null
   page?: number | null
   content: string
   legendImages: string[]
   studentAnswer?: string | null
   canonicalAnswer?: string | null
+  explanation?: string | null
   gradingJudgement?: string | null
   gradingPredictedAnswer?: string | null
   gradingReasoning?: string | null
@@ -410,7 +412,7 @@ export interface QuestionSyncResponse {
   studio_document_id: string | number
   source_document_id?: string | number | null
   question: {
-    id: number
+    id: string | number
     sequence_index: number
   }
 }
@@ -929,9 +931,9 @@ export interface AgentSessionMessagesResponseDto {
 export interface AgUiQuestionReplaceEvent {
   action: 'question.replace'
   target: {
-    questionId?: number
+    questionId?: string | number
     sequenceIndex?: number
-    groupId?: number | null
+    groupId?: string | number | null
   }
   payload: {
     mode: 'similar_insert'
@@ -948,7 +950,7 @@ export interface AgUiQuestionReplaceEvent {
     ui?: {
       shinyOverlay?: boolean
       answerModeReset?: boolean
-      variantOfQuestionId?: number | null
+      variantOfQuestionId?: string | number | null
     }
   }
 }
@@ -961,16 +963,16 @@ export interface NoteSourceMeta {
   snippet?: string | null
   context?: string | null
   title?: string | null
-  questionId?: number | null
+  questionId?: string | number | null
   sequenceIndex?: number | null
 }
 
 export interface AgUiQuestionInsertEvent {
   action: 'question.insert'
   target: {
-    questionId?: number
+    questionId?: string | number
     sequenceIndex?: number
-    groupId?: number | null
+    groupId?: string | number | null
   }
   payload: {
     mode: 'similar_insert'
@@ -992,9 +994,22 @@ export interface AgUiQuestionInsertEvent {
   }
 }
 
+export interface AgUiStudioCardsMutatedEvent {
+  action: 'studio.cards.mutated'
+  payload: {
+    studioDocumentID: string
+    reason: 'insert' | 'create' | 'create_practice' | 'update' | 'attach'
+    insertedCardIDs?: string[]
+    sequenceIndexes?: number[]
+    anchorCardID?: string
+    position?: 'before' | 'after'
+  }
+}
+
 export type AgUiEvent =
   | AgUiQuestionReplaceEvent
   | AgUiQuestionInsertEvent
+  | AgUiStudioCardsMutatedEvent
   | (Record<string, unknown> & { action: string })
 
 export interface GradeQuestionPayload {

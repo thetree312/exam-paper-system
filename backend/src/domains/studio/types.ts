@@ -39,6 +39,7 @@ export type StudioQuestionCardRecord = {
   workroomID: string
   studioDocumentID: string
   sourceDocumentID?: string | null
+  cardGroupID: string
   sequenceIndex: number
   page: number
   text: string
@@ -46,7 +47,15 @@ export type StudioQuestionCardRecord = {
   answerContent: MathContentDocument
   answerText: string
   canonicalAnswer: string
+  explanation?: string | null
   legendImages: string[]
+  derivedFromCardID?: string | null
+  relationType?: "primary" | "practice_generated" | "variant" | "explanation_followup" | null
+  originTask?: {
+    kind: string
+    sessionID?: string | null
+    messageID?: string | null
+  } | null
   sourceSelection: {
     regions: StudioSelectionRegion[]
     legends: StudioLegendRegion[]

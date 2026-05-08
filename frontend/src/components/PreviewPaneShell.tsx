@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentCitationFocus, DocumentPreviewAssetRef, UploadedFileTab, UserInfo } from '../types'
 import { FileTabsBar } from './FileTabsBar'
@@ -6,6 +6,7 @@ import { SelectionPane } from './SelectionPane'
 import { WorkroomWikiTree } from './WorkroomWikiTree'
 import Icon from './Icon'
 import { useAppStore } from '../store/appStore'
+import type { UITheme } from '../lib/theme'
 
 
 interface PreviewPaneShellProps {
@@ -45,6 +46,8 @@ interface PreviewPaneShellProps {
   userMenuRef: React.RefObject<HTMLDivElement>
   onToggleUserMenu: () => void
   onOpenAiModelSettings: () => void
+  theme: UITheme
+  onToggleTheme: () => void
   onLogout: () => void
   onBackToWorkspace?: () => void
   onOpenWorkroomFile?: (path: string) => void
@@ -89,6 +92,8 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   userMenuRef,
   onToggleUserMenu,
   onOpenAiModelSettings,
+  theme,
+  onToggleTheme,
   onLogout,
   onBackToWorkspace,
   onOpenWorkroomFile,
@@ -107,10 +112,10 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   }, [expandPreview, onAppViewChange, workroomTreeRevealRequest?.id])
 
   const renderPreviewRail = () => (
-    <div className="flex w-11 shrink-0 flex-col items-center gap-2 py-2 text-slate-500">
+    <div className="flex w-11 shrink-0 flex-col items-center gap-2 py-2 text-[var(--ui-text-primary)]">
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 hover:bg-slate-100"
+        className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)]"
         onClick={() => {
           if (isPreviewCollapsed) {
             setIsWikiTreeOpen(false)
@@ -119,7 +124,6 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
             collapsePreview()
           }
         }}
-        title={isPreviewCollapsed ? t('source_panel.collapsed.expand') : t('source_panel.collapsed.collapse')}
       >
         <Icon name={"menu"} className="text-[18px]" />
       </button>
@@ -127,33 +131,30 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
         <Icon name={"grid_view"} className="text-[18px]" />
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
           onClick={() => {
             onAppViewChange('editor')
             expandPreview()
             setIsWikiTreeOpen(true)
           }}
-          title={t('source_panel.collapsed.workroom_files')}
         >
           <Icon name={"alt_route"} className="text-[18px]" style={{ fontVariationSettings: isWikiTreeOpen ? "'FILL' 1" : "'FILL' 0" }} />
         </button>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
           onClick={() => {
             onAppViewChange('favorites')
             collapsePreview()
           }}
-          title={t('source_panel.collapsed.favorites')}
         >
           <Icon name={"bookmark"} className="text-[18px]" style={{ fontVariationSettings: appView === 'favorites' ? "'FILL' 1" : "'FILL' 0" }} />
         </button>
-        <div className="h-px w-6 bg-slate-200" />
+        <div className="h-px w-6 bg-[var(--ui-border-default)]" />
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
           onClick={onBackToWorkspace}
-          title={t('source_panel.collapsed.workspace')}
         >
           <Icon name={"home_app_logo"} className="text-[18px]" />
         </button>
@@ -161,30 +162,43 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
       <div className="flex-1" />
       <button
         type="button"
-        className="mb-1 flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 transition-colors"
+        className="mb-1 flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
+        onClick={onToggleTheme}
+      >
+        <span className={`theme-morph-icon ${theme === 'light' ? 'is-a' : 'is-b'}`}>
+          <span className="theme-morph-icon__layer theme-morph-icon__layer--a">
+            <Icon name={"light_mode"} className="text-[18px]" />
+          </span>
+          <span className="theme-morph-icon__layer theme-morph-icon__layer--b">
+            <Icon name={"mode_night"} className="text-[18px]" />
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="mb-1 flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
         onClick={onOpenAiModelSettings}
-        title={t('app.buttons.ai_model_settings')}
       >
         <Icon name={"settings"} className="text-[18px]" />
       </button>
       <div className="relative" ref={userMenuRef}>
         <button
           type="button"
-          className="mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white hover:bg-slate-800 transition-colors"
+          className="mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ui-btn-solid-bg)] text-[11px] font-semibold text-white transition-colors hover:bg-[var(--ui-btn-solid-hover)]"
           onClick={onToggleUserMenu}
           title={user.display_name}
         >
           {(user.display_name || user.email || 'U').trim().charAt(0).toUpperCase()}
         </button>
         {isUserMenuOpen && (
-          <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-56 rounded-2xl border border-slate-100 bg-white p-3 shadow-xl">
+          <div className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-56 rounded-2xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-3 shadow-xl">
             <div className="mb-2">
-              <p className="truncate text-sm font-semibold text-slate-900">{user.display_name}</p>
-              <p className="truncate text-xs text-slate-500">{user.email}</p>
+              <p className="truncate text-sm font-semibold text-[var(--ui-text-primary)]">{user.display_name}</p>
+              <p className="truncate text-xs text-[var(--ui-text-primary)]">{user.email}</p>
             </div>
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--ui-btn-solid-bg)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--ui-btn-solid-hover)]"
               onClick={onLogout}
             >
               <Icon name={"logout"} className="text-[16px]" />
@@ -198,7 +212,7 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
 
   return (
     <aside
-      className="bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex relative"
+      className="bg-[var(--ui-bg-panel)] border-b lg:border-b-0 lg:border-r border-[var(--ui-border-default)] flex relative"
       ref={leftPaneRef}
       style={style}
     >
@@ -251,7 +265,7 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
           {!isWikiTreeOpen && <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
             <button
               type="button"
-              className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full shadow-xl text-sm font-medium hover:scale-105 transition-transform disabled:opacity-60"
+              className="flex items-center gap-2 bg-[var(--ui-btn-solid-bg)] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[var(--ui-btn-solid-hover)] hover:scale-105 transition-transform disabled:opacity-60"
               onClick={onUploadClick}
               disabled={isUploading}
             >
@@ -273,3 +287,5 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
     </aside>
   )
 }
+
+

@@ -36,7 +36,7 @@ export function buildOcrItemsFromSnapshot(
   return [...(snapshot.questions ?? [])]
     .sort((a, b) => {
       if (a.sequenceIndex !== b.sequenceIndex) return a.sequenceIndex - b.sequenceIndex
-      return a.id - b.id
+      return String(a.id).localeCompare(String(b.id))
     })
     .map((question, index) => ({
       id: `restored-${snapshot.studio_document_id}-${question.id}`,
@@ -61,7 +61,7 @@ export function buildOcrItemsFromSnapshot(
       questionMeta: {
         questionId: question.id,
         sequenceIndex: question.sequenceIndex,
-        groupId: question.groupId ?? question.id,
+        groupId: question.groupId ?? question.sequenceIndex,
       },
       grading:
         question.gradingJudgement ||
