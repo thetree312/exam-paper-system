@@ -81,6 +81,13 @@
       "register": "注册并登录",
       "loading": "处理中..."
     },
+    "show_password": "显示密码",
+    "hide_password": "隐藏密码",
+    "remember_credentials_toggle": "记住账号密码",
+    "remember_toast_enabled": "已开启账号密码记忆（{{policy}}）。您可以通过设置中心调整记忆时长。",
+    "remember_toast_disabled": "已关闭账号密码记忆。",
+    "use_remembered_account": "使用已记住账号一键登录",
+    "remembered_account_hint": "检测到已记住账号：{{email}}",
     "footnote": "已为后续微信 / Google 登录预留账号绑定结构，当前仅支持邮箱密码。",
       "error": {
         "generic": "登录/注册失败，请检查邮箱和密码",
@@ -318,6 +325,13 @@
       "security_desc": "你可以在这里退出当前设备上的登录状态。",
       "session_title": "当前状态",
       "session_value": "已登录"
+    },
+    "security": {
+      "remember_login_title": "登录信息记忆时长",
+      "remember_login_hint": "保存后，下次打开可直接一键登录（本地设备生效）。",
+      "remember_30d": "一个月",
+      "remember_365d": "一年",
+      "remember_forever": "永久"
     },
     "ai_summary": {
       "hero_title": "先配置平台凭证，再把能力绑定到具体账号和模型。",

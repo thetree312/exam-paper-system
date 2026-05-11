@@ -28,6 +28,5 @@
   "expand_more": "expand_circle_down",
   "expand_less": "expand_circle_up",
   "layers": "grid_view",
-  "memory": "account_tree",
-  "visibility": "search"
+  "memory": "account_tree"
 }

@@ -91,8 +91,9 @@ export const FileTabsBar: React.FC<FileTabsBarProps> = ({
   return (
     <div
       className="file-tabs-bar bg-[var(--ui-bg-tabbar)] px-2 border-b border-[var(--ui-border-default)] h-[34px] flex items-end"
+      style={{ WebkitAppRegion: 'drag' as const }}
     >
-      <div className="flex items-center gap-2 w-full">
+      <div className="flex items-center gap-2 w-full" style={{ WebkitAppRegion: 'no-drag' as const }}>
         <div ref={scrollRef} className="flex items-end gap-1 overflow-x-auto no-scrollbar pr-2 flex-1 h-full">
           {fileTabs.map((tab, index) => {
             const isActive = index === activeTabIndex

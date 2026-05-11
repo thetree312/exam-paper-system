@@ -20,7 +20,6 @@ import {
   deleteStudioQuestionCard,
   listStudioQuestionCardsWithRevision,
   recognizeStudioSelection,
-  updateStudioQuestionCard,
 } from '../services/studioApi'
 import { createTextMathDocument, mathContentToPromptText, type MathContentDocument } from '../lib/mathContent'
 import { buildOcrItemFromStudioQuestionCard } from '../utils/studioQuestionCards'
@@ -581,14 +580,6 @@ export const useOcrManager = (
               if (!userAnswer) {
                 return [idx, { judgement: 'skipped', reasoning: '学生未作答' } satisfies GradingDisplayResult] as const
               }
-              await updateStudioQuestionCard(backendBaseUrl, {
-                workroomID: String(workroom.id),
-                cardID: item.id,
-                text: item.text,
-                answerContent: item.answerContent,
-                answerText: item.answerText,
-                legendImages: item.legendImages ?? [],
-              })
               const learning = await submitProblemCardAnswer(backendBaseUrl, {
                 workroomID: String(workroom.id),
                 problemCardID: item.id,

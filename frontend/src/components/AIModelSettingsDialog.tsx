@@ -8,6 +8,7 @@ import { fetchModelSettings, fetchModelSettingsCatalog, saveModelSettings, syncP
 import openSourceLicenses from '../data/open-source-licenses.json'
 import type { AiModelOperationType, ModelCatalogDto, ProviderAccountDto, ProviderModelCatalogDto, UserInfo, UserModelSettingsDto } from '../types'
 import type { UITheme } from '../lib/theme'
+import type { AuthRememberPolicy } from '../utils/secureStorage'
 
 type MenuKey =
   | 'settings_center'
@@ -30,6 +31,8 @@ interface AIModelSettingsDialogProps {
   onStudioAutoSaveModeChange?: (mode: 'off' | 'afterDelay') => void
   theme?: UITheme
   onThemeChange?: (theme: UITheme) => void
+  authRememberPolicy?: AuthRememberPolicy
+  onAuthRememberPolicyChange?: (policy: AuthRememberPolicy) => void
 }
 
 type DraftState = {
@@ -158,6 +161,8 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
   onStudioAutoSaveModeChange,
   theme = 'light',
   onThemeChange,
+  authRememberPolicy = '30d',
+  onAuthRememberPolicyChange,
 }) => {
   const { t } = useTranslation('common')
   const [menu, setMenu] = useState<MenuKey>('provider_accounts')
@@ -1128,7 +1133,36 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
       </div>
     ))
     if (menu === 'security') return renderSimplePanel(t('settings_modal.menu.security'), t('settings_modal.account.security_desc'), (
-      <button type="button" className="rounded-md border border-rose-200 px-3 py-1.5 text-[12px] text-rose-600 hover:bg-rose-50" onClick={onLogout}>{t('app.buttons.logout')}</button>
+      <div className="space-y-4">
+        <div>
+          <div className="mb-2 text-[12px] font-medium text-[var(--ui-text-primary)]">{t('settings_modal.security.remember_login_title')}</div>
+          <div className="inline-flex rounded-md border border-[var(--ui-border-default)] p-1 text-[12px]">
+            <button
+              type="button"
+              className={`rounded px-3 py-1 ${authRememberPolicy === '30d' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)]'}`}
+              onClick={() => onAuthRememberPolicyChange?.('30d')}
+            >
+              {t('settings_modal.security.remember_30d')}
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1 ${authRememberPolicy === '365d' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)]'}`}
+              onClick={() => onAuthRememberPolicyChange?.('365d')}
+            >
+              {t('settings_modal.security.remember_365d')}
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1 ${authRememberPolicy === 'forever' ? 'bg-slate-900 text-white' : 'text-[var(--ui-text-primary)]'}`}
+              onClick={() => onAuthRememberPolicyChange?.('forever')}
+            >
+              {t('settings_modal.security.remember_forever')}
+            </button>
+          </div>
+          <div className="mt-2 text-[11px] text-[var(--ui-text-primary)]">{t('settings_modal.security.remember_login_hint')}</div>
+        </div>
+        <button type="button" className="rounded-md border border-rose-200 px-3 py-1.5 text-[12px] text-rose-600 hover:bg-rose-50" onClick={onLogout}>{t('app.buttons.logout')}</button>
+      </div>
     ))
     if (menu === 'open_source') return renderOpenSourcePanel()
     return renderSimplePanel(t('settings_modal.menu.settings_center'), t('settings_modal.subtitle'))

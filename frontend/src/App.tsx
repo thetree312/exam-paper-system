@@ -315,6 +315,10 @@ const App: React.FC = () => {
     setAuthDisplayName,
     authError,
     authLoading,
+    authRememberPolicy,
+    setAuthRememberPolicy,
+    rememberCredentialEnabled,
+    setRememberCredentialEnabled,
     handleAuthSubmit,
     handleLogout,
   } = useAuth(backendBaseUrl)
@@ -341,6 +345,7 @@ const App: React.FC = () => {
   const [workroomLoadError, setWorkroomLoadError] = useState<string | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceInfo | null>(null)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [workspaceSearchKeyword, setWorkspaceSearchKeyword] = useState('')
 
   const [statusMessageKey, setStatusMessageKey] = useState<StatusMessageKey>('upload_prompt')
   const [statusValues, setStatusValues] = useState<Record<string, string | number> | undefined>()
@@ -1620,33 +1625,50 @@ const App: React.FC = () => {
 
   if (!user) {
     return (
-      <AuthScreen
-        authMode={authMode}
-        onAuthModeChange={setAuthMode}
-        authEmail={authEmail}
-        onAuthEmailChange={setAuthEmail}
-        authPassword={authPassword}
-        onAuthPasswordChange={setAuthPassword}
-        authDisplayName={authDisplayName}
-        onAuthDisplayNameChange={setAuthDisplayName}
-        authError={authError}
-        authLoading={authLoading}
-        onSubmit={handleAuthSubmit}
-      />
+      <div className="bg-background-light text-[var(--ui-text-primary)] font-display antialiased overflow-hidden h-screen flex flex-col">
+        <AppHeader showExportButton={false} titleText="试卷编辑器工作区" />
+        <AuthScreen
+          authMode={authMode}
+          onAuthModeChange={setAuthMode}
+          authEmail={authEmail}
+          onAuthEmailChange={setAuthEmail}
+          authPassword={authPassword}
+          onAuthPasswordChange={setAuthPassword}
+          authDisplayName={authDisplayName}
+          onAuthDisplayNameChange={setAuthDisplayName}
+          authError={authError}
+          authLoading={authLoading}
+          rememberCredentialEnabled={rememberCredentialEnabled}
+          onRememberCredentialEnabledChange={setRememberCredentialEnabled}
+          authRememberPolicy={authRememberPolicy}
+          onSubmit={handleAuthSubmit}
+        />
+      </div>
     )
   }
 
   if (route?.kind !== 'workroom') {
     return (
-      <WorkspacePage
-        user={user}
-        workspaces={workspaces}
-        onCreateWorkspace={handleCreateWorkspace}
-        onDeleteWorkspace={handleDeleteWorkspace}
-        onOpenWorkspace={(workspace) => {
-          navigate(buildWorkroomPath(String(workspace.id)))
-        }}
-      />
+      <div className="bg-background-light text-[var(--ui-text-primary)] font-display antialiased overflow-hidden h-screen flex flex-col">
+        <AppHeader
+          showExportButton={false}
+          titleText="试卷编辑器工作区"
+          searchPlaceholder={t('workspace_page.header.search_placeholder')}
+          searchValue={workspaceSearchKeyword}
+          onSearchChange={setWorkspaceSearchKeyword}
+          userDisplayName={user.display_name}
+          userEmail={user.email}
+        />
+        <WorkspacePage
+          workspaces={workspaces}
+          searchKeyword={workspaceSearchKeyword}
+          onCreateWorkspace={handleCreateWorkspace}
+          onDeleteWorkspace={handleDeleteWorkspace}
+          onOpenWorkspace={(workspace) => {
+            navigate(buildWorkroomPath(String(workspace.id)))
+          }}
+        />
+      </div>
     )
   }
 
@@ -1838,6 +1860,7 @@ const App: React.FC = () => {
             onDocumentResolved={handleAgentDocumentResolved}
             onSessionResolved={handleAgentSessionResolved}
             onCitationClick={handleAgentCitationClick}
+            onOpenWorkroomFile={handleOpenWorkroomFile}
             modelSettingsRevision={modelSettingsRevision}
           />
         )}
@@ -1862,6 +1885,8 @@ const App: React.FC = () => {
           onStudioAutoSaveModeChange={setStudioAutoSaveMode}
           theme={theme}
           onThemeChange={setTheme}
+          authRememberPolicy={authRememberPolicy}
+          onAuthRememberPolicyChange={setAuthRememberPolicy}
           onSaved={() => {
             setModelSettingsRevision((prev) => prev + 1)
           }}

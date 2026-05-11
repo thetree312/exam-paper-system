@@ -1,13 +1,12 @@
 ﻿import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { UserInfo, WorkspaceInfo } from '../types'
-import BrandIcon from './BrandIcon'
+import type { WorkspaceInfo } from '../types'
 import Icon from './Icon'
 
 
 interface WorkspacePageProps {
-  user: UserInfo
   workspaces: WorkspaceInfo[]
+  searchKeyword?: string
   onCreateWorkspace: () => void | Promise<void>
   onOpenWorkspace: (workspace: WorkspaceInfo) => void
   onDeleteWorkspace?: (workspace: WorkspaceInfo) => void | Promise<void>
@@ -44,21 +43,29 @@ const topicBadgeClass = (index: number) => {
 }
 
 export const WorkspacePage: React.FC<WorkspacePageProps> = ({
-  user,
   workspaces,
+  searchKeyword = '',
   onCreateWorkspace,
   onOpenWorkspace,
   onDeleteWorkspace,
 }) => {
   const { t } = useTranslation('common')
   const [pendingDeleteWorkspace, setPendingDeleteWorkspace] = useState<WorkspaceInfo | null>(null)
+  const normalizedKeyword = searchKeyword.trim().toLowerCase()
+  const visibleWorkspaces = useMemo(() => {
+    if (!normalizedKeyword) return workspaces
+    return workspaces.filter((workspace) => {
+      const haystack = `${workspace.name} ${workspace.topic || ''} ${workspace.id}`.toLowerCase()
+      return haystack.includes(normalizedKeyword)
+    })
+  }, [normalizedKeyword, workspaces])
 
   const [todayItems, yesterdayItems, olderItems] = useMemo(() => {
-    const today = workspaces.slice(0, 3)
-    const yesterday = workspaces.slice(3, 6)
-    const older = workspaces.slice(6)
+    const today = visibleWorkspaces.slice(0, 3)
+    const yesterday = visibleWorkspaces.slice(3, 6)
+    const older = visibleWorkspaces.slice(6)
     return [today, yesterday, older]
-  }, [workspaces])
+  }, [visibleWorkspaces])
 
   const confirmDeleteWorkspace = async () => {
     if (!pendingDeleteWorkspace) return
@@ -67,32 +74,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   }
 
   return (
-    <div className="workspace-page flex min-h-screen flex-col overflow-hidden bg-[var(--ui-bg-app)] font-display text-[var(--ui-text-primary)] antialiased">
-      <header className="z-20 flex h-16 shrink-0 items-center justify-between border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-8 py-4 shadow-sm">
-        <div className="flex w-[30%] items-center gap-3 pr-8">
-          <BrandIcon />
-          <h1 className="text-lg font-bold tracking-tight text-[var(--ui-text-primary)]">{t('workspace_page.header.title')}</h1>
-        </div>
-
-        <div className="flex h-8 w-[70%] items-center justify-between gap-6 border-l border-[var(--ui-border-default)] pl-8">
-          <div className="relative w-full max-w-2xl">
-            <Icon name={"search"} className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-[var(--ui-text-primary)]" />
-            <input
-              className="w-full rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] py-2 pl-10 pr-4 text-sm text-[var(--ui-text-primary)] placeholder-[var(--ui-text-primary)] transition-all focus:border-transparent focus:ring-2 focus:ring-[var(--ui-border-strong)]"
-              placeholder={t('workspace_page.header.search_placeholder')}
-              type="text"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 border-l border-[var(--ui-border-default)] pl-6">
-            <div className="text-right">
-              <div className="text-sm font-medium text-[var(--ui-text-primary)]">{user.display_name}</div>
-              <div className="text-xs text-[var(--ui-text-primary)]">{user.email}</div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="workspace-page flex h-full min-h-0 flex-col overflow-hidden bg-[var(--ui-bg-app)] font-display text-[var(--ui-text-primary)] antialiased">
       <main className="flex flex-1 overflow-hidden">
         <aside className="flex w-[30%] flex-col border-r border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]">
           <div className="px-8 pb-4 pt-8">
@@ -114,7 +96,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <div className="relative">
               <div className="absolute bottom-0 left-[19px] top-0 w-px bg-[var(--ui-border-default)]" />
 
-              {workspaces.length === 0 ? (
+              {visibleWorkspaces.length === 0 ? (
                 <div className="space-y-4 pt-4">
                   <div className="mb-2 flex items-center gap-4">
                     <div className="z-10 flex w-10 justify-center bg-[var(--ui-bg-panel)] py-1">
@@ -290,13 +272,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold tracking-tight text-[var(--ui-text-primary)]">{t('workspace_page.saved_questions.title')}</h2>
               <span className="rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] px-2.5 py-0.5 text-xs font-bold text-[var(--ui-text-primary)] shadow-sm">
-                {workspaces.length}
+                {visibleWorkspaces.length}
               </span>
             </div>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto px-8 pb-10">
-            {workspaces.map((workspace, index) => (
+            {visibleWorkspaces.map((workspace, index) => (
               <button
                 key={`card-${workspace.id}`}
                 type="button"

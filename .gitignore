@@ -147,3 +147,6 @@ backend/scripts/
 # Local runtime data
 backend/local-data/
 Trace-*.json
+
+# Desktop app workspace/build artifacts
+desktop/

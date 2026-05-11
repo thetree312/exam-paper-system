@@ -1,4 +1,5 @@
 import { CloudAuthRepository, type CloudAuthUserRecord } from "./cloud-auth-repository"
+import { LocalAuthRepository } from "./local-auth-repository"
 import { LocalSessionRepository, type AuthSessionRecord } from "./local-session-repository"
 import { hashCloudPassword, verifyCloudPassword, type PasswordVerifyResult } from "./password"
 
@@ -31,6 +32,7 @@ type AuthDependencies = {
     findUserByEmail(email: string): Promise<CloudAuthUserRecord | null>
     getUserByID(userID: string): Promise<CloudAuthUserRecord | null>
     updatePasswordHash(userID: string, passwordHash: string): Promise<void>
+    createUser?(input: { email: string; password: string; displayName?: string }): Promise<CloudAuthUserRecord>
   }
   localSessions: {
     create(user: CloudAuthUserRecord): Promise<AuthSessionRecord>
@@ -62,8 +64,29 @@ function toPublicUser(user: CloudAuthUserRecord): AuthPublicUser {
 
 export function createAuthService(deps: AuthDependencies) {
   return {
-    async register(_input: { email: string; password: string; displayName?: string }) {
-      throw new AuthDomainError("Registration is disabled in local development. Please use the cloud account system.", 403)
+    async register(input: { email: string; password: string; displayName?: string }) {
+      if (!deps.cloudAuth.createUser) {
+        throw new AuthDomainError("Registration is disabled in local development. Please use the cloud account system.", 403)
+      }
+      const email = normalizeEmail(input.email)
+      const password = input.password.trim()
+      if (!email) throw new AuthDomainError("Email is required", 400)
+      if (password.length < 8) throw new AuthDomainError("Password must be at least 8 characters", 400)
+
+      const existing = await deps.cloudAuth.findUserByEmail(email)
+      if (existing) throw new AuthDomainError("Email already registered", 400)
+
+      const created = await deps.cloudAuth.createUser({
+        email,
+        password,
+        displayName: input.displayName,
+      })
+      const session = await deps.localSessions.create(created)
+      return {
+        user: toPublicUser(created),
+        token: session.token,
+        sessionID: session.id,
+      }
     },
 
     async login(input: { email: string; password: string }) {
@@ -73,6 +96,20 @@ export function createAuthService(deps: AuthDependencies) {
       if (password.length < 8) throw new AuthDomainError("Password must be at least 8 characters", 400)
 
       const user = await deps.cloudAuth.findUserByEmail(email)
+      if (!user && deps.cloudAuth.createUser) {
+        const bootstrapUser = await deps.cloudAuth.createUser({
+          email,
+          password,
+          displayName: input.email.split("@")[0] || "Local User",
+        })
+        await deps.cloudAuth.reconcileLegacyDataForUser?.(bootstrapUser.id)
+        const session = await deps.localSessions.create(bootstrapUser)
+        return {
+          user: toPublicUser(bootstrapUser),
+          token: session.token,
+          sessionID: session.id,
+        }
+      }
       if (!user) throw new AuthDomainError("Invalid email or password", 400)
       if (user.accountStatus !== 1) throw new AuthDomainError("Account is disabled", 403)
 
@@ -126,15 +163,21 @@ export function createAuthService(deps: AuthDependencies) {
   }
 }
 
+const localAuthMode = process.env.LOCAL_AUTH_MODE === "1" || !process.env.DATABASE_URL
+
 export const AuthService = createAuthService({
-  cloudAuth: CloudAuthRepository,
+  cloudAuth: localAuthMode
+    ? LocalAuthRepository
+    : CloudAuthRepository,
   localSessions: LocalSessionRepository,
   passwordAuth: {
     verify: verifyCloudPassword,
     hash: hashCloudPassword,
   },
-  afterLogin: async (user) => {
-    const { migrateLegacyLocalStateForCloudUser } = await import("./user-local-state-migration")
-    await migrateLegacyLocalStateForCloudUser(user)
-  },
+  afterLogin: localAuthMode
+    ? undefined
+    : async (user) => {
+        const { migrateLegacyLocalStateForCloudUser } = await import("./user-local-state-migration")
+        await migrateLegacyLocalStateForCloudUser(user)
+      },
 })

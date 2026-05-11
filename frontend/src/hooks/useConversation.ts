@@ -425,9 +425,11 @@ export const useConversation = (
         return
       }
       setStoreActiveConversationKey(key)
+      // 先立即切换会话上下文，避免“第一次点击无变化，第二次才生效”。
+      // 若目标会话消息尚未缓存，UI 会先切换到该会话并显示空态，随后异步补全历史消息。
+      setConversationResetSignal(Date.now())
 
       if (storeConversationMessages[key] !== undefined) {
-        setConversationResetSignal(Date.now())
         return
       }
 
@@ -438,12 +440,11 @@ export const useConversation = (
             ...prev,
             [key]: historyMessages,
           }))
+          setConversationResetSignal(Date.now())
         } catch (error) {
           console.warn('[agent conversations] load messages failed', error)
         }
       }
-
-      setConversationResetSignal(Date.now())
     },
     [backendBaseUrl, fetchHistoryMessages, setStoreActiveConversationKey, setStoreConversationMessages, storeActiveConversationKey, storeConversationMessages, storeConversations, workroomId],
   )

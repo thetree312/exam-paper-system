@@ -51,6 +51,7 @@ interface AgentChatPanelProps {
   preferredSessionId?: string | null
   onSessionResolved?: (sessionId: string | null) => void
   onCitationClick?: (citation: AgentCitationAnchor) => void
+  onOpenWorkroomFile?: (path: string) => Promise<void> | void
   modelSettingsRevision?: number
 }
 
@@ -279,7 +280,10 @@ function toolTitle(block: AgentAssistantToolBlock) {
   return block.toolName
 }
 
-const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block }) => {
+const ToolEvidenceBlock: React.FC<{
+  block: AgentAssistantToolBlock
+  onOpenWorkroomFile?: (path: string) => Promise<void> | void
+}> = ({ block, onOpenWorkroomFile }) => {
   const status = toolStatusMeta(block.status)
   const inputText = stringifyToolValue(block.input)
   const outputText = stringifyToolValue(block.output)
@@ -311,6 +315,24 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
   const detailViewportClass = 'h-44 overflow-auto'
   const diffViewportClass = 'h-72 overflow-auto'
   const detailPreClass = 'min-w-max whitespace-pre text-[12px] leading-6 text-[var(--ui-text-tool-call)] font-mono'
+  const diffStat = (() => {
+    if (block.displayKind === 'file_edit' && fileEntries.length > 0) {
+      const add = fileEntries.reduce((sum, file) => sum + (typeof file.additions === 'number' ? file.additions : 0), 0)
+      const del = fileEntries.reduce((sum, file) => sum + (typeof file.deletions === 'number' ? file.deletions : 0), 0)
+      return { add, del, files: fileEntries.length }
+    }
+    if (block.displayKind === 'file_edit' && fileDiffMeta?.patch) {
+      const add = typeof fileDiffMeta.additions === 'number' ? fileDiffMeta.additions : 0
+      const del = typeof fileDiffMeta.deletions === 'number' ? fileDiffMeta.deletions : 0
+      return { add, del }
+    }
+    if (block.displayKind === 'file_edit' && diffText) {
+      const add = diffText.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++')).length
+      const del = diffText.split('\n').filter((line) => line.startsWith('-') && !line.startsWith('---')).length
+      return { add, del }
+    }
+    return null
+  })()
 
   useEffect(() => {
     if (isRunning) {
@@ -322,20 +344,8 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
   }, [isRunning])
 
   const detailSummary = (() => {
-    if (block.displayKind === 'file_edit' && fileEntries.length > 0) {
-      const add = fileEntries.reduce((sum, file) => sum + (typeof file.additions === 'number' ? file.additions : 0), 0)
-      const del = fileEntries.reduce((sum, file) => sum + (typeof file.deletions === 'number' ? file.deletions : 0), 0)
-      return `${fileEntries.length} 个文件 · +${add} / -${del}`
-    }
-    if (block.displayKind === 'file_edit' && fileDiffMeta?.patch) {
-      const add = typeof fileDiffMeta.additions === 'number' ? fileDiffMeta.additions : 0
-      const del = typeof fileDiffMeta.deletions === 'number' ? fileDiffMeta.deletions : 0
-      return `+${add} / -${del}`
-    }
-    if (block.displayKind === 'file_edit' && diffText) {
-      const add = diffText.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++')).length
-      const del = diffText.split('\n').filter((line) => line.startsWith('-') && !line.startsWith('---')).length
-      return `+${add} / -${del}`
+    if (diffStat) {
+      return diffStat.files ? `${diffStat.files} 个文件` : null
     }
     if (block.displayKind === 'search_read' && typeof block.metadata?.count === 'number') {
       return `${block.metadata.count} 条结果`
@@ -359,7 +369,29 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
     return (
       <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-3 py-2 text-[12px] text-[var(--ui-text-tool-call)] border-b border-[var(--ui-border-default)]">
-          <span className="truncate">{fileLabel}</span>
+          {onOpenWorkroomFile ? (
+            <button
+              type="button"
+              onClick={() => {
+                const rawPath = String(
+                  block.metadata?.relativePath ??
+                    block.metadata?.filepath ??
+                    fileDiffMeta?.file ??
+                    block.input?.path ??
+                    block.input?.filePath ??
+                    '',
+                ).trim()
+                if (!rawPath) return
+                void onOpenWorkroomFile(rawPath)
+              }}
+              className="truncate text-left underline-offset-2 hover:underline"
+              title={`打开文件：${fileLabel}`}
+            >
+              {fileLabel}
+            </button>
+          ) : (
+            <span className="truncate">{fileLabel}</span>
+          )}
           <span className="shrink-0">{additions} additions / {deletions} deletions</span>
         </div>
         <div className={`${diffViewportClass} bg-[var(--ui-bg-panel)]`}>
@@ -403,7 +435,22 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
             }
             return (
               <div key={`${label}-${index}`} className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-3 py-2">
-                <div className="text-[12px] text-[var(--ui-text-tool-call)]">{label}</div>
+                {onOpenWorkroomFile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rawPath = String(file.relativePath ?? file.filePath ?? '').trim()
+                      if (!rawPath) return
+                      void onOpenWorkroomFile(rawPath)
+                    }}
+                    className="text-[12px] text-[var(--ui-text-tool-call)] underline-offset-2 hover:underline"
+                    title={`打开文件：${label}`}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <div className="text-[12px] text-[var(--ui-text-tool-call)]">{label}</div>
+                )}
               </div>
             )
           })}
@@ -431,7 +478,22 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
       <div className="rounded-[12px] border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--ui-border-default)] px-3 py-2">
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-[var(--ui-text-tool-call)]">{fileLabel}</div>
+            {onOpenWorkroomFile ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const rawPath = String(block.metadata?.relativePath ?? block.metadata?.filepath ?? '').trim()
+                  if (!rawPath) return
+                  void onOpenWorkroomFile(rawPath)
+                }}
+                className="truncate text-[13px] font-medium text-[var(--ui-text-tool-call)] underline-offset-2 hover:underline"
+                title={`打开文件：${fileLabel}`}
+              >
+                {fileLabel}
+              </button>
+            ) : (
+              <div className="truncate text-[13px] font-medium text-[var(--ui-text-tool-call)]">{fileLabel}</div>
+            )}
             <div className="text-[12px] text-[var(--ui-text-tool-call)]">
               {block.metadata?.exists === false ? '新建文件' : '写入文件'}
             </div>
@@ -491,7 +553,7 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
       <button
         type="button"
         onClick={() => setManualExpanded((prev) => (prev == null ? !shouldExpand : !prev))}
-        className="group flex w-full items-center justify-between gap-3 py-1 text-left"
+        className="group flex w-full items-center justify-between gap-3 py-0.5 text-left"
         aria-expanded={shouldExpand}
       >
         <div className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-[13px] text-[var(--ui-text-tool-call)]">
@@ -503,6 +565,13 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
             {collapsedTitle}
           </span>
           {detailSummary ? <span className="truncate text-[12px] text-[var(--ui-text-tool-call)]">· {detailSummary}</span> : null}
+          {diffStat ? (
+            <span className="inline-flex items-center gap-1 text-[12px]">
+              <span className="font-medium text-[var(--ui-diff-add-text)]">+{diffStat.add}</span>
+              <span className="text-[var(--ui-text-tool-call)]">/</span>
+              <span className="font-medium text-[var(--ui-diff-del-text)]">-{diffStat.del}</span>
+            </span>
+          ) : null}
         </div>
         <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${status.tone}`}>
           <Icon name={status.icon} className={`text-[16px] leading-none ${block.status === 'running' ? 'animate-spin' : ''}`} />
@@ -514,7 +583,7 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
       </button>
 
       {shouldExpand && (
-        <div className="ml-6 mt-1 border-l border-[var(--ui-border-default)] pl-4 space-y-3">
+        <div className="mt-0.5 space-y-2">
           {block.displayKind === 'command' && renderCommandBlock()}
 
           {block.displayKind === 'file_edit' && renderFileEditBlock()}
@@ -568,7 +637,8 @@ const ToolEvidenceBlock: React.FC<{ block: AgentAssistantToolBlock }> = ({ block
 const AssistantNaturalFlow: React.FC<{
   msg: any
   onCitationClick?: (citation: AgentCitationAnchor) => void
-}> = React.memo(({ msg, onCitationClick }) => {
+  onOpenWorkroomFile?: (path: string) => Promise<void> | void
+}> = React.memo(({ msg, onCitationClick, onOpenWorkroomFile }) => {
   const blocks = useMemo(() => {
     if (Array.isArray(msg.parts)) {
       return deriveAssistantBlocks(msg.parts) ?? []
@@ -592,7 +662,13 @@ const AssistantNaturalFlow: React.FC<{
         <div className="space-y-3">
           {visibleBlocks.map((block, index) => {
             if (block.type === 'tool') {
-              return <ToolEvidenceBlock key={block.id ?? `tool-${index}`} block={block} />
+              return (
+                <ToolEvidenceBlock
+                  key={block.id ?? `tool-${index}`}
+                  block={block}
+                  onOpenWorkroomFile={onOpenWorkroomFile}
+                />
+              )
             }
             return (
               <div key={block.id ?? `text-${index}`} className="max-w-none text-[15px] leading-relaxed text-[var(--ui-text-primary)]">
@@ -634,6 +710,7 @@ const AssistantNaturalFlow: React.FC<{
   && prev.msg?.isStreaming === next.msg?.isStreaming
   && prev.msg?.citations === next.msg?.citations
   && prev.msg?.citationStatus === next.msg?.citationStatus
+  && prev.onOpenWorkroomFile === next.onOpenWorkroomFile
 ))
 
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
@@ -653,6 +730,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   preferredSessionId,
   onSessionResolved,
   onCitationClick,
+  onOpenWorkroomFile,
   modelSettingsRevision = 0,
 }) => {
   const { t } = useTranslation()
@@ -1157,8 +1235,15 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   ])
 
   const AssistantMessage = useMemo(
-    () => React.memo(({ msg }: { msg: any }) => <AssistantNaturalFlow msg={msg} onCitationClick={onCitationClick} />),
-    [onCitationClick],
+    () =>
+      React.memo(({ msg }: { msg: any }) => (
+        <AssistantNaturalFlow
+          msg={msg}
+          onCitationClick={onCitationClick}
+          onOpenWorkroomFile={onOpenWorkroomFile}
+        />
+      )),
+    [onCitationClick, onOpenWorkroomFile],
   )
 
   const UserMessage: React.FC<{ msg: any }> = useMemo(
@@ -1316,28 +1401,34 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   return (
     <div className="agent-chat-panel fixed inset-0 z-40 pointer-events-none">
       <aside
-        className={`fixed top-0 right-0 h-full bg-[var(--ui-bg-agent)] flex flex-col transition-transform duration-300 pointer-events-auto ${
+        className={`fixed right-0 bg-[var(--ui-bg-agent)] flex flex-col transition-transform duration-300 pointer-events-auto ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         ref={drawerRef}
         data-agent-panel
         style={{
+          top: 38,
+          height: 'calc(100% - 38px)',
           width: Math.min(Math.max(width, 360), 640),
           maxWidth: '90vw',
         }}
       >
         <div className="flex flex-col h-full">
           {/* 顶部工具栏：标题下拉 + 新建按钮 */}
-          <div className="relative h-[46px] flex items-center justify-between px-6 border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-agent)] backdrop-blur-sm">
+          <div
+            className="relative h-[34px] flex items-center justify-between px-3 border-b border-[var(--ui-border-default)] bg-[var(--ui-bg-tabbar)]"
+            style={{ WebkitAppRegion: 'drag' as const }}
+          >
             <button
               onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-              className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1.5 rounded-lg hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
+              className="flex items-center space-x-2 group max-w-[85%] -ml-1 px-2 py-1 rounded-md hover:bg-[var(--ui-bg-panel-muted)] transition-colors"
+              style={{ WebkitAppRegion: 'no-drag' as const }}
             >
-              <span className="text-sm font-semibold text-[var(--ui-text-primary)] truncate">
+              <span className="text-[12px] font-semibold text-[var(--ui-text-primary)] truncate">
                 {(activeConversation?.title && activeConversation.title !== '新的会话') ? activeConversation.title : t('agent_chat.new_conversation')}
               </span>
               <svg
-                className={`w-3.5 h-3.5 text-[var(--ui-text-primary)] transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`}
+                className={`w-3 h-3 text-[var(--ui-text-primary)] transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -1348,10 +1439,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             </button>
             <button
               onClick={handleStartNewConversation}
-              className="text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)] p-2 hover:bg-[var(--ui-bg-panel-muted)] rounded-full transition-colors"
+              className="text-[var(--ui-text-primary)] hover:text-[var(--ui-text-primary)] p-1.5 hover:bg-[var(--ui-bg-panel-muted)] rounded-md transition-colors"
               aria-label={t('agent_chat.new_conversation_aria')}
+              style={{ WebkitAppRegion: 'no-drag' as const }}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>

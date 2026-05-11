@@ -185,6 +185,35 @@ type AgentStreamEnvelope = {
   properties: Record<string, unknown>
 }
 
+function toRecord(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  return input as Record<string, unknown>
+}
+
+function firstNonEmptyString(values: Array<unknown>): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value.trim()
+  }
+  return null
+}
+
+function extractRuntimeErrorMessage(error: unknown): string {
+  const root = toRecord(error)
+  const data = toRecord(root?.data)
+  const cause = toRecord(root?.cause)
+  const metadata = toRecord(data?.metadata)
+  return (
+    firstNonEmptyString([
+      root?.message,
+      data?.message,
+      cause?.message,
+      metadata?.message,
+      metadata?.error,
+      root?.name,
+    ]) ?? "Unknown agent runtime error"
+  )
+}
+
 function shouldUpgradeLegacyWorkroomPermission(permission: unknown) {
   if (!Array.isArray(permission)) return true
   return permission.some((rule) => {
@@ -296,10 +325,7 @@ function toAgUiCompatibleEvent(input: Record<string, unknown>, sessionID: string
     return {
       type: "RUN_ERROR",
       timestamp,
-      message:
-        (typeof err.message === "string" && err.message) ||
-        (typeof err.name === "string" && err.name) ||
-        "Unknown agent runtime error",
+      message: extractRuntimeErrorMessage(err),
       code: typeof err.name === "string" ? err.name : undefined,
       rawEvent: input,
     }
@@ -797,18 +823,20 @@ agentRoutes.post("/session/:sessionID/prompt_async", async (c) => {
       session_id: sessionID,
     })
   }).catch(async (err) => {
+    const runtimeErrorMessage = extractRuntimeErrorMessage(err)
     logger.error("agent prompt failed", {
       user_id: user.id,
       workroom_id: body.workroomID,
       session_id: sessionID,
-      error: err instanceof Error ? err.message : String(err),
+      error: runtimeErrorMessage,
       stack: err instanceof Error ? err.stack : undefined,
+      raw_error: err,
     })
     await withAgentScope({ userID: user.id, workroomID: body.workroomID, syncUserSettings: false }, async () =>
       AppRuntime.runPromise(
         Bus.publish(Session.Event.Error, {
           sessionID,
-          error: new NamedError.Unknown({ message: err instanceof Error ? err.message : String(err) }).toObject(),
+          error: new NamedError.Unknown({ message: runtimeErrorMessage }).toObject(),
         }),
       ),
     ).catch(() => {})

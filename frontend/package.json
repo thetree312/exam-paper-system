@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run icons:sync && npm run lobe-icons:sync && npm run icons:verify && npm run lobe-icons:verify && tsc && vite build",
+    "build:desktop": "vite build --mode desktop",
     "preview": "vite preview",
     "icons:sync": "node ./scripts/sync-material-symbols.mjs",
     "icons:verify": "node ./scripts/verify-material-symbols.mjs",
@@ -32,6 +33,7 @@
     "@tiptap/extension-table-row": "^3.14.0",
     "@tiptap/html": "^3.14.0",
     "@tiptap/markdown": "^3.14.0",
+    "@tiptap/pm": "^3.14.0",
     "@tiptap/react": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
     "@types/dompurify": "^3.0.5",

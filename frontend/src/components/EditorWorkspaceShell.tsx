@@ -409,8 +409,15 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
         </div>
       </div>
 
-      <div className="absolute inset-x-0 top-0 z-10 h-[34px] border-y border-[var(--ui-border-default)] bg-[var(--ui-bg-tabbar)] px-0">
-        <div ref={tabsScrollRef} className="scrollbar-hidden flex h-full w-full items-end gap-0 overflow-x-auto pr-0">
+      <div
+        className="absolute inset-x-0 top-0 z-10 h-[34px] border-y border-[var(--ui-border-default)] bg-[var(--ui-bg-tabbar)] px-0"
+        style={{ WebkitAppRegion: 'drag' as const }}
+      >
+        <div
+          ref={tabsScrollRef}
+          className="scrollbar-hidden flex h-full w-full items-end gap-0 overflow-x-auto pr-0"
+          style={{ WebkitAppRegion: 'no-drag' as const }}
+        >
           {studioTabs.map((tab, index) => {
             const isActive = tab.id === activeStudioTabId
             const prevActive = studioTabs[index - 1]?.id === activeStudioTabId

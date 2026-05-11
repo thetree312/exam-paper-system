@@ -10,6 +10,7 @@ import {
   studioQuestionCardsCommands,
   type StudioQuestionCardsCommand,
 } from "../domains/studio/command-bridge"
+import { createQuestionByIntent, insertQuestionByIntent } from "../domains/studio/question-write-service"
 import { StudioEvents } from "../domains/studio/events"
 import { StudioRevisionRepository } from "../domains/studio/revision-repository"
 import { StudioService } from "../domains/studio/service"
@@ -34,6 +35,18 @@ const listQuestionCardsQuerySchema = z.object({
 
 const bridgeCommandBodySchema = z.object({
   payload: z.unknown().optional(),
+})
+
+const bridgeQuestionActionSchema = z.enum(["create", "insert"])
+
+const bridgeQuestionBodySchema = z.object({
+  stem: z.string().min(1),
+  answer: z.string().optional().nullable(),
+  explanation: z.string().optional().nullable(),
+  options: z.array(z.string().min(1)).optional(),
+  page: z.number().int().min(1).optional(),
+  questionNumber: z.number().int().min(1).optional(),
+  placement: z.enum(["before", "after"]).optional(),
 })
 
 const normalizedRegionSchema = z.object({
@@ -65,85 +78,6 @@ const importFromLayoutSchema = z.object({
   studioDocumentID: z.string().min(1).optional().nullable(),
   title: z.string().trim().optional().nullable(),
   replaceExisting: z.boolean().optional(),
-})
-
-const updateQuestionCardSchema = z
-  .object({
-    text: z.string().optional(),
-    answerContent: z.record(z.string(), z.unknown()).optional(),
-    answerText: z.string().optional(),
-    canonicalAnswer: z.string().nullable().optional(),
-    explanation: z.string().nullable().optional(),
-    legendImages: z.array(z.string().min(1)).optional(),
-    derivedFromCardID: z.string().nullable().optional(),
-    relationType: z.enum(["primary", "practice_generated", "variant", "explanation_followup"]).nullable().optional(),
-    originTask: z
-      .object({
-        kind: z.string().min(1),
-        sessionID: z.string().optional().nullable(),
-        messageID: z.string().optional().nullable(),
-      })
-      .nullable()
-      .optional(),
-  })
-  .refine(
-    (value) =>
-      value.text !== undefined ||
-      value.answerContent !== undefined ||
-      value.answerText !== undefined ||
-      value.canonicalAnswer !== undefined ||
-      value.explanation !== undefined ||
-      value.legendImages !== undefined ||
-      value.derivedFromCardID !== undefined ||
-      value.relationType !== undefined ||
-      value.originTask !== undefined,
-    {
-      message: "At least one field must be provided",
-    },
-  )
-
-const questionCardDraftSchema = z.object({
-  text: z.string().min(1),
-  page: z.number().int().min(1).nullable().optional(),
-  originalText: z.string().nullable().optional(),
-  answerText: z.string().nullable().optional(),
-  canonicalAnswer: z.string().nullable().optional(),
-  explanation: z.string().nullable().optional(),
-  legendImages: z.array(z.string().min(1)).optional(),
-  derivedFromCardID: z.string().nullable().optional(),
-  relationType: z.enum(["primary", "practice_generated", "variant", "explanation_followup"]).nullable().optional(),
-  originTask: z
-    .object({
-      kind: z.string().min(1),
-      sessionID: z.string().optional().nullable(),
-      messageID: z.string().optional().nullable(),
-    })
-    .nullable()
-    .optional(),
-})
-
-const appendQuestionCardsSchema = z.object({
-  workroomID: z.string().min(1),
-  studioDocumentID: z.string().min(1),
-  drafts: z.array(questionCardDraftSchema).min(1),
-})
-
-const insertQuestionCardsSchema = z.object({
-  workroomID: z.string().min(1),
-  studioDocumentID: z.string().min(1),
-  anchorCardID: z.string().min(1),
-  position: z.enum(["before", "after"]),
-  drafts: z.array(questionCardDraftSchema).min(1),
-})
-
-const explanationSchema = z.object({
-  workroomID: z.string().min(1),
-  explanation: z.string().min(1),
-})
-
-const attachDerivedPracticeSchema = z.object({
-  workroomID: z.string().min(1),
-  createdCardIDs: z.array(z.string().min(1)).min(1),
 })
 
 const submitAttemptSchema = z.object({
@@ -390,40 +324,53 @@ studioRoutes.post("/question-cards/bridge/:command", async (c) => {
   }
 })
 
-studioRoutes.post("/question-cards/append", async (c) => {
-  const { user } = await requireAuth(c)
-  const body = appendQuestionCardsSchema.parse(await c.req.json())
+studioRoutes.post("/question-cards/question/:action", async (c) => {
+  const bridge = await requireStudioBridgeAuth(c)
+  const action = bridgeQuestionActionSchema.parse(c.req.param("action"))
+  const body = bridgeQuestionBodySchema.parse(await c.req.json())
 
-  return c.json(
-    {
-      items: await StudioService.appendQuestionCards({
-        userID: user.id,
-        workroomID: body.workroomID,
-        studioDocumentID: body.studioDocumentID,
-        drafts: body.drafts,
-      }),
-    },
-    201,
-  )
-})
+  try {
+    const result =
+      action === "create"
+        ? await createQuestionByIntent({
+            userID: bridge.userID,
+            workroomID: bridge.workroomID,
+            stem: body.stem,
+            answer: body.answer,
+            explanation: body.explanation,
+            options: body.options,
+            page: body.page,
+          })
+        : await insertQuestionByIntent({
+            userID: bridge.userID,
+            workroomID: bridge.workroomID,
+            stem: body.stem,
+            answer: body.answer,
+            explanation: body.explanation,
+            options: body.options,
+            page: body.page,
+            questionNumber: body.questionNumber ?? 0,
+            placement: body.placement ?? "after",
+          })
 
-studioRoutes.post("/question-cards/insert", async (c) => {
-  const { user } = await requireAuth(c)
-  const body = insertQuestionCardsSchema.parse(await c.req.json())
-
-  return c.json(
-    {
-      items: await StudioService.insertQuestionCards({
-        userID: user.id,
-        workroomID: body.workroomID,
-        studioDocumentID: body.studioDocumentID,
-        anchorCardID: body.anchorCardID,
-        position: body.position,
-        drafts: body.drafts,
-      }),
-    },
-    201,
-  )
+    return c.json({
+      ok: true,
+      action,
+      result,
+    })
+  } catch (error) {
+    const parsed = asStructuredError(error)
+    return c.json(
+      {
+        ok: false,
+        action,
+        error: parsed.message,
+        code: parsed.code,
+        detail: parsed.detail ?? null,
+      },
+      parsed.code === "INVALID_ARGUMENT" ? 400 : 500,
+    )
+  }
 })
 
 studioRoutes.get("/question-cards/:cardID/detail", async (c) => {
@@ -472,56 +419,6 @@ studioRoutes.post("/question-cards/import-from-layout", async (c) => {
     }),
     201,
   )
-})
-
-studioRoutes.patch("/question-cards/:cardID", async (c) => {
-  const { user } = await requireAuth(c)
-  const body = updateQuestionCardSchema.parse(await c.req.json())
-  const workroomID = String(c.req.query("workroom_id") ?? "").trim()
-  if (!workroomID) throw new Error("Missing workroom_id")
-
-  return c.json(
-    await StudioService.updateQuestionCard({
-      userID: user.id,
-      workroomID,
-      cardID: c.req.param("cardID"),
-      text: body.text,
-      answerContent: body.answerContent as any,
-      answerText: body.answerText,
-      canonicalAnswer: body.canonicalAnswer,
-      explanation: body.explanation,
-      legendImages: body.legendImages,
-      derivedFromCardID: body.derivedFromCardID,
-      relationType: body.relationType,
-      originTask: body.originTask,
-    }),
-  )
-})
-
-studioRoutes.post("/question-cards/:cardID/explanation", async (c) => {
-  const { user } = await requireAuth(c)
-  const body = explanationSchema.parse(await c.req.json())
-  return c.json(
-    await StudioService.writeQuestionExplanation({
-      userID: user.id,
-      workroomID: body.workroomID,
-      cardID: c.req.param("cardID"),
-      explanation: body.explanation,
-    }),
-  )
-})
-
-studioRoutes.post("/question-cards/:cardID/derived-practice", async (c) => {
-  const { user } = await requireAuth(c)
-  const body = attachDerivedPracticeSchema.parse(await c.req.json())
-  return c.json({
-    items: await StudioService.attachDerivedPracticeCards({
-      userID: user.id,
-      workroomID: body.workroomID,
-      sourceCardID: c.req.param("cardID"),
-      createdCardIDs: body.createdCardIDs,
-    }),
-  })
 })
 
 studioRoutes.delete("/question-cards/:cardID", async (c) => {

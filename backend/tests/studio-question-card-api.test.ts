@@ -9,7 +9,6 @@ const { getLocalSqlite } = await import("../src/lib/local-sqlite")
 const { WorkroomService } = await import("../src/domains/workrooms/service")
 const { StudioService } = await import("../src/domains/studio/service")
 const { QuestionsRepository } = await import("../src/domains/questions/repository")
-const { StudioQuestionCardApi } = await import("../src/domains/studio/internal-api")
 
 const dbPath = process.env.LOCAL_SQLITE_PATH
 
@@ -49,10 +48,10 @@ beforeEach(() => {
   resetDb()
 })
 
-test("appendStudioQuestionCards appends cards and syncs projected questions", async () => {
+test("StudioService.appendQuestionCards appends cards and syncs projected questions", async () => {
   const fixture = await createFixture()
 
-  const created = await StudioQuestionCardApi.appendStudioQuestionCards({
+  const created = await StudioService.appendQuestionCards({
     ...fixture,
     drafts: [
       { text: "第一题", page: 1 },
@@ -104,20 +103,20 @@ test("appendStudioQuestionCards appends cards and syncs projected questions", as
   )
 })
 
-test("insertStudioQuestionCards inserts before/after anchor and keeps projection ordered", async () => {
+test("StudioService.insertQuestionCards inserts before/after anchor and keeps projection ordered", async () => {
   const fixture = await createFixture()
-  const seed = await StudioQuestionCardApi.appendStudioQuestionCards({
+  const seed = await StudioService.appendQuestionCards({
     ...fixture,
     drafts: [{ text: "题一", page: 1 }, { text: "题二", page: 1 }],
   })
 
-  const insertedBefore = await StudioQuestionCardApi.insertStudioQuestionCards({
+  const insertedBefore = await StudioService.insertQuestionCards({
     ...fixture,
     anchorCardID: seed[1].id,
     position: "before",
     drafts: [{ text: "插入前", page: 1 }],
   })
-  const insertedAfter = await StudioQuestionCardApi.insertStudioQuestionCards({
+  const insertedAfter = await StudioService.insertQuestionCards({
     ...fixture,
     anchorCardID: seed[0].id,
     position: "after",
@@ -154,24 +153,24 @@ test("insertStudioQuestionCards inserts before/after anchor and keeps projection
   )
 })
 
-test("attachDerivedPracticeCards and writeStudioQuestionExplanation persist derived relation and explanation", async () => {
+test("StudioService.attachDerivedPracticeCards and writeQuestionExplanation persist derived relation and explanation", async () => {
   const fixture = await createFixture()
-  const [source] = await StudioQuestionCardApi.appendStudioQuestionCards({
+  const [source] = await StudioService.appendQuestionCards({
     ...fixture,
     drafts: [{ text: "原题", page: 1 }],
   })
-  const practice = await StudioQuestionCardApi.appendStudioQuestionCards({
+  const practice = await StudioService.appendQuestionCards({
     ...fixture,
     drafts: [{ text: "练习1", page: 1 }, { text: "练习2", page: 1 }],
   })
 
-  await StudioQuestionCardApi.attachDerivedPracticeCards({
+  await StudioService.attachDerivedPracticeCards({
     userID: fixture.userID,
     workroomID: fixture.workroomID,
     sourceCardID: source.id,
     createdCardIDs: practice.map((item) => item.id),
   })
-  await StudioQuestionCardApi.writeStudioQuestionExplanation({
+  await StudioService.writeQuestionExplanation({
     userID: fixture.userID,
     workroomID: fixture.workroomID,
     cardID: source.id,

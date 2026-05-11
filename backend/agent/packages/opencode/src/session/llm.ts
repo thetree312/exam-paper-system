@@ -4,7 +4,6 @@ import { Context, Effect, Layer, Record } from "effect"
 import * as Stream from "effect/Stream"
 import { streamText, wrapLanguageModel, type ModelMessage, type Tool, tool, jsonSchema } from "ai"
 import { mergeDeep, pipe } from "remeda"
-import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
 import * as ProviderTransform from "@/provider/transform"
 import { Config } from "@/config"
 import { Instance } from "@/project/instance"
@@ -146,20 +145,17 @@ export namespace LLM {
           options.instructions = system.join("\n")
         }
 
-        const isWorkflow = language instanceof GitLabWorkflowLanguageModel
         const messages = isOpenaiOauth
           ? input.messages
-          : isWorkflow
-            ? input.messages
-            : [
-                ...system.map(
-                  (x): ModelMessage => ({
-                    role: "system",
-                    content: x,
-                  }),
-                ),
-                ...input.messages,
-              ]
+          : [
+              ...system.map(
+                (x): ModelMessage => ({
+                  role: "system",
+                  content: x,
+                }),
+              ),
+              ...input.messages,
+            ]
 
         const params = yield* plugin.trigger(
           "chat.params",
@@ -226,93 +222,6 @@ export namespace LLM {
               },
             }),
             execute: async () => ({ output: "", title: "", metadata: {} }),
-          })
-        }
-
-        // Wire up toolExecutor for DWS workflow models so that tool calls
-        // from the workflow service are executed via opencode's tool system
-        // and results sent back over the WebSocket.
-        if (language instanceof GitLabWorkflowLanguageModel) {
-          const workflowModel = language as GitLabWorkflowLanguageModel & {
-            sessionID?: string
-            sessionPreapprovedTools?: string[]
-            approvalHandler?: (approvalTools: { name: string; args: string }[]) => Promise<{ approved: boolean }>
-          }
-          workflowModel.sessionID = input.sessionID
-          workflowModel.systemPrompt = system.join("\n")
-          workflowModel.toolExecutor = async (toolName, argsJson, _requestID) => {
-            const t = tools[toolName]
-            if (!t || !t.execute) {
-              return { result: "", error: `Unknown tool: ${toolName}` }
-            }
-            try {
-              const result = await t.execute!(JSON.parse(argsJson), {
-                toolCallId: _requestID,
-                messages: input.messages,
-                abortSignal: input.abort,
-              })
-              const output = typeof result === "string" ? result : (result?.output ?? JSON.stringify(result))
-              return {
-                result: output,
-                metadata: typeof result === "object" ? result?.metadata : undefined,
-                title: typeof result === "object" ? result?.title : undefined,
-              }
-            } catch (e: any) {
-              return { result: "", error: e.message ?? String(e) }
-            }
-          }
-
-          const ruleset = Permission.merge(input.agent.permission ?? [], input.permission ?? [])
-          workflowModel.sessionPreapprovedTools = Object.keys(tools).filter((name) => {
-            const match = ruleset.findLast((rule) => Wildcard.match(name, rule.permission))
-            return !match || match.action !== "ask"
-          })
-
-          const bridge = yield* EffectBridge.make()
-          const approvedToolsForSession = new Set<string>()
-          workflowModel.approvalHandler = Instance.bind(async (approvalTools) => {
-            const uniqueNames = [...new Set(approvalTools.map((t: { name: string }) => t.name))] as string[]
-            // Auto-approve tools that were already approved in this session
-            // (prevents infinite approval loops for server-side MCP tools)
-            if (uniqueNames.every((name) => approvedToolsForSession.has(name))) {
-              return { approved: true }
-            }
-
-            const id = PermissionID.ascending()
-            let unsub: (() => void) | undefined
-            try {
-              unsub = Bus.subscribe(Permission.Event.Replied, (evt) => {
-                if (evt.properties.requestID === id) void evt.properties.reply
-              })
-              const toolPatterns = approvalTools.map((t: { name: string; args: string }) => {
-                try {
-                  const parsed = JSON.parse(t.args) as Record<string, unknown>
-                  const title = (parsed?.title ?? parsed?.name ?? "") as string
-                  return title ? `${t.name}: ${title}` : t.name
-                } catch {
-                  return t.name
-                }
-              })
-              const uniquePatterns = [...new Set(toolPatterns)] as string[]
-              await bridge.promise(
-                perm.ask({
-                  id,
-                  sessionID: SessionID.make(input.sessionID),
-                  permission: "workflow_tool_approval",
-                  patterns: uniquePatterns,
-                  metadata: { tools: approvalTools },
-                  always: uniquePatterns,
-                  ruleset: [],
-                }),
-              )
-              for (const name of uniqueNames) approvedToolsForSession.add(name)
-              workflowModel.sessionPreapprovedTools = [...(workflowModel.sessionPreapprovedTools ?? []), ...uniqueNames]
-              return { approved: true }
-            } catch {
-              return { approved: false }
-            } finally {
-              unsub?.()
-            }
           })
         }
 

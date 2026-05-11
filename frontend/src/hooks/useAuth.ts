@@ -7,6 +7,10 @@ import {
   loadUser as secureLoadUser,
   saveUser as secureSaveUser,
   clearUser as secureClearUser,
+  clearRememberedAuthCredential,
+  loadRememberedAuthCredential,
+  saveRememberedAuthCredential,
+  type AuthRememberPolicy,
 } from '../utils/secureStorage'
 
 interface UseAuthReturn {
@@ -24,6 +28,13 @@ interface UseAuthReturn {
   setAuthError: (error: string | null) => void
   authLoading: boolean
   setAuthLoading: (loading: boolean) => void
+  authRememberPolicy: AuthRememberPolicy
+  setAuthRememberPolicy: (policy: AuthRememberPolicy) => void
+  rememberCredentialEnabled: boolean
+  setRememberCredentialEnabled: (enabled: boolean) => void
+  hasRememberedCredential: boolean
+  rememberedEmail: string
+  applyRememberedCredential: () => void
   handleAuthSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
   handleLogout: () => void
 }
@@ -39,6 +50,9 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
   const [authDisplayName, setAuthDisplayName] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [authRememberPolicy, setAuthRememberPolicyState] = useState<AuthRememberPolicy>('30d')
+  const [rememberCredentialEnabled, setRememberCredentialEnabledState] = useState(true)
+  const [rememberedCredential, setRememberedCredential] = useState<{ email: string; password: string } | null>(null)
 
   // 加载登录用户信息
   useEffect(() => {
@@ -64,11 +78,70 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         setStoreUser(parsed)
         secureSaveUser(parsed)
         window.localStorage.removeItem('exam_user')
-        if ((parsed as UserInfo | null) == null) return
       }
     } catch (e) {
       console.error('migrate legacy user failed', e)
     }
+  }, [setStoreUser])
+
+  useEffect(() => {
+    const remembered = loadRememberedAuthCredential()
+    if (!remembered) {
+      setRememberCredentialEnabledState(false)
+      setRememberedCredential(null)
+      return
+    }
+    setRememberCredentialEnabledState(true)
+    setAuthRememberPolicyState(remembered.policy)
+    setRememberedCredential({
+      email: remembered.email,
+      password: remembered.password,
+    })
+    setAuthEmail((prev) => prev || remembered.email)
+    setAuthPassword((prev) => prev || remembered.password)
+  }, [])
+
+  const setAuthRememberPolicy = useCallback((policy: AuthRememberPolicy) => {
+    setAuthRememberPolicyState(policy)
+    const remembered = loadRememberedAuthCredential()
+    if (remembered) {
+      saveRememberedAuthCredential({
+        email: remembered.email,
+        password: remembered.password,
+        policy,
+      })
+      return
+    }
+    if (authEmail.trim() && authPassword.trim()) {
+      saveRememberedAuthCredential({
+        email: authEmail,
+        password: authPassword,
+        policy,
+      })
+    }
+  }, [authEmail, authPassword])
+
+  const setRememberCredentialEnabled = useCallback((enabled: boolean) => {
+    setRememberCredentialEnabledState(enabled)
+    if (!enabled) {
+      clearRememberedAuthCredential()
+      setRememberedCredential(null)
+    }
+  }, [])
+
+  const applyRememberedCredential = useCallback(() => {
+    const remembered = loadRememberedAuthCredential()
+    if (!remembered) {
+      setRememberedCredential(null)
+      return
+    }
+    setAuthMode('login')
+    setAuthEmail(remembered.email)
+    setAuthPassword(remembered.password)
+    setRememberedCredential({
+      email: remembered.email,
+      password: remembered.password,
+    })
   }, [])
 
   const handleAuthSubmit = useCallback(
@@ -92,7 +165,6 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
       }
 
       try {
-        console.log('[auth] request', mode, payload)
         const data = (await apiJson(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -117,9 +189,21 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         }
         setStoreUser(nextUser)
         secureSaveUser(nextUser)
-        console.log('[auth] success', data.user)
+        if (mode === 'login' && rememberCredentialEnabled) {
+          saveRememberedAuthCredential({
+            email: authEmail,
+            password: authPassword,
+            policy: authRememberPolicy,
+          })
+          setRememberedCredential({
+            email: authEmail,
+            password: authPassword,
+          })
+        } else if (mode === 'login' && !rememberCredentialEnabled) {
+          clearRememberedAuthCredential()
+          setRememberedCredential(null)
+        }
       } catch (err) {
-        console.error('[auth] failed', err)
         const message = err instanceof Error ? err.message : ''
         if (mode === 'login' && message === 'Invalid email or password') {
           setAuthError(t('auth.error.invalid_credentials'))
@@ -136,7 +220,7 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         setAuthLoading(false)
       }
     },
-    [authMode, authEmail, authPassword, authDisplayName, backendBaseUrl, t],
+    [authMode, authEmail, authPassword, authDisplayName, authRememberPolicy, backendBaseUrl, rememberCredentialEnabled, setStoreUser, t],
   )
 
   const handleLogout = useCallback(() => {
@@ -150,10 +234,22 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
       secureClearUser()
     }
     void run()
-    setAuthEmail('')
-    setAuthPassword('')
+    if (rememberCredentialEnabled) {
+      const remembered = loadRememberedAuthCredential()
+      if (remembered) {
+        setAuthMode('login')
+        setAuthEmail(remembered.email)
+        setAuthPassword(remembered.password)
+      } else {
+        setAuthEmail('')
+        setAuthPassword('')
+      }
+    } else {
+      setAuthEmail('')
+      setAuthPassword('')
+    }
     setAuthDisplayName('')
-  }, [backendBaseUrl, setStoreUser])
+  }, [backendBaseUrl, rememberCredentialEnabled, setStoreUser])
 
   useEffect(() => {
     const stored = secureLoadUser()
@@ -165,7 +261,7 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
         method: 'GET',
       },
     )
-        .then((data) => {
+      .then((data) => {
         const nextUser: UserInfo = {
           id: data.user.id,
           tenant_id: data.user.tenantID ?? 0,
@@ -198,6 +294,13 @@ export const useAuth = (backendBaseUrl: string): UseAuthReturn => {
     setAuthError,
     authLoading,
     setAuthLoading,
+    authRememberPolicy,
+    setAuthRememberPolicy,
+    rememberCredentialEnabled,
+    setRememberCredentialEnabled,
+    hasRememberedCredential: Boolean(rememberedCredential?.email && rememberedCredential?.password),
+    rememberedEmail: rememberedCredential?.email ?? '',
+    applyRememberedCredential,
     handleAuthSubmit,
     handleLogout,
   }

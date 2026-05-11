@@ -343,6 +343,20 @@ body {
 .tool-running-shiny-text {
   color: inherit;
   -webkit-text-fill-color: currentColor;
+  background-image: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--ui-text-tool-call) 72%, transparent) 0%,
+    color-mix(in srgb, #ffffff 85%, var(--ui-text-tool-call) 15%) 42%,
+    color-mix(in srgb, #7dd3fc 42%, var(--ui-text-tool-call) 58%) 50%,
+    color-mix(in srgb, #ffffff 88%, var(--ui-text-tool-call) 12%) 58%,
+    color-mix(in srgb, var(--ui-text-tool-call) 72%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 140% center;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: tool-running-shiny 1.9s linear infinite;
 }
 
 @keyframes tool-running-shiny {

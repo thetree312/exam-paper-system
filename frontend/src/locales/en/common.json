@@ -81,6 +81,13 @@
       "register": "Register & sign in",
       "loading": "Processing…"
     },
+    "show_password": "Show password",
+    "hide_password": "Hide password",
+    "remember_credentials_toggle": "Remember account and password",
+    "remember_toast_enabled": "Credential memory enabled ({{policy}}). You can adjust duration in Settings Center.",
+    "remember_toast_disabled": "Credential memory disabled.",
+    "use_remembered_account": "One-click sign in with remembered account",
+    "remembered_account_hint": "Remembered account detected: {{email}}",
     "footnote": "Account binding for WeChat / Google is reserved; currently email+password only.",
       "error": {
         "generic": "Login or registration failed, please check your credentials",
@@ -318,6 +325,13 @@
       "security_desc": "You can sign out from the current device here.",
       "session_title": "Current status",
       "session_value": "Signed in"
+    },
+    "security": {
+      "remember_login_title": "Remember login duration",
+      "remember_login_hint": "After saving, next launch can sign in with one click on this device.",
+      "remember_30d": "1 month",
+      "remember_365d": "1 year",
+      "remember_forever": "Forever"
     },
     "ai_summary": {
       "hero_title": "Configure platform credentials first, then bind each capability to an account and model.",

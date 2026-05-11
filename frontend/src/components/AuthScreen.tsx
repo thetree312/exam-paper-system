@@ -1,8 +1,10 @@
 ﻿import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthMode } from '../types'
+import type { AuthRememberPolicy } from '../utils/secureStorage'
 import { validateEmail, validatePassword, validateDisplayName } from '../utils/validation'
 import BrandIcon from './BrandIcon'
+import Icon from './Icon'
 
 interface AuthScreenProps {
   authMode: AuthMode
@@ -15,6 +17,9 @@ interface AuthScreenProps {
   onAuthDisplayNameChange: (value: string) => void
   authError: string | null
   authLoading: boolean
+  rememberCredentialEnabled?: boolean
+  onRememberCredentialEnabledChange?: (enabled: boolean) => void
+  authRememberPolicy?: AuthRememberPolicy
   onSubmit: React.FormEventHandler<HTMLFormElement>
 }
 
@@ -29,12 +34,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onAuthDisplayNameChange,
   authError,
   authLoading,
+  rememberCredentialEnabled = false,
+  onRememberCredentialEnabledChange,
+  authRememberPolicy = '30d',
   onSubmit,
 }) => {
   const { t } = useTranslation('common')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [displayNameError, setDisplayNameError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberToast, setRememberToast] = useState<string | null>(null)
 
   // 清除错误信息当切换模式时
   useEffect(() => {
@@ -81,8 +91,32 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     onSubmit(e)
   }
 
+  const rememberPolicyText =
+    authRememberPolicy === '365d'
+      ? t('settings_modal.security.remember_365d')
+      : authRememberPolicy === 'forever'
+        ? t('settings_modal.security.remember_forever')
+        : t('settings_modal.security.remember_30d')
+
+  const handleRememberToggle = () => {
+    const next = !rememberCredentialEnabled
+    onRememberCredentialEnabledChange?.(next)
+    const message = next
+      ? t('auth.remember_toast_enabled', { policy: rememberPolicyText })
+      : t('auth.remember_toast_disabled')
+    setRememberToast(message)
+    window.setTimeout(() => {
+      setRememberToast((current) => (current === message ? null : current))
+    }, 2800)
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--ui-bg-panel-muted)] px-4">
+      {rememberToast && (
+        <div className="fixed right-5 top-5 z-[120] rounded-xl bg-slate-900 px-4 py-2 text-xs text-white shadow-xl">
+          {rememberToast}
+        </div>
+      )}
       <div className="w-full max-w-md bg-[var(--ui-bg-panel)] shadow-xl rounded-2xl p-6 sm:p-8 border border-[var(--ui-border-default)]">
         <div className="flex items-center gap-3 mb-6">
           <div className="scale-110">
@@ -128,19 +162,60 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
           <div>
             <label className="block text-xs font-medium text-[var(--ui-text-primary)] mb-1">{t('auth.fields.password')}</label>
-            <input
-              type="password"
-              required
-              className={`w-full h-9 px-3 rounded-lg border ${passwordError ? 'border-red-500' : 'border-[var(--ui-border-default)]'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
-              value={authPassword}
-              onChange={(e) => onAuthPasswordChange(e.target.value)}
-              onBlur={handlePasswordBlur}
-              placeholder={t('auth.placeholders.password')}
-              minLength={8}
-              maxLength={128}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                className={`w-full h-9 px-3 pr-10 rounded-lg border ${passwordError ? 'border-red-500' : 'border-[var(--ui-border-default)]'} focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm`}
+                value={authPassword}
+                onChange={(e) => onAuthPasswordChange(e.target.value)}
+                onBlur={handlePasswordBlur}
+                placeholder={t('auth.placeholders.password')}
+                minLength={8}
+                maxLength={128}
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0 text-[var(--ui-text-primary)]"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? t('auth.hide_password') : t('auth.show_password')}
+                title={showPassword ? t('auth.hide_password') : t('auth.show_password')}
+              >
+                <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                  <Icon name="visibility" className="text-[16px]" />
+                  {!showPassword && (
+                    <span className="absolute h-[2px] w-4 rotate-[-35deg] rounded bg-current" />
+                  )}
+                </span>
+              </button>
+            </div>
             {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
           </div>
+          {authMode === 'login' && (
+            <button
+              type="button"
+              onClick={handleRememberToggle}
+              className="inline-flex items-center gap-2 rounded-md px-1 py-1 text-xs text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]"
+            >
+              <span className="relative inline-flex h-5 w-5 items-center justify-center overflow-hidden">
+                <span
+                  className={`absolute inset-0 inline-flex items-center justify-center transition-all duration-300 ${
+                    rememberCredentialEnabled ? 'rotate-90 opacity-0 scale-75' : 'rotate-0 opacity-100 scale-100'
+                  }`}
+                >
+                  <Icon name="key" className="text-[16px] text-slate-500" />
+                </span>
+                <span
+                  className={`absolute inset-0 inline-flex items-center justify-center transition-all duration-300 ${
+                    rememberCredentialEnabled ? 'rotate-0 opacity-100 scale-100' : '-rotate-90 opacity-0 scale-75'
+                  }`}
+                >
+                  <Icon name="verified_user" className="text-[16px] text-emerald-600" />
+                </span>
+              </span>
+              <span>{t('auth.remember_credentials_toggle')}</span>
+            </button>
+          )}
           {authMode === 'register' && (
             <div>
               <label className="block text-xs font-medium text-[var(--ui-text-primary)] mb-1">{t('auth.fields.display_name')}</label>

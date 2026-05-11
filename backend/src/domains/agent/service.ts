@@ -64,7 +64,7 @@ const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const studioQuestionCardsCliPath = path.join(repoRoot, "backend", "src", "cli", "studio-question-cards.ts")
 const localModelsCatalogPath = path.join(repoRoot, "backend", "vendor", "models.dev", "dist", "_api.json")
 const logger = createLogger({ domain: "agent", source: "runtime" })
-export const STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION = "studio-question-cards-bridge@v4"
+export const STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION = "studio-question-cards-bridge@v8"
 let initializePromise: Promise<void> | undefined
 let opencodeModulesPromise: Promise<any> | undefined
 const instanceBootstrapByDirectory = new Map<string, Promise<void>>()
@@ -445,6 +445,8 @@ async function materializeAgentCommandBridges(input: {
   rootDirectory: string
   bridgeBaseURL: string
   bridgeToken: string
+  userID: string
+  workroomID: string
 }) {
   const relativeWrapperPath = path.join("wiki", ".agent", "bin", "studio-question-cards.ts")
   const wrapperPath = path.join(input.rootDirectory, relativeWrapperPath)
@@ -453,6 +455,8 @@ async function materializeAgentCommandBridges(input: {
   const wrapper = [
     `process.env.STUDIO_QUESTION_CARDS_BRIDGE_BASE_URL = ${JSON.stringify(input.bridgeBaseURL)}`,
     `process.env.STUDIO_QUESTION_CARDS_BRIDGE_TOKEN = ${JSON.stringify(input.bridgeToken)}`,
+    `process.env.STUDIO_QUESTION_CARDS_SCOPE_USER_ID = ${JSON.stringify(input.userID)}`,
+    `process.env.STUDIO_QUESTION_CARDS_SCOPE_WORKROOM_ID = ${JSON.stringify(input.workroomID)}`,
     `const { runStudioQuestionCardsCli } = await import(${cliImportPath})`,
     `const exitCode = await runStudioQuestionCardsCli(process.argv.slice(2))`,
     `if (typeof exitCode === "number" && exitCode !== 0) process.exit(exitCode)`,
@@ -471,25 +475,13 @@ export function buildStudioQuestionCardsCommandGuide(input: {
   const commandPath = "wiki/.agent/bin/studio-question-cards.ts"
   return [
     `[guide-version:${STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION}]`,
-    "When the task is about question cards, treat the studio question-card container as the source of truth and execute the project-native command bridge.",
-    "The bridge routes all mutations through the backend host process; do not bypass it with direct database/service access.",
-    "Do not rely on visible tabs, AG-UI actions, or guessed frontend memory state for creation/update operations.",
-    "Do not inspect source-package.json or filesystem metadata to discover studio document targets.",
-    `The current workroom root directory is ${JSON.stringify(input.workroomRootDirectory)}.`,
-    `Run it as: bun ${commandPath} <command>`,
-    "Commands: resolve-target, create-container, get-document, list-cards, list-container-cards, get-card, append, insert, insert-card, create-practice-cards, update-card, write-explanation, attach-derived-practice.",
-    `Every payload must include userID=${JSON.stringify(input.userID)} and workroomID=${JSON.stringify(input.workroomID)}.`,
-    "Always provide structured JSON payload and prefer deterministic command order: resolve-target/list-container-cards -> insert-card or append -> attach-derived-practice when needed.",
-    "On Windows, if payload contains non-ASCII text (especially Chinese), MUST use --payload-b64; do not send inline non-ASCII JSON.",
-    "For list/insert on existing container, do not auto-create container. Use list-container-cards/insert-card semantics.",
-    "Semantics: create-container creates a new question-card container (studio document). insert-card inserts new questions into existing container sequence around anchorCardID.",
-    "For mutating commands (create-container/append/insert-card/create-practice-cards/write-explanation/attach-derived-practice), include idempotencyKey. If absent, bridge will derive one from originTask.sessionID + originTask.messageID when possible.",
-    "If user asks to insert around an existing question, resolve anchor card first by list-container-cards/get-card, then use insert-card with anchorCardID and position.",
-    "If user asks to create practice questions based on an original card, create cards first (append/insert), then call attach-derived-practice.",
-    "Example:",
-    `Encode UTF-8 JSON as base64, then run: bun ${commandPath} resolve-target --payload-b64 <base64_json>`,
-    `Encode UTF-8 JSON as base64, then run: bun ${commandPath} insert-card --payload-b64 <base64_json>`,
-    "Use append/insert to create practice questions inside the target container; use attach-derived-practice to link generated cards back to the source card.",
+    `Bridge scope is already fixed to userID=${JSON.stringify(input.userID)} and workroomID=${JSON.stringify(input.workroomID)} in agent runtime. Do not invent studioDocumentID, sourceDocumentID, anchorCardID, cardID, or other internal IDs.`,
+    `For question-card writing, only use: bun ${commandPath} question create ... or bun ${commandPath} question insert ...`,
+    "Question commands call the backend question API directly.",
+    "Pass only inline business intent: stem, optional answer, optional explanation, optional options, plus question-number and placement for insert.",
+    "Do not request card lists before insert unless the human explicitly asks to inspect current questions.",
+    "Do not base64-encode question text. Do not write temporary files.",
+    "Use question create for append. Use question insert for insertion around a 1-based question number.",
   ].join("\n")
 }
 
@@ -588,6 +580,8 @@ export async function withAgentScope<T>(
         rootDirectory,
         bridgeBaseURL: resolveBackendBaseURL(),
         bridgeToken: bridgeToken.token,
+        userID: input.userID,
+        workroomID: input.workroomID,
       })
       await AppRuntime.runPromise(
         Project.Service.use((svc: any) =>
