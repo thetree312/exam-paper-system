@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type {
   AgentSendPayload,
   AggregatedOcrItem,
+  StudioLectureTabPayload,
   StudioPreviewTabPayload,
   StudioTabKind,
   StudioWorkspaceTab,
@@ -14,6 +15,7 @@ import { MindMapPanel } from '../features/mindmap/MindMapPanel'
 import { AgentWorkspacePanel } from './AgentWorkspacePanel'
 import { FlashcardPanel } from './FlashcardPanel'
 import Icon from './Icon'
+import { LectureStudioPanel } from './LectureStudioPanel'
 import { ContextMenuList, type ContextMenuAction } from './contextMenu'
 import { revealWorkroomPathInOs } from '../services/workroomTreeApi'
 import { useAppStore } from '../store/appStore'
@@ -26,7 +28,7 @@ interface EditorWorkspaceShellProps {
   workroomId?: string | null
   studioTabs: StudioWorkspaceTab[]
   activeStudioTabId: string
-  onOpenStudioTab: (kind: StudioTabKind) => void
+  onOpenStudioTab: (kind: Exclude<StudioTabKind, 'lecture'>) => void
   onActivateStudioTab: (tabId: string) => void
   onCloseStudioTab: (tabId: string) => void
   onReorderStudioTabs: (fromTabId: string, toTabId: string) => void
@@ -105,7 +107,10 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
   const markdownReadContainerRef = useRef<HTMLDivElement | null>(null)
   const activeStudioTab = studioTabs.find((tab) => tab.id === activeStudioTabId) ?? studioTabs[0]
   const activeStudioView = activeStudioTab?.kind ?? 'editor'
-  const activePreviewPayload = (activeStudioTab?.payload ?? null) as StudioPreviewTabPayload | null
+  const activePreviewPayload =
+    activeStudioView === 'preview' ? ((activeStudioTab?.payload ?? null) as StudioPreviewTabPayload | null) : null
+  const activeLecturePayload =
+    activeStudioView === 'lecture' ? ((activeStudioTab?.payload ?? null) as StudioLectureTabPayload | null) : null
   const activePreviewViewMode = activePreviewPayload?.viewMode === 'markdown-read' ? 'markdown-read' : 'edit'
   const previewLineCount = useMemo(() => {
     const content = activePreviewPayload?.draftContent ?? ''
@@ -121,6 +126,7 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
     return lines.join('\n')
   }, [previewLineCount])
   const [isSavingPreview, setIsSavingPreview] = React.useState(false)
+  const [isDockCollapsed, setIsDockCollapsed] = React.useState(false)
   const [editorContextMenu, setEditorContextMenu] = React.useState<{ x: number; y: number } | null>(null)
   const [tabContextMenu, setTabContextMenu] = React.useState<{
     x: number
@@ -134,7 +140,9 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
       ? 'flex-1 overflow-hidden pt-[42px] sm:pt-[42px] lg:pt-6'
       : activeStudioView === 'preview'
         ? 'flex-1 overflow-hidden p-0 pt-[42px]'
-      : 'scrollbar-hidden flex-1 overflow-y-auto p-0 pt-[42px] lg:p-6 lg:pt-[42px]'
+        : activeStudioView === 'lecture'
+          ? 'flex-1 overflow-hidden pt-[42px]'
+        : 'scrollbar-hidden flex-1 overflow-y-auto p-0 pt-[42px] lg:p-6 lg:pt-[42px]'
 
   useEffect(() => {
     const el = tabsScrollRef.current
@@ -327,85 +335,154 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
       className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--ui-bg-app)]"
       style={{ marginRight: agentDrawerInset > 0 ? `${agentDrawerInset}px` : undefined, transition: 'margin-right 200ms ease' }}
     >
-      <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex justify-center">
-        <div className="pointer-events-auto inline-flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] p-1.5 shadow-none backdrop-blur scrollbar-hidden">
-          <button
-          className="shrink-0 rounded-full p-2 text-[var(--ui-text-primary)]"
-          type="button"
-          title={t('editor_workspace.text_button')}
-          onClick={() => {
-            void onRunGlmOcr()
+      <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex justify-center" style={{ perspective: '1200px' }}>
+        <div
+          className="pointer-events-auto inline-flex w-fit max-w-[calc(100vw-2rem)] items-center overflow-hidden border border-[var(--ui-border-default)] bg-[var(--ui-bg-elevated)] shadow-none backdrop-blur scrollbar-hidden select-none"
+          style={{
+            width: isDockCollapsed ? 56 : 'fit-content',
+            height: 56,
+            borderRadius: 9999,
+            padding: isDockCollapsed ? 0 : 6,
+            gap: isDockCollapsed ? 0 : 4,
+            transformStyle: 'preserve-3d',
+            transition:
+              'width 700ms cubic-bezier(0.16, 1, 0.3, 1), padding 700ms cubic-bezier(0.16, 1, 0.3, 1), border-radius 700ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1), background-color 300ms ease, border-color 300ms ease',
+            boxShadow: isDockCollapsed ? '0 0 20px rgba(168, 85, 247, 0.15)' : 'none',
           }}
         >
-          <Icon name={"title"} className="text-[18px] leading-none" />
-        </button>
-        <button
-          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'flashcard' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
-          type="button"
-          title={t('editor_workspace.flashcard_button')}
-          onClick={() => onOpenStudioTab('flashcard')}
-        >
-          <Icon name={"image"} className="text-[18px] leading-none" />
-        </button>
-        <button
-          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'mindmap' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
-          type="button"
-          title={t('editor_workspace.mindmap_button')}
-          onClick={() => onOpenStudioTab('mindmap')}
-        >
-          <Icon name={"account_tree"} className="text-[18px] leading-none" />
-        </button>
-        <button
-          className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'editor' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
-          type="button"
-          title={t('editor_workspace.workspace_title')}
-          onClick={() => onOpenStudioTab('editor')}
-        >
-          <Icon name={"article"} className="text-[18px] leading-none" />
-        </button>
-        <button
-          className={`shrink-0 rounded-full p-2 ${
-            studioDataSourceMode === 'keep_workset'
-              ? 'bg-[var(--ui-btn-solid-bg)] text-white'
-              : 'text-[var(--ui-text-primary)]'
-          }`}
-          type="button"
-          title={
-            studioDataSourceMode === 'keep_workset'
-              ? t('editor_workspace.toolbar.mode_keep_workset')
-              : t('editor_workspace.toolbar.mode_follow_preview')
-          }
-          onClick={() =>
-            onStudioDataSourceModeChange(
-              studioDataSourceMode === 'keep_workset' ? 'follow_preview' : 'keep_workset',
-            )
-          }
-        >
-          <Icon
-            name={studioDataSourceMode === 'keep_workset' ? "layers" : "link"}
-            className="text-[16px] leading-none"
-          />
-        </button>
-        <button
-          className={`flex shrink-0 items-center gap-1.5 rounded-full p-2 text-sm ${
-            isAnswerMode ? 'bg-[var(--ui-btn-solid-bg)] text-white' : 'text-[var(--ui-text-primary)]'
-          }`}
-          type="button"
-          title={t('editor_workspace.answer_mode_button')}
-          onClick={onToggleAnswerMode}
-        >
-          <Icon name={"edit_note"} className="text-[16px] leading-none" />
-        </button>
-        <div className="mx-1 hidden w-px bg-[var(--ui-border-default)] sm:block" />
-        <button
-          className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-purple-600"
-          type="button"
-          onClick={onOpenAgentDrawer}
-          title={t('editor_workspace.copilot_button')}
-        >
-          <Icon name={"auto_awesome"} className="text-[16px] leading-none" />
-          {t('editor_workspace.copilot_button')}
-        </button>
+          <div
+            className="flex shrink-0 items-center gap-1 overflow-hidden"
+            style={{
+              transformOrigin: 'right center',
+              transform: isDockCollapsed ? 'rotateY(-90deg) scaleX(0)' : 'rotateY(0deg) scaleX(1)',
+              opacity: isDockCollapsed ? 0 : 1,
+              width: isDockCollapsed ? 0 : 'auto',
+              visibility: isDockCollapsed ? 'hidden' : 'visible',
+              transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), opacity 420ms ease, width 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <button
+              className="shrink-0 rounded-full p-2 text-[var(--ui-text-primary)]"
+              type="button"
+              title={t('editor_workspace.text_button')}
+              onClick={() => {
+                void onRunGlmOcr()
+              }}
+            >
+              <Icon name={"title"} className="text-[18px] leading-none" />
+            </button>
+            <button
+              className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'flashcard' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
+              type="button"
+              title={t('editor_workspace.flashcard_button')}
+              onClick={() => onOpenStudioTab('flashcard')}
+            >
+              <Icon name={"image"} className="text-[18px] leading-none" />
+            </button>
+            <button
+              className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'mindmap' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
+              type="button"
+              title={t('editor_workspace.mindmap_button')}
+              onClick={() => onOpenStudioTab('mindmap')}
+            >
+              <Icon name={"account_tree"} className="text-[18px] leading-none" />
+            </button>
+            <button
+              className={`shrink-0 rounded-full p-2 text-[var(--ui-text-primary)] ${activeStudioView === 'editor' ? 'bg-[var(--ui-bg-panel-muted)]' : ''}`}
+              type="button"
+              title={t('editor_workspace.workspace_title')}
+              onClick={() => onOpenStudioTab('editor')}
+            >
+              <Icon name={"article"} className="text-[18px] leading-none" />
+            </button>
+            <button
+              className={`shrink-0 rounded-full p-2 ${
+                studioDataSourceMode === 'keep_workset'
+                  ? 'bg-[var(--ui-btn-solid-bg)] text-white'
+                  : 'text-[var(--ui-text-primary)]'
+              }`}
+              type="button"
+              title={
+                studioDataSourceMode === 'keep_workset'
+                  ? t('editor_workspace.toolbar.mode_keep_workset')
+                  : t('editor_workspace.toolbar.mode_follow_preview')
+              }
+              onClick={() =>
+                onStudioDataSourceModeChange(
+                  studioDataSourceMode === 'keep_workset' ? 'follow_preview' : 'keep_workset',
+                )
+              }
+            >
+              <Icon
+                name={studioDataSourceMode === 'keep_workset' ? "layers" : "link"}
+                className="text-[16px] leading-none"
+              />
+            </button>
+            <button
+              className={`flex shrink-0 items-center gap-1.5 rounded-full p-2 text-sm ${
+                isAnswerMode ? 'bg-[var(--ui-btn-solid-bg)] text-white' : 'text-[var(--ui-text-primary)]'
+              }`}
+              type="button"
+              title={t('editor_workspace.answer_mode_button')}
+              onClick={onToggleAnswerMode}
+            >
+              <Icon name={"edit_note"} className="text-[16px] leading-none" />
+            </button>
+          </div>
+
+          <button
+            className="group relative flex shrink-0 items-center justify-center overflow-hidden bg-transparent outline-none"
+            type="button"
+            aria-label={isDockCollapsed ? t('editor_workspace.copilot_button') : t('editor_workspace.copilot_button')}
+            title={isDockCollapsed ? t('editor_workspace.copilot_button') : t('editor_workspace.copilot_button')}
+            onClick={() => {
+              setIsDockCollapsed((prev) => !prev)
+            }}
+            style={{
+              width: isDockCollapsed ? 56 : 32,
+              height: 56,
+              borderRadius: isDockCollapsed ? 9999 : 12,
+              transition: 'width 700ms cubic-bezier(0.16, 1, 0.3, 1), border-radius 700ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease, transform 200ms ease',
+            }}
+          >
+            {isDockCollapsed ? (
+              <span className="flex h-full w-full items-center justify-center rounded-full text-[var(--ui-text-primary)] hover:bg-[var(--ui-bg-panel-muted)]">
+                <Icon name={"auto_awesome"} className="text-[16px] leading-none text-purple-600" />
+              </span>
+            ) : (
+              <>
+                <span className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-[var(--ui-border-default)] transition-colors duration-200 group-hover:bg-purple-500" />
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] text-purple-500 opacity-0 transition-opacity duration-200 pointer-events-none select-none group-hover:opacity-100">
+                  ▲
+                </span>
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-purple-500 opacity-0 transition-opacity duration-200 pointer-events-none select-none group-hover:opacity-100">
+                  ▼
+                </span>
+              </>
+            )}
+          </button>
+
+          <div
+            className="flex shrink-0 items-center overflow-hidden"
+            style={{
+              transformOrigin: 'left center',
+              transform: isDockCollapsed ? 'rotateY(90deg) scaleX(0)' : 'rotateY(0deg) scaleX(1)',
+              opacity: isDockCollapsed ? 0 : 1,
+              width: isDockCollapsed ? 0 : 'auto',
+              visibility: isDockCollapsed ? 'hidden' : 'visible',
+              transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), opacity 420ms ease, width 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <button
+              className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[13px] leading-none text-purple-600"
+              type="button"
+              onClick={onOpenAgentDrawer}
+              title={t('editor_workspace.copilot_button')}
+            >
+              <Icon name={"auto_awesome"} className="text-[14px] leading-none" />
+              {t('editor_workspace.copilot_button')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -540,6 +617,13 @@ const EditorWorkspaceShellComponent: React.FC<EditorWorkspaceShellProps> = ({
             onToast={onToast}
             ensureDocument={onRunGlmOcr}
             onDocumentResolved={onDocumentChange}
+          />
+        ) : activeStudioView === 'lecture' && activeLecturePayload && workroomId ? (
+          <LectureStudioPanel
+            backendBaseUrl={backendBaseUrl}
+            workroomId={workroomId}
+            tab={activeLecturePayload}
+            onToast={onToast}
           />
         ) : activeStudioView === 'preview' ? (
           <div className="flex h-full min-h-0 w-full flex-col">

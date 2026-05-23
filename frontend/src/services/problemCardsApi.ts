@@ -39,6 +39,7 @@ export interface ProblemCardLearningDetailDto {
     repeated_mistakes: string[]
     progress_signal: string | null
     progress_summary: string | null
+    generation_recommendation: Record<string, unknown>
     updated_at: string
   }
   gradingRecords: Array<{

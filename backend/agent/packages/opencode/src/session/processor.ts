@@ -36,7 +36,14 @@ export namespace SessionProcessor {
     | { type: "part_added"; messageID: MessageID; part: MessageV2.Part }
     | { type: "part_updated"; messageID: MessageID; part: MessageV2.Part }
     | { type: "part_completed"; messageID: MessageID; part: MessageV2.Part }
-    | { type: "part_delta"; messageID: MessageID; partID: PartID; field: string; delta: string }
+    | {
+        type: "part_delta"
+        messageID: MessageID
+        partID: PartID
+        partType?: MessageV2.Part["type"]
+        field: string
+        delta: string
+      }
 
   export type StreamSink = {
     onEvent: (event: StreamEvent) => void | Promise<void>
@@ -316,6 +323,7 @@ export namespace SessionProcessor {
                 sessionID: ctx.reasoningMap[value.id].sessionID,
                 messageID: ctx.reasoningMap[value.id].messageID,
                 partID: ctx.reasoningMap[value.id].id,
+                partType: "reasoning",
                 field: "text",
                 delta: value.text,
               })
@@ -323,6 +331,7 @@ export namespace SessionProcessor {
                 type: "part_delta",
                 messageID: ctx.reasoningMap[value.id].messageID,
                 partID: ctx.reasoningMap[value.id].id,
+                partType: "reasoning",
                 field: "text",
                 delta: value.text,
               })
@@ -561,6 +570,7 @@ export namespace SessionProcessor {
                 sessionID: ctx.currentText.sessionID,
                 messageID: ctx.currentText.messageID,
                 partID: ctx.currentText.id,
+                partType: "text",
                 field: "text",
                 delta: value.text,
               })
@@ -568,6 +578,7 @@ export namespace SessionProcessor {
                 type: "part_delta",
                 messageID: ctx.currentText.messageID,
                 partID: ctx.currentText.id,
+                partType: "text",
                 field: "text",
                 delta: value.text,
               })

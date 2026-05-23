@@ -17,12 +17,17 @@ const targetSchema = baseScopeSchema.extend({
 
 const getCardSchema = baseScopeSchema.extend({
   cardID: z.string().min(1),
+  full: z.boolean().optional(),
+})
+
+const searchCardsSchema = targetSchema.extend({
+  query: z.string().min(1),
 })
 
 export const studioQuestionCardsCommands = [
   "resolve-target",
   "get-document",
-  "list-container-cards",
+  "search-cards",
   "get-card",
 ] as const
 
@@ -41,23 +46,31 @@ export function asStructuredError(error: unknown): StudioCommandError {
   if (message.startsWith("TARGET_STUDIO_DOCUMENT_UNRESOLVED")) return { code: "TARGET_STUDIO_DOCUMENT_UNRESOLVED", message }
   if (message.startsWith("TARGET_STUDIO_DOCUMENT_AMBIGUOUS")) return { code: "TARGET_STUDIO_DOCUMENT_AMBIGUOUS", message, detail }
   if (message.startsWith("QUESTION_NUMBER_OUT_OF_RANGE")) return { code: "QUESTION_NUMBER_OUT_OF_RANGE", message, detail }
+  if (message.startsWith("DEPRECATED_COMMAND")) return { code: "DEPRECATED_COMMAND", message, detail }
+  if (message.startsWith("MISSING_REQUIRED_ARGUMENT")) return { code: "MISSING_REQUIRED_ARGUMENT", message, detail }
   if (message.startsWith("INVALID_ARGUMENT")) return { code: "INVALID_ARGUMENT", message, detail }
   if (message.includes("Studio question card not found")) return { code: "TARGET_CARD_NOT_FOUND", message }
   return { code: "COMMAND_EXECUTION_FAILED", message, detail }
 }
 
-function compactTextPreview(text: string, max = 80) {
-  const normalized = text.replace(/\s+/g, " ").trim()
-  return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1)}…`
-}
-
-function toCompactCard(card: { id: string; sequenceIndex: number; text: string; page?: number | null }) {
+function toCompactCard(card: {
+  cardID: string
+  sequenceIndex: number
+  stemPreview: string
+  questionType?: string | null
+  difficulty?: string | null
+  masteryLevel?: string | null
+  updatedAt: string
+}) {
   return {
-    id: card.id,
+    cardID: card.cardID,
     questionNumber: card.sequenceIndex + 1,
     sequenceIndex: card.sequenceIndex,
-    page: card.page ?? null,
-    preview: compactTextPreview(card.text),
+    stemPreview: card.stemPreview,
+    questionType: card.questionType ?? null,
+    difficulty: card.difficulty ?? null,
+    masteryLevel: card.masteryLevel ?? null,
+    updatedAt: card.updatedAt,
   }
 }
 
@@ -91,18 +104,20 @@ export async function executeStudioQuestionCardsCommand(command: StudioQuestionC
       })
       return { ...target, document }
     }
-    case "list-container-cards": {
-      const input = targetSchema.parse(payload)
+    case "search-cards": {
+      const input = searchCardsSchema.parse(payload)
       const target = await resolveExistingTarget(input)
-      const cards = await StudioQuestionCardApi.listStudioQuestionCards({
+      const cards = await StudioQuestionCardApi.searchStudioQuestionCards({
         userID: input.userID,
         workroomID: input.workroomID,
         studioDocumentID: target.studioDocumentID,
+        query: input.query,
       })
       return { ...target, cards: cards.map(toCompactCard) }
     }
     case "get-card": {
-      return StudioQuestionCardApi.getStudioQuestionCard(getCardSchema.parse(payload))
+      const input = getCardSchema.parse(payload)
+      return StudioQuestionCardApi.getStudioQuestionCard(input)
     }
     default: {
       const exhaustive: never = command

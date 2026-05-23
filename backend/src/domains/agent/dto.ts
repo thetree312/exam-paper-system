@@ -522,18 +522,22 @@ export function mapAgentQuestionAskedFact(input: unknown): AgentQuestionAskedFac
     questions: questions.map((item) => {
       const question = asRecord(item) ?? {}
       const options = Array.isArray(question.options) ? question.options : []
-      return {
-        question: asString(question.question) ?? "",
-        header: asString(question.header) ?? "",
-        options: options.map((option) => {
+      const normalizedOptions: AgentQuestionAskedFactDto["questions"][number]["options"] = options
+        .map((option) => {
           const normalized = asRecord(option) ?? {}
           return {
             label: asString(normalized.label) ?? "",
             description: asString(normalized.description) ?? "",
           }
-        }),
+        })
+        .filter((option) => option.label && option.description)
+      const allowsCustom = question.custom !== false
+      return {
+        question: asString(question.question) ?? "",
+        header: asString(question.header) ?? "",
+        options: normalizedOptions,
         multiple: question.multiple === true ? true : undefined,
-        custom: question.custom === true ? true : undefined,
+        custom: allowsCustom ? true : undefined,
       }
     }),
     tool: tool

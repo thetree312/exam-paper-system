@@ -387,7 +387,7 @@
       "ocr": "OCR & Parsing"
     },
     "capability_label": {
-      "question_split": "Question Splitting",
+      "question_split": "Split Question Cards",
       "question_grading": "Smart Grading",
       "flashcard_generation": "Flashcard Generation",
       "flashcard_long_outline": "Long Flashcard Outline",
@@ -643,8 +643,14 @@
     "version_label": "Version {{current}}/{{total}}",
     "version_old": "Old",
     "button_delete": "Delete",
-    "button_split": "Smart Split",
-    "button_split_in_progress": "Smart split in progress",
+    "button_split": "Split Question Cards",
+    "button_split_in_progress": "Splitting Question Cards",
+    "button_learning_profile": "Learning Profile",
+    "learning_profile_title": "Learning Profile",
+    "mastery_level": "Mastery Level",
+    "mastery_score": "Mastery Score",
+    "loading": "Loading...",
+    "load_failed": "Failed to load",
     "button_send_to_copilot": "Send to Ordis",
     "button_copy": "Copy",
     "grading_status": {

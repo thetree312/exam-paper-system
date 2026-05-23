@@ -70,6 +70,7 @@ export const questionHandlers = Layer.unwrap(
       yield* svc.reply({
         requestID: ctx.params.requestID,
         answers: ctx.payload.answers,
+        freeText: ctx.payload.freeText ?? undefined,
       })
       return true
     })

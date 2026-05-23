@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { QuestionEditor } from '../QuestionEditor'
 
 import { useAgentSync } from '../hooks/useAgentSync'
-import { listStudioQuestionCards } from '../services/studioApi'
+import { getStudioQuestionCardDetail, listStudioQuestionCards, type StudioQuestionCardDetailDto } from '../services/studioApi'
 
 import { MarkdownWithMath } from './MarkdownWithMath'
 
@@ -172,6 +172,11 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 }) => {
   const { t } = useTranslation('common')
   const [mathInputEnabled, setMathInputEnabled] = useState(false)
+  const [cardIdBySequence, setCardIdBySequence] = useState<Record<number, string>>({})
+  const [learningDetailByCardId, setLearningDetailByCardId] = useState<Record<string, StudioQuestionCardDetailDto>>({})
+  const [learningLoadingCardId, setLearningLoadingCardId] = useState<string | null>(null)
+  const [learningHoverCardId, setLearningHoverCardId] = useState<string | null>(null)
+  const [learningOpenCardId, setLearningOpenCardId] = useState<string | null>(null)
 
   const {
 
@@ -222,6 +227,30 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
       cancelled = true
     }
   }, [backendBaseUrl, modelSettingsRevision])
+
+  useEffect(() => {
+    if (!syncedStudioDocumentId || !isReady || !workroomId) return
+    let cancelled = false
+    void listStudioQuestionCards(backendBaseUrl, {
+      workroomID: String(workroomId),
+      studioDocumentID: String(syncedStudioDocumentId),
+    })
+      .then((cards) => {
+        if (cancelled) return
+        const next: Record<number, string> = {}
+        for (const card of cards) {
+          next[card.sequenceIndex] = card.id
+        }
+        setCardIdBySequence(next)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCardIdBySequence({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [backendBaseUrl, isReady, syncedStudioDocumentId, workroomId])
 
 
 
@@ -588,6 +617,33 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
     [documentTitle, onUpdateItem, resolveSequenceIndex, sourceDocumentId, syncedSourceDocumentId, syncedStudioDocumentId, syncDebounced],
 
+  )
+
+  const resolveStudioCardId = useCallback(
+    (item: AggregatedOcrItem, fallbackIndex: number) => {
+      const sequenceIndex = item.questionMeta?.sequenceIndex ?? fallbackIndex
+      return typeof sequenceIndex === 'number' ? cardIdBySequence[sequenceIndex] ?? null : null
+    },
+    [cardIdBySequence],
+  )
+
+  const ensureLearningDetail = useCallback(
+    async (cardId: string) => {
+      if (learningDetailByCardId[cardId]) return learningDetailByCardId[cardId]
+      if (!workroomId) return null
+      setLearningLoadingCardId(cardId)
+      try {
+        const detail = await getStudioQuestionCardDetail(backendBaseUrl, {
+          workroomID: String(workroomId),
+          cardID: cardId,
+        })
+        setLearningDetailByCardId((prev) => ({ ...prev, [cardId]: detail }))
+        return detail
+      } finally {
+        setLearningLoadingCardId((prev) => (prev === cardId ? null : prev))
+      }
+    },
+    [backendBaseUrl, learningDetailByCardId, workroomId],
   )
 
 
@@ -1260,21 +1316,21 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
+                      className="size-7 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center disabled:opacity-40"
 
                       onClick={() => handlePageChange(activePageIndex - 1)}
 
                       disabled={activePageIndex <= 0}
+                      title={t('editor_workspace.prev_question')}
 
                     >
-
-                      {t('editor_workspace.prev_question')}
+                      <Icon name="chevron_left" className="text-[16px]" />
 
                     </button>
 
                     <span className="font-medium text-[var(--ui-text-primary)]">
 
-                      {t('editor_workspace.question_card', { current: activePageIndex + 1, total: totalPages })}
+                      {`${activePageIndex + 1}/${totalPages}`}
 
                     </span>
 
@@ -1282,15 +1338,15 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
 
                       type="button"
 
-                      className="px-2 py-1 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] disabled:opacity-40"
+                      className="size-7 rounded-full border border-[var(--ui-border-default)] hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center disabled:opacity-40"
 
                       onClick={() => handlePageChange(activePageIndex + 1)}
 
                       disabled={activePageIndex >= totalPages - 1}
+                      title={t('editor_workspace.next_question')}
 
                     >
-
-                      {t('editor_workspace.next_question')}
+                      <Icon name="chevron_right" className="text-[16px]" />
 
                     </button>
 
@@ -1413,6 +1469,50 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
                     </button>
 
                   )}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center transition"
+                      title={t('editor_workspace.button_learning_profile')}
+                      onMouseEnter={() => {
+                        const cardId = resolveStudioCardId(item, index)
+                        if (!cardId) return
+                        setLearningHoverCardId(cardId)
+                        void ensureLearningDetail(cardId)
+                      }}
+                      onMouseLeave={() => setLearningHoverCardId((prev) => (prev === resolveStudioCardId(item, index) ? null : prev))}
+                      onClick={() => {
+                        const cardId = resolveStudioCardId(item, index)
+                        if (!cardId) return
+                        setLearningOpenCardId(cardId)
+                        void ensureLearningDetail(cardId)
+                      }}
+                    >
+                      <Icon name={"inventory_2"} className="text-[18px]" />
+                    </button>
+                    {(() => {
+                      const cardId = resolveStudioCardId(item, index)
+                      if (!cardId || learningHoverCardId !== cardId || learningOpenCardId === cardId) return null
+                      const detail = learningDetailByCardId[cardId]
+                      const currentState = (detail?.learningProfile as Record<string, unknown> | undefined)?.currentState as Record<string, unknown> | null
+                      const learningState = (detail?.learningProfile as Record<string, unknown> | undefined)?.learningState as Record<string, unknown> | null
+                      const masteryLevel = String((currentState?.mastery_level ?? learningState?.mastery_level ?? 'unknown'))
+                      const masteryScore = Number((currentState?.mastery_score ?? learningState?.mastery_score ?? 0))
+                      return (
+                        <div className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-3 shadow-lg">
+                          <div className="text-xs font-semibold mb-2">{t('editor_workspace.learning_profile_title')}</div>
+                          {learningLoadingCardId === cardId && !detail ? (
+                            <div className="text-xs text-[var(--ui-text-primary)] opacity-75">{t('editor_workspace.loading')}</div>
+                          ) : (
+                            <div className="text-xs space-y-1">
+                              <div>{t('editor_workspace.mastery_level')}: {masteryLevel}</div>
+                              <div>{t('editor_workspace.mastery_score')}: {Number.isFinite(masteryScore) ? masteryScore : 0}</div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
 
                   <button
 
@@ -1721,6 +1821,63 @@ export const AgentWorkspacePanel: React.FC<AgentWorkspacePanelProps> = React.mem
         </article>
 
       )})}
+
+      {learningOpenCardId && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4" onClick={() => setLearningOpenCardId(null)}>
+          <div
+            className="w-full max-w-2xl max-h-[80vh] overflow-auto rounded-xl border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">{t('editor_workspace.learning_profile_title')}</h3>
+              <button
+                type="button"
+                className="size-8 rounded-full hover:bg-[var(--ui-bg-panel-muted)] inline-flex items-center justify-center"
+                onClick={() => setLearningOpenCardId(null)}
+              >
+                <Icon name="close" className="text-[18px]" />
+              </button>
+            </div>
+            {(() => {
+              const detail = learningDetailByCardId[learningOpenCardId]
+              const profile = (detail?.learningProfile ?? {}) as Record<string, unknown>
+              const currentState = (profile.currentState ?? profile.learningState ?? null) as Record<string, unknown> | null
+              const attempts = (profile.raw_recent_attempts ?? profile.attempts ?? []) as Array<Record<string, unknown>>
+              const summaries = (profile.summaries ?? {}) as Record<string, unknown>
+              const monthly = (summaries.monthly_summaries ?? []) as Array<Record<string, unknown>>
+              const yearly = (summaries.yearly_summaries ?? []) as Array<Record<string, unknown>>
+              if (learningLoadingCardId === learningOpenCardId && !detail) {
+                return <div className="text-sm text-[var(--ui-text-primary)] opacity-80">{t('editor_workspace.loading')}</div>
+              }
+              if (!detail) {
+                return <div className="text-sm text-red-500">{t('editor_workspace.load_failed')}</div>
+              }
+              return (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>Mastery: {String(currentState?.mastery_level ?? 'unknown')}</div>
+                    <div>Score: {Number(currentState?.mastery_score ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="font-medium mb-1">Recent Attempts</div>
+                    <div className="space-y-1">
+                      {attempts.slice(0, 5).map((attempt, attemptIndex) => (
+                        <div key={String(attempt.id ?? attemptIndex)} className="rounded-md border border-[var(--ui-border-default)] px-2 py-1 text-xs">
+                          #{Number(attempt.attempt_index ?? attemptIndex + 1)} · {String(attempt.judgement ?? 'uncertain')} · {Number(attempt.score_percent ?? 0)}%
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>Monthly summaries: {monthly.length}</div>
+                    <div>Yearly summaries: {yearly.length}</div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
 
     </div>
 

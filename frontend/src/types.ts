@@ -79,7 +79,7 @@ export interface WorkroomRuntimeState {
   right_panel_state_json: Record<string, unknown>
 }
 
-export type StudioTabKind = 'editor' | 'mindmap' | 'flashcard' | 'preview'
+export type StudioTabKind = 'editor' | 'mindmap' | 'flashcard' | 'preview' | 'lecture'
 
 export interface StudioPreviewTabPayload {
   path: string
@@ -91,12 +91,27 @@ export interface StudioPreviewTabPayload {
   saveError?: string | null
 }
 
+export interface StudioLectureTabPayload {
+  lectureSessionId: string
+  cardID: string
+  studioDocumentID: string
+  originAgentSessionID?: string | null
+  title: string
+  path?: string
+  savedContent?: string
+  draftContent?: string
+  isDirty?: boolean
+  viewMode?: 'edit' | 'markdown-read'
+  lastSavedAt?: string | null
+  saveError?: string | null
+}
+
 export interface StudioWorkspaceTab {
   id: string
   kind: StudioTabKind
   title: string
   closable: boolean
-  payload?: StudioPreviewTabPayload
+  payload?: StudioPreviewTabPayload | StudioLectureTabPayload
 }
 
 export interface WorkroomSourceBinding {
@@ -647,6 +662,13 @@ export interface AgentQuestionAskedFact {
   } | null
 }
 
+export interface AgentQuestionRepliedFact {
+  requestId: string
+  sessionId: string
+  answers: string[][]
+  freeText?: Array<string | null>
+}
+
 export interface AgentCitationFocus {
   token: number
   citationId: string
@@ -1006,10 +1028,22 @@ export interface AgUiStudioCardsMutatedEvent {
   }
 }
 
+export interface AgUiLectureLaunchOfferEvent {
+  action: 'lecture.launch_offer'
+  payload: {
+    lectureSessionId: string
+    cardID: string
+    studioDocumentID: string
+    originAgentSessionID?: string | null
+    title: string
+  }
+}
+
 export type AgUiEvent =
   | AgUiQuestionReplaceEvent
   | AgUiQuestionInsertEvent
   | AgUiStudioCardsMutatedEvent
+  | AgUiLectureLaunchOfferEvent
   | (Record<string, unknown> & { action: string })
 
 export interface GradeQuestionPayload {

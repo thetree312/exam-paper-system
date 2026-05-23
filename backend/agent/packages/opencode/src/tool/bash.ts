@@ -380,6 +380,7 @@ export const BashTool = Tool.define(
       return {
         ...process.env,
         ...extra.env,
+        OPENCODE_SESSION_ID: ctx.sessionID,
       }
     })
 

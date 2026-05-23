@@ -500,6 +500,7 @@ export namespace MessageV2 {
         sessionID: SessionID.zod,
         messageID: MessageID.zod,
         partID: PartID.zod,
+        partType: z.string().optional(),
         field: z.string(),
         delta: z.string(),
       }),

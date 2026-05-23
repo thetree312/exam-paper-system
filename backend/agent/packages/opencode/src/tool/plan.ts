@@ -33,7 +33,7 @@ export const PlanExitTool = Tool.define(
           const instance = yield* InstanceState.context
           const info = yield* session.get(ctx.sessionID)
           const plan = path.relative(instance.worktree, Session.plan(info, instance))
-          const answers = yield* question.ask({
+          const responses = yield* question.ask({
             sessionID: ctx.sessionID,
             questions: [
               {
@@ -49,7 +49,7 @@ export const PlanExitTool = Tool.define(
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
           })
 
-          if (answers[0]?.[0] === "No") yield* new Question.RejectedError()
+          if (responses[0]?.answers[0] === "No") yield* new Question.RejectedError()
 
           const model = getLastModel(ctx.sessionID) ?? (yield* provider.defaultModel())
 

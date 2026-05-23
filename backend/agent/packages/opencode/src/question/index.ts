@@ -75,9 +75,20 @@ export namespace Question {
     .pipe(withStatics((s) => ({ zod: zod(s) })))
   export type Answer = Schema.Schema.Type<typeof Answer>
 
+  export const Response = Schema.Struct({
+    answers: Answer,
+    freeText: Schema.NullOr(Schema.String).annotate({
+      description: "Raw free-form answer entered by the user, if any",
+    }),
+  })
+  export type Response = Schema.Schema.Type<typeof Response>
+
   export class Reply extends Schema.Class<Reply>("QuestionReply")({
     answers: Schema.Array(Answer).annotate({
       description: "User answers in order of questions (each answer is an array of selected labels)",
+    }),
+    freeText: Schema.optional(Schema.Array(Schema.NullOr(Schema.String))).annotate({
+      description: "Raw free-form answers in question order (null when no custom text was entered)",
     }),
   }) {
     static readonly zod = zod(this)
@@ -87,6 +98,7 @@ export namespace Question {
     sessionID: SessionID,
     requestID: QuestionID,
     answers: Schema.Array(Answer),
+    freeText: Schema.Array(Schema.NullOr(Schema.String)),
   }) {}
 
   class Rejected extends Schema.Class<Rejected>("QuestionRejected")({
@@ -108,7 +120,7 @@ export namespace Question {
 
   interface PendingEntry {
     info: Request
-    deferred: Deferred.Deferred<ReadonlyArray<Answer>, RejectedError>
+    deferred: Deferred.Deferred<ReadonlyArray<Response>, RejectedError>
   }
 
   interface State {
@@ -122,8 +134,12 @@ export namespace Question {
       sessionID: SessionID
       questions: ReadonlyArray<Info>
       tool?: Tool
-    }) => Effect.Effect<ReadonlyArray<Answer>, RejectedError>
-    readonly reply: (input: { requestID: QuestionID; answers: ReadonlyArray<Answer> }) => Effect.Effect<void>
+    }) => Effect.Effect<ReadonlyArray<Response>, RejectedError>
+    readonly reply: (input: {
+      requestID: QuestionID
+      answers: ReadonlyArray<Answer>
+      freeText?: ReadonlyArray<string | null>
+    }) => Effect.Effect<void>
     readonly reject: (requestID: QuestionID) => Effect.Effect<void>
     readonly list: () => Effect.Effect<ReadonlyArray<Request>>
   }
@@ -162,7 +178,7 @@ export namespace Question {
         const id = QuestionID.ascending()
         log.info("asking", { id, questions: input.questions.length })
 
-        const deferred = yield* Deferred.make<ReadonlyArray<Answer>, RejectedError>()
+        const deferred = yield* Deferred.make<ReadonlyArray<Response>, RejectedError>()
         const info = Schema.decodeUnknownSync(Request)({
           id,
           sessionID: input.sessionID,
@@ -183,6 +199,7 @@ export namespace Question {
       const reply = Effect.fn("Question.reply")(function* (input: {
         requestID: QuestionID
         answers: ReadonlyArray<Answer>
+        freeText?: ReadonlyArray<string | null>
       }) {
         const pending = (yield* InstanceState.get(state)).pending
         const existing = pending.get(input.requestID)
@@ -191,13 +208,18 @@ export namespace Question {
           return
         }
         pending.delete(input.requestID)
-        log.info("replied", { requestID: input.requestID, answers: input.answers })
+        const responses = input.answers.map((answers, index) => ({
+          answers,
+          freeText: input.freeText?.[index] ?? null,
+        }))
+        log.info("replied", { requestID: input.requestID, responses })
         yield* bus.publish(Event.Replied, {
           sessionID: existing.info.sessionID,
           requestID: existing.info.id,
           answers: input.answers,
+          freeText: responses.map((item) => item.freeText),
         })
-        yield* Deferred.succeed(existing.deferred, input.answers)
+        yield* Deferred.succeed(existing.deferred, responses)
       })
 
       const reject = Effect.fn("Question.reject")(function* (requestID: QuestionID) {

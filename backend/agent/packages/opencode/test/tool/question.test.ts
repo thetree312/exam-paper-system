@@ -20,6 +20,7 @@ const ctx = {
   ask: () => Effect.void,
 }
 
+
 const it = testEffect(
   Layer.mergeAll(Question.defaultLayer, CrossSpawnSpawner.defaultLayer, Truncate.defaultLayer, Agent.defaultLayer),
 )
@@ -54,7 +55,7 @@ describe("tool.question", () => {
 
         const fiber = yield* tool.execute({ questions }, ctx).pipe(Effect.forkScoped)
         const item = yield* pending(question)
-        yield* question.reply({ requestID: item.id, answers: [["Red"]] })
+        yield* question.reply({ requestID: item.id, answers: [["Red"]], freeText: [null] })
 
         const result = yield* Fiber.join(fiber)
         expect(result.title).toBe("Asked 1 question")
@@ -78,10 +79,34 @@ describe("tool.question", () => {
 
         const fiber = yield* tool.execute({ questions }, ctx).pipe(Effect.forkScoped)
         const item = yield* pending(question)
-        yield* question.reply({ requestID: item.id, answers: [["Dog"]] })
+        yield* question.reply({ requestID: item.id, answers: [["Dog"]], freeText: [null] })
 
         const result = yield* Fiber.join(fiber)
         expect(result.output).toContain(`"What is your favorite animal?"="Dog"`)
+      }),
+    ),
+  )
+
+  it.live("should include free text in the output", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const question = yield* Question.Service
+        const toolInfo = yield* QuestionTool
+        const tool = yield* toolInfo.init()
+        const questions = [
+          {
+            question: "How do you feel?",
+            header: "Feel",
+            options: [{ label: "Good", description: "Feeling good" }],
+          },
+        ]
+
+        const fiber = yield* tool.execute({ questions }, ctx).pipe(Effect.forkScoped)
+        const item = yield* pending(question)
+        yield* question.reply({ requestID: item.id, answers: [["Good"]], freeText: ["I do not know"] })
+
+        const result = yield* Fiber.join(fiber)
+        expect(result.output).toContain(`free text: "I do not know"`)
       }),
     ),
   )

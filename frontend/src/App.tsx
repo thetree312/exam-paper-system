@@ -29,11 +29,14 @@ import { createTextMathDocument } from './lib/mathContent'
 import { useAppStore } from './store/appStore'
 import { buildOcrItemFromStudioQuestionCard } from './utils/studioQuestionCards'
 import { applyThemeToDocument } from './lib/theme'
+import { closeLectureSession } from './services/lectureApi'
 import type {
   AggregatedOcrItem,
+  AgUiEvent,
   AgentCitationAnchor,
   AgentCitationFocus,
   AgentSendPayload,
+  StudioLectureTabPayload,
   StudioTabKind,
   StudioWorkspaceTab,
   StatusMessageKey,
@@ -54,6 +57,7 @@ function studioTabTitle(kind: StudioTabKind) {
   if (kind === 'mindmap') return '思维导图'
   if (kind === 'flashcard') return '闪卡'
   if (kind === 'preview') return '文件预览'
+  if (kind === 'lecture') return '题目讲解'
   return '题卡'
 }
 
@@ -67,15 +71,27 @@ function buildStudioTab(kind: StudioTabKind, payload?: StudioWorkspaceTab['paylo
     }
   }
   return {
-    id: kind === 'preview' ? `preview:${payload?.path ?? 'file'}` : kind,
+    id:
+      kind === 'preview'
+        ? `preview:${(payload as { path?: string } | undefined)?.path ?? 'file'}`
+        : kind === 'lecture'
+          ? `lecture:${(payload as StudioLectureTabPayload | undefined)?.lectureSessionId ?? 'session'}`
+          : kind,
     kind,
-    title: kind === 'preview' && payload?.path ? payload.path.split('/').pop() || payload.path : studioTabTitle(kind),
+    title:
+      kind === 'preview' && payload && 'path' in payload && payload.path
+        ? payload.path.split('/').pop() || payload.path
+        : kind === 'lecture' && payload && 'title' in payload
+          ? payload.title
+          : studioTabTitle(kind),
     closable: true,
     payload:
       kind === 'preview' && payload
         ? {
-            ...payload,
-            isDirty: payload.draftContent !== payload.savedContent,
+            ...(payload as NonNullable<StudioWorkspaceTab['payload']> & { draftContent: string; savedContent: string }),
+            isDirty:
+              (payload as { draftContent: string; savedContent: string }).draftContent !==
+              (payload as { draftContent: string; savedContent: string }).savedContent,
           }
         : payload,
   }
@@ -91,7 +107,7 @@ function normalizeStudioTabs(
       if (!entry || typeof entry !== 'object') continue
       const id = typeof (entry as Record<string, unknown>).id === 'string' ? String((entry as Record<string, unknown>).id) : ''
       const kind = (entry as Record<string, unknown>).kind
-      if (!id || (kind !== 'editor' && kind !== 'mindmap' && kind !== 'flashcard' && kind !== 'preview')) continue
+      if (!id || (kind !== 'editor' && kind !== 'mindmap' && kind !== 'flashcard' && kind !== 'preview' && kind !== 'lecture')) continue
       const payload = (entry as Record<string, unknown>).payload
       const previewPayload: StudioWorkspaceTab['payload'] =
         kind === 'preview' && payload && typeof payload === 'object'
@@ -126,13 +142,47 @@ function normalizeStudioTabs(
                 (payload as Record<string, unknown>).viewMode === 'markdown-read'
                   ? 'markdown-read'
                   : 'edit',
+              }
+            : undefined
+      const lecturePayload: StudioWorkspaceTab['payload'] =
+        kind === 'lecture' && payload && typeof payload === 'object'
+          ? {
+              lectureSessionId:
+                typeof (payload as Record<string, unknown>).lectureSessionId === 'string'
+                  ? String((payload as Record<string, unknown>).lectureSessionId)
+                  : '',
+              cardID:
+                typeof (payload as Record<string, unknown>).cardID === 'string'
+                  ? String((payload as Record<string, unknown>).cardID)
+                  : '',
+              studioDocumentID:
+                typeof (payload as Record<string, unknown>).studioDocumentID === 'string'
+                  ? String((payload as Record<string, unknown>).studioDocumentID)
+                  : '',
+              originAgentSessionID:
+                typeof (payload as Record<string, unknown>).originAgentSessionID === 'string'
+                  ? String((payload as Record<string, unknown>).originAgentSessionID)
+                  : null,
+              title:
+                typeof (payload as Record<string, unknown>).title === 'string'
+                  ? String((payload as Record<string, unknown>).title)
+                  : '题目讲解',
             }
           : undefined
       if (kind === 'preview' && (!previewPayload || !previewPayload.path.trim())) {
         continue
       }
+      if (
+        kind === 'lecture' &&
+        (!lecturePayload ||
+          !lecturePayload.lectureSessionId.trim() ||
+          !lecturePayload.cardID.trim() ||
+          !lecturePayload.studioDocumentID.trim())
+      ) {
+        continue
+      }
       parsed.push({
-        ...buildStudioTab(kind, previewPayload),
+        ...buildStudioTab(kind, kind === 'lecture' ? lecturePayload : previewPayload),
         id,
       })
     }
@@ -144,7 +194,7 @@ function normalizeStudioTabs(
     byId.set(tab.id, tab)
   }
 
-  if (fallbackActiveKind !== 'editor' && fallbackActiveKind !== 'preview' && !byId.has(fallbackActiveKind)) {
+  if (fallbackActiveKind !== 'editor' && fallbackActiveKind !== 'preview' && fallbackActiveKind !== 'lecture' && !byId.has(fallbackActiveKind)) {
     byId.set(fallbackActiveKind, buildStudioTab(fallbackActiveKind))
   }
 
@@ -277,7 +327,7 @@ const App: React.FC = () => {
       active_extraction_session_id?: string | number
       open_document_ids?: string[]
       center_panel_state_json: {
-        studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview'
+        studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview' | 'lecture'
         studio_tabs?: StudioWorkspaceTab[]
         active_studio_tab_id?: string
         studio_data_source_mode?: StudioDataSourceMode
@@ -347,8 +397,8 @@ const App: React.FC = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [workspaceSearchKeyword, setWorkspaceSearchKeyword] = useState('')
 
-  const [statusMessageKey, setStatusMessageKey] = useState<StatusMessageKey>('upload_prompt')
-  const [statusValues, setStatusValues] = useState<Record<string, string | number> | undefined>()
+  const [_statusMessageKey, setStatusMessageKey] = useState<StatusMessageKey>('upload_prompt')
+  const [_statusValues, setStatusValues] = useState<Record<string, string | number> | undefined>()
 
   const setStatusMessage: StatusMessageSetter = (key, values) => {
     setStatusMessageKey(key)
@@ -369,7 +419,7 @@ const App: React.FC = () => {
         active_extraction_session_id?: string | number
         open_document_ids?: string[]
         center_panel_state_json: {
-          studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview'
+          studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview' | 'lecture'
           studio_tabs?: StudioWorkspaceTab[]
           active_studio_tab_id?: string
           studio_data_source_mode?: StudioDataSourceMode
@@ -562,7 +612,7 @@ const App: React.FC = () => {
   }, [])
 
   const openStudioTab = useCallback((kind: StudioTabKind) => {
-    if (kind === 'preview') return
+    if (kind === 'preview' || kind === 'lecture') return
     const targetId = kind === 'editor' ? EDITOR_TAB_ID : kind
     setStudioTabs((prev) => {
       if (prev.some((tab) => tab.id === targetId)) return prev
@@ -570,6 +620,31 @@ const App: React.FC = () => {
     })
     setActiveStudioTabId(targetId)
     setLastActiveStudioTabIds((prev) => [...prev.filter((id) => id !== targetId), targetId])
+  }, [])
+
+  const openLectureTab = useCallback((payload: StudioLectureTabPayload) => {
+    const tabId = `lecture:${payload.lectureSessionId}`
+    setStudioTabs((prev) => {
+      const existing = prev.find((tab) => tab.id === tabId)
+      if (existing) {
+        return prev.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                title: payload.title,
+                payload,
+              }
+            : tab,
+        )
+      }
+      return [...prev, buildStudioTab('lecture', payload)]
+    })
+    setActiveStudioTabId(tabId)
+    setLastActiveStudioTabIds((prev) => [...prev.filter((id) => id !== tabId), tabId])
+    setActiveStudioDocumentId(payload.studioDocumentID)
+    if (payload.originAgentSessionID?.trim()) {
+      setAgentSessionId(payload.originAgentSessionID)
+    }
   }, [])
 
   const openStudioPreviewTab = useCallback((path: string, content: string) => {
@@ -630,39 +705,75 @@ const App: React.FC = () => {
     if (tabId === EDITOR_TAB_ID) return
     void (async () => {
       const tab = studioTabs.find((item) => item.id === tabId)
-      if (tab?.kind === 'preview' && tab.payload?.isDirty) {
-        const action = await requestUnsavedDecision('关闭前保存？', '文件有未保存修改，是否保存后再关闭？')
-        if (action === 'cancel') return
-        if (action === 'save') {
-          if (!workroom?.id || !tab.payload?.path) return
-          try {
-            const savedContent = await saveWorkroomFile(
-              backendBaseUrl,
-              String(workroom.id),
-              tab.payload.path,
-              tab.payload.draftContent ?? '',
-            )
-            setStudioTabs((prev) =>
-              prev.map((item) =>
-                item.id === tabId && item.kind === 'preview' && item.payload?.path
-                  ? {
-                      ...item,
-                      payload: {
-                        ...item.payload,
-                        savedContent,
-                        draftContent: savedContent,
-                        isDirty: false,
-                        lastSavedAt: new Date().toISOString(),
-                        saveError: null,
-                      },
-                    }
-                  : item,
-              ),
-            )
-          } catch {
-            return
+      if (!tab || tab.kind !== 'lecture') {
+        if (tab?.kind === 'preview' && tab.payload?.isDirty) {
+          const action = await requestUnsavedDecision('关闭前保存？', '文件有未保存修改，是否保存后再关闭？')
+          if (action === 'cancel') return
+          if (action === 'save') {
+            if (!workroom?.id || !tab.payload?.path) return
+            try {
+              const savedContent = await saveWorkroomFile(
+                backendBaseUrl,
+                String(workroom.id),
+                tab.payload.path,
+                tab.payload.draftContent ?? '',
+              )
+              setStudioTabs((prev) =>
+                prev.map((item) =>
+                  item.id === tabId && item.kind === 'preview' && item.payload?.path
+                    ? {
+                        ...item,
+                        payload: {
+                          ...item.payload,
+                          savedContent,
+                          draftContent: savedContent,
+                          isDirty: false,
+                          lastSavedAt: new Date().toISOString(),
+                          saveError: null,
+                        },
+                      }
+                    : item,
+                ),
+              )
+            } catch {
+              return
+            }
           }
         }
+        setStudioTabs((prev) => {
+          const remaining = prev.filter((item) => item.id !== tabId)
+          return remaining.some((item) => item.id === EDITOR_TAB_ID)
+            ? remaining
+            : [buildStudioTab('editor'), ...remaining]
+        })
+        setLastActiveStudioTabIds((prev) => {
+          const next = prev.filter((id) => id !== tabId)
+          lastActiveStudioTabIdsRef.current = next
+          return next
+        })
+        setActiveStudioTabId((current) => {
+          if (current !== tabId) return current
+          const fallbackFromHistory = [...lastActiveStudioTabIdsRef.current]
+            .filter((id) => id !== tabId)
+            .reverse()
+            .find(
+              (id) =>
+                id === EDITOR_TAB_ID ||
+                id === 'mindmap' ||
+                id === 'flashcard' ||
+                id.startsWith('preview:') ||
+                id.startsWith('lecture:'),
+            )
+          return fallbackFromHistory ?? EDITOR_TAB_ID
+        })
+        return
+      }
+      const lecturePayload = tab.payload as StudioLectureTabPayload | undefined
+      if (lecturePayload?.lectureSessionId && workroom?.id) {
+        await closeLectureSession(backendBaseUrl, {
+          workroomID: String(workroom.id),
+          lectureSessionId: lecturePayload.lectureSessionId,
+        }).catch(() => {})
       }
       setStudioTabs((prev) => {
         const remaining = prev.filter((item) => item.id !== tabId)
@@ -680,7 +791,14 @@ const App: React.FC = () => {
         const fallbackFromHistory = [...lastActiveStudioTabIdsRef.current]
           .filter((id) => id !== tabId)
           .reverse()
-          .find((id) => id === EDITOR_TAB_ID || id === 'mindmap' || id === 'flashcard' || id.startsWith('preview:'))
+          .find(
+            (id) =>
+              id === EDITOR_TAB_ID ||
+              id === 'mindmap' ||
+              id === 'flashcard' ||
+              id.startsWith('preview:') ||
+              id.startsWith('lecture:'),
+          )
         return fallbackFromHistory ?? EDITOR_TAB_ID
       })
     })()
@@ -1030,7 +1148,11 @@ const App: React.FC = () => {
     appliedRuntimeStateKeyRef.current = runtimeStateKey
 
     const fallbackKind: StudioTabKind =
-      nextView === 'mindmap' || nextView === 'flashcard' || nextView === 'editor' || nextView === 'preview'
+      nextView === 'mindmap' ||
+      nextView === 'flashcard' ||
+      nextView === 'editor' ||
+      nextView === 'preview' ||
+      nextView === 'lecture'
         ? nextView
         : 'editor'
     const normalizedTabState = normalizeStudioTabs(center.studio_tabs, fallbackKind)
@@ -1042,13 +1164,15 @@ const App: React.FC = () => {
       ? restoredActiveTabId
       : normalizedTabState.activeTabId
     let resolvedActiveTabId = effectiveActiveTabId
-    setStudioTabs((prev) => {
-      const previewTabs = prev.filter((tab) => tab.kind === 'preview')
-      const merged = [...normalizedTabState.tabs, ...previewTabs.filter((tab) => !normalizedTabState.tabs.some((base) => base.id === tab.id))]
-      if (activeStudioTabId.startsWith('preview:') && merged.some((tab) => tab.id === activeStudioTabId)) {
-        resolvedActiveTabId = activeStudioTabId
-      } else if (!merged.some((tab) => tab.id === resolvedActiveTabId)) {
-        resolvedActiveTabId = merged[0]?.id ?? EDITOR_TAB_ID
+      setStudioTabs((prev) => {
+        const volatileTabs = prev.filter((tab) => tab.kind === 'preview' || tab.kind === 'lecture')
+        const merged = [...normalizedTabState.tabs, ...volatileTabs.filter((tab) => !normalizedTabState.tabs.some((base) => base.id === tab.id))]
+        if (activeStudioTabId.startsWith('preview:') && merged.some((tab) => tab.id === activeStudioTabId)) {
+          resolvedActiveTabId = activeStudioTabId
+        } else if (activeStudioTabId.startsWith('lecture:') && merged.some((tab) => tab.id === activeStudioTabId)) {
+          resolvedActiveTabId = activeStudioTabId
+        } else if (!merged.some((tab) => tab.id === resolvedActiveTabId)) {
+          resolvedActiveTabId = merged[0]?.id ?? EDITOR_TAB_ID
       }
       return merged
     })
@@ -1521,6 +1645,14 @@ const App: React.FC = () => {
     setActiveStudioDocumentId(id != null ? String(id) : null)
   }, [])
 
+  const handleAgentUiEvent = useCallback((event: AgUiEvent) => {
+    handleAgUiEvent(event)
+  }, [handleAgUiEvent])
+
+  const handleOpenLectureSession = useCallback((payload: StudioLectureTabPayload) => {
+    openLectureTab(payload)
+  }, [openLectureTab])
+
   const handleAgentCitationClick = useCallback((citation: AgentCitationAnchor) => {
     if (
       !citation ||
@@ -1855,7 +1987,8 @@ const App: React.FC = () => {
             width={agentDrawerWidth}
             onResize={setAgentDrawerWidth}
             appendToken={agentAppendToken}
-            onAgUiEvent={handleAgUiEvent}
+            onAgUiEvent={handleAgentUiEvent}
+            onOpenLectureSession={handleOpenLectureSession}
             onAppendTokenConsumed={handleAppendTokenConsumed}
             onDocumentResolved={handleAgentDocumentResolved}
             onSessionResolved={handleAgentSessionResolved}

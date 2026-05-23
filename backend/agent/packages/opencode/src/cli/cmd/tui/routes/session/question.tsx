@@ -45,9 +45,14 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
   function submit() {
     const answers = questions().map((_, i) => store.answers[i] ?? [])
+    const freeText = questions().map((_, i) => {
+      const value = store.custom[i]?.trim() ?? ""
+      return value && (store.answers[i] ?? []).includes(value) ? value : null
+    })
     void sdk.client.question.reply({
       requestID: props.request.id,
       answers,
+      freeText,
     })
   }
 
@@ -70,6 +75,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       void sdk.client.question.reply({
         requestID: props.request.id,
         answers: [[answer]],
+        freeText: custom ? [answer] : [null],
       })
       return
     }

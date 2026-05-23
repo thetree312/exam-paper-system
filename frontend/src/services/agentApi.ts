@@ -35,6 +35,8 @@ export type AgentStreamEvent =
   | { type: 'part_completed'; message_id: string; part: AgentMessagePartFact }
   | { type: 'permission_asked'; request: AgentPermissionAskedFact }
   | { type: 'question_asked'; request: AgentQuestionAskedFact }
+  | { type: 'question_replied'; requestId: string; sessionId: string; answers: string[][]; freeText?: Array<string | null> }
+  | { type: 'question_rejected'; requestId: string; sessionId: string }
   | { type: 'cancelled'; reason?: string }
   | { type: 'error'; error?: string }
   | { type: 'done' }
@@ -344,18 +346,22 @@ function mapQuestionAsked(input: unknown): AgentQuestionAskedFact {
     questions: questions.map((item) => {
       const question = asRecord(item) ?? {}
       const options = Array.isArray(question.options) ? question.options : []
-      return {
-        question: asString(question.question) ?? '',
-        header: asString(question.header) ?? '',
-        options: options.map((option) => {
+      const normalizedOptions: AgentQuestionAskedFact['questions'][number]['options'] = options
+        .map((option) => {
           const normalized = asRecord(option) ?? {}
           return {
             label: asString(normalized.label) ?? '',
             description: asString(normalized.description) ?? '',
           }
-        }),
+        })
+        .filter((option) => option.label && option.description)
+      const allowsCustom = question.custom !== false
+      return {
+        question: asString(question.question) ?? '',
+        header: asString(question.header) ?? '',
+        options: normalizedOptions,
         multiple: question.multiple === true ? true : undefined,
-        custom: question.custom === true ? true : undefined,
+        custom: allowsCustom ? true : undefined,
       }
     }),
     tool: tool
@@ -367,7 +373,7 @@ function mapQuestionAsked(input: unknown): AgentQuestionAskedFact {
   }
 }
 
-function mapEventPayload(raw: unknown, depth = 0): AgentStreamEvent | null {
+export function parseAgentStreamEvent(raw: unknown, depth = 0): AgentStreamEvent | null {
   if (depth > 3) return null
   const event = asRecord(raw)
   if (!event) return null
@@ -414,13 +420,33 @@ function mapEventPayload(raw: unknown, depth = 0): AgentStreamEvent | null {
         request: mapQuestionAsked(customProperties),
       }
     }
+    if (name === 'question.replied') {
+      return {
+        type: 'question_replied',
+        requestId: asString(customProperties.requestID) ?? '',
+        sessionId: asString(customProperties.sessionID) ?? '',
+        answers: Array.isArray(customProperties.answers)
+          ? customProperties.answers.map((entry) => (Array.isArray(entry) ? entry.map((item) => String(item)) : []))
+          : [],
+        freeText: Array.isArray(customProperties.freeText)
+          ? customProperties.freeText.map((item) => (typeof item === 'string' ? item : null))
+          : undefined,
+      }
+    }
+    if (name === 'question.rejected') {
+      return {
+        type: 'question_rejected',
+        requestId: asString(customProperties.requestID) ?? '',
+        sessionId: asString(customProperties.sessionID) ?? '',
+      }
+    }
     return null
   }
 
   if (type === 'RAW') {
     const nested = asRecord(event.event) ?? asRecord(event.rawEvent)
     if (!nested) return null
-    return mapEventPayload(nested, depth + 1)
+    return parseAgentStreamEvent(nested, depth + 1)
   }
 
   if (type === 'server.connected' || type === 'server.heartbeat') return null
@@ -584,7 +610,7 @@ async function readSseStream(
         eventBuffer += line.slice(5).trim()
       }
       if (!eventBuffer) continue
-      const event = mapEventPayload(JSON.parse(eventBuffer))
+      const event = parseAgentStreamEvent(JSON.parse(eventBuffer))
       eventBuffer = ''
       if (!event) continue
       if (event.type === 'error') {

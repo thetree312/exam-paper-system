@@ -13,6 +13,7 @@ import { documentRoutes } from "./routes/documents"
 import { exportRoutes } from "./routes/export"
 import { favoritesRoutes } from "./routes/favorites"
 import { learningArtifactsRoutes } from "./routes/learning-artifacts"
+import { lectureRoutes } from "./routes/lectures"
 import { modelSettingsRoutes } from "./routes/model-settings"
 import { questionsRoutes } from "./routes/questions"
 import { problemCardsRoutes } from "./routes/problem-cards"
@@ -128,11 +129,11 @@ export function createApp() {
   app.route("/api/studio", studioRoutes)
   app.route("/api/favorites", favoritesRoutes)
   app.route("/api/learning-artifacts", learningArtifactsRoutes)
+  app.route("/api/lectures", lectureRoutes)
   app.route("/api/documents", documentRoutes)
   app.route("/api/taxonomies", taxonomiesRoutes)
   app.route("/api/translation", translationRoutes)
   app.route("/api/export", exportRoutes)
-
   return app
 }
 

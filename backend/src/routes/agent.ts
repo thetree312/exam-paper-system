@@ -4,11 +4,16 @@ import { z } from "zod"
 import { AppFileSystem } from "@opencode-ai/shared/filesystem"
 import { NamedError } from "@opencode-ai/shared/util/error"
 import { createLogger, runWithLogContext, type LogContext } from "../lib/logger"
+import { AuthService } from "../domains/auth/service"
 import { requireAuth } from "./auth-context"
 import { AgentSkillSettingsService } from "../domains/agent-skill-settings/service"
 import { AgentSessionModelSelectionService } from "../domains/agent/session-model-selection"
+import { toRuntimeStreamEnvelope } from "../domains/agent/runtime-event-envelope"
 import {
+  analyzeLectureIntentPrompt,
+  buildLectureIntentDirective,
   buildStudioQuestionCardsCommandGuide,
+  buildLectureCommandGuide,
   buildWorkroomSessionPermission,
   getDisabledSkillNames,
   loadAgentRuntimeModules,
@@ -17,6 +22,10 @@ import {
   syncAgentUserSettings,
   withAgentScope,
 } from "../domains/agent/service"
+import {
+  publishRuntimeStream,
+  subscribeRuntimeStream,
+} from "../domains/agent/runtime-stream"
 
 const logger = createLogger({ domain: "agent-route" })
 
@@ -80,6 +89,7 @@ const sessionUpdateSchema = z.object({
 
 const promptSchema = z.object({
   workroomID: z.string().min(1),
+  documentId: z.union([z.string().min(1), z.number().int()]).optional(),
   text: z.string().min(1).optional(),
   parts: z
     .array(
@@ -137,6 +147,7 @@ const permissionReplySchema = z.object({
 const questionReplySchema = z.object({
   workroomID: z.string().min(1),
   answers: z.array(z.array(z.string())),
+  freeText: z.array(z.string().nullable()).optional(),
 })
 
 const skillUpdateSchema = z.object({
@@ -180,11 +191,6 @@ async function runMcpStatusProbe<T>(action: () => Promise<T>, fallback: T): Prom
   }
 }
 
-type AgentStreamEnvelope = {
-  type: string
-  properties: Record<string, unknown>
-}
-
 function toRecord(input: unknown): Record<string, unknown> | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null
   return input as Record<string, unknown>
@@ -195,6 +201,14 @@ function firstNonEmptyString(values: Array<unknown>): string | null {
     if (typeof value === "string" && value.trim().length > 0) return value.trim()
   }
   return null
+}
+
+function extractPromptText(parts: Array<{ type: "text"; text: string } | { type: "file"; [key: string]: unknown }>) {
+  return parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text.trim())
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 function extractRuntimeErrorMessage(error: unknown): string {
@@ -223,91 +237,21 @@ function shouldUpgradeLegacyWorkroomPermission(permission: unknown) {
   })
 }
 
-const runtimeStreamSubscribers = new Map<string, Set<(event: AgentStreamEnvelope) => void>>()
 const studioGuideVersionBySessionID = new Map<string, string>()
-
-function subscribeRuntimeStream(sessionID: string, listener: (event: AgentStreamEnvelope) => void) {
-  const bucket = runtimeStreamSubscribers.get(sessionID) ?? new Set<(event: AgentStreamEnvelope) => void>()
-  bucket.add(listener)
-  runtimeStreamSubscribers.set(sessionID, bucket)
-  return () => {
-    const current = runtimeStreamSubscribers.get(sessionID)
-    if (!current) return
-    current.delete(listener)
-    if (current.size === 0) {
-      runtimeStreamSubscribers.delete(sessionID)
-    }
-  }
-}
-
-function publishRuntimeStream(sessionID: string, event: AgentStreamEnvelope) {
-  const listeners = runtimeStreamSubscribers.get(sessionID)
-  if (!listeners || listeners.size === 0) return
-  for (const listener of listeners) {
-    listener(event)
-  }
-}
-
-function toRuntimeStreamEnvelope(event: any): AgentStreamEnvelope | null {
-  if (!event || typeof event !== "object" || typeof event.type !== "string") return null
-
-  switch (event.type) {
-    case "message_started":
-    case "message_updated":
-    case "message_completed":
-      return {
-        type: event.type.replace("_", "."),
-        properties: {
-          info: event.message?.info ?? {},
-          parts: Array.isArray(event.message?.parts) ? event.message.parts : [],
-        },
-      }
-    case "part_added":
-      return {
-        type: "message.part.added",
-        properties: {
-          sessionID: event.part?.sessionID,
-          messageID: event.messageID,
-          part: event.part,
-        },
-      }
-    case "part_updated":
-      return {
-        type: "message.part.updated",
-        properties: {
-          sessionID: event.part?.sessionID,
-          messageID: event.messageID,
-          part: event.part,
-        },
-      }
-    case "part_completed":
-      return {
-        type: "message.part.completed",
-        properties: {
-          sessionID: event.part?.sessionID,
-          messageID: event.messageID,
-          part: event.part,
-        },
-      }
-    case "part_delta":
-      return {
-        type: "message.part.delta",
-        properties: {
-          sessionID: event.part?.sessionID,
-          messageID: event.messageID,
-          partID: event.partID,
-          field: event.field,
-          delta: event.delta,
-        },
-      }
-    default:
-      return null
-  }
-}
 
 function toAgUiCompatibleEvent(input: Record<string, unknown>, sessionID: string) {
   const type = typeof input.type === "string" ? input.type : ""
   const timestamp = Date.now()
+  if (type === "agent.custom") {
+    const properties = toRecord(input.properties) ?? {}
+    return {
+      type: "CUSTOM",
+      timestamp,
+      name: typeof properties.name === "string" ? properties.name : "agent.custom",
+      value: properties.value ?? {},
+      rawEvent: input,
+    }
+  }
   if (type === "session.idle") {
     return {
       type: "RUN_FINISHED",
@@ -330,7 +274,7 @@ function toAgUiCompatibleEvent(input: Record<string, unknown>, sessionID: string
       rawEvent: input,
     }
   }
-  if (type === "permission.asked" || type === "question.asked") {
+  if (type === "permission.asked" || type === "question.asked" || type === "question.replied" || type === "question.rejected") {
     return {
       type: "CUSTOM",
       timestamp,
@@ -759,6 +703,8 @@ agentRoutes.post("/session/:sessionID/prompt_async", async (c) => {
     const sessionIDText = String(sessionID)
     const existingGuideVersion = studioGuideVersionBySessionID.get(sessionIDText)
     const shouldInjectStudioGuide = existingGuideVersion !== STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION
+    const promptText = extractPromptText(parts)
+    const lectureIntent = analyzeLectureIntentPrompt(promptText)
     const effectiveSystem = [
       body.system?.trim() ? body.system.trim() : "",
       shouldInjectStudioGuide
@@ -766,6 +712,15 @@ agentRoutes.post("/session/:sessionID/prompt_async", async (c) => {
             userID: user.id,
             workroomID: body.workroomID,
             workroomRootDirectory: sessionInfo?.directory ?? "",
+          })
+        : "",
+      buildLectureCommandGuide({
+        sessionID: sessionIDText,
+        studioDocumentID: body.documentId != null ? String(body.documentId) : null,
+      }),
+      lectureIntent.isLectureIntent
+        ? buildLectureIntentDirective({
+            questionNumber: lectureIntent.questionNumber,
           })
         : "",
     ]
@@ -921,14 +876,15 @@ agentRoutes.post("/session/:sessionID/cancel", async (c) => {
 })
 
 agentRoutes.get("/event", async (c) => {
-  const { user } = await requireAuth(c)
+  const tokenFromQuery = c.req.query("access_token")?.trim()
+  const auth = tokenFromQuery ? await AuthService.resolveSession(tokenFromQuery) : await requireAuth(c)
   const { Bus } = await loadAgentRuntimeModules()
   const query = eventQuerySchema.parse({
     workroom_id: c.req.query("workroom_id"),
     session_id: c.req.query("session_id"),
   })
 
-  return withAgentScope({ userID: user.id, workroomID: query.workroom_id, syncUserSettings: false }, async () => {
+  return withAgentScope({ userID: auth.user.id, workroomID: query.workroom_id, syncUserSettings: false }, async () => {
     c.header("Cache-Control", "no-cache, no-transform")
     c.header("X-Accel-Buffering", "no")
     c.header("X-Content-Type-Options", "nosniff")
@@ -1064,6 +1020,7 @@ agentRoutes.post("/question/:requestID/reply", async (c) => {
         svc.reply({
           requestID: QuestionID.make(c.req.param("requestID")),
           answers: body.answers,
+          freeText: body.freeText,
         }),
       ),
     ),

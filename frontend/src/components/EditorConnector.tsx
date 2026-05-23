@@ -151,10 +151,11 @@ export const EditorConnector: React.FC<EditorConnectorProps> = ({
       activeStudioTabId={activeStudioTabId}
       onOpenStudioTab={openStudioTab}
       onActivateStudioTab={activateStudioTab}
-      onCloseStudioTab={closeStudioTab}
-      onReorderStudioTabs={() => {}}
-      onUpdateStudioPreviewContent={() => {}}
-      onSaveStudioPreviewTab={async () => false}
+        onCloseStudioTab={closeStudioTab}
+        onReorderStudioTabs={() => {}}
+        onUpdateStudioPreviewContent={() => {}}
+        onUpdateStudioPreviewViewMode={() => {}}
+        onSaveStudioPreviewTab={async () => false}
       studioDataSourceMode={'keep_workset'}
       onStudioDataSourceModeChange={() => {}}
       isAnswerMode={isAnswerMode}

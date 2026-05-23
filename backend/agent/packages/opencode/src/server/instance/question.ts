@@ -12,6 +12,7 @@ const Reply = z.object({
   answers: Question.Answer.zod
     .array()
     .describe("User answers in order of questions (each answer is an array of selected labels)"),
+  freeText: z.array(z.string().nullable()).optional(),
 })
 
 export const QuestionRoutes = lazy(() =>
@@ -71,6 +72,7 @@ export const QuestionRoutes = lazy(() =>
             svc.reply({
               requestID: params.requestID,
               answers: json.answers,
+              freeText: json.freeText,
             }),
           ),
         )

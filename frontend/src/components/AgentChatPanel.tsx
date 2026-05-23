@@ -10,6 +10,7 @@ import type {
   AgentRunContext,
   AgentSendPayload,
   AgUiEvent,
+  StudioLectureTabPayload,
   UserInfo,
 } from '../types'
 import { InlineCitationMarkdown } from './InlineCitationMarkdown'
@@ -52,6 +53,7 @@ interface AgentChatPanelProps {
   onSessionResolved?: (sessionId: string | null) => void
   onCitationClick?: (citation: AgentCitationAnchor) => void
   onOpenWorkroomFile?: (path: string) => Promise<void> | void
+  onOpenLectureSession?: (payload: StudioLectureTabPayload) => void
   modelSettingsRevision?: number
 }
 
@@ -141,6 +143,45 @@ function normalizeAiMarkdown(raw: string): string {
   text = normalizedParagraphs.join('\n\n')
 
   return text
+}
+
+function parseJsonObject(raw: string) {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>
+  } catch {}
+
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function extractLectureLaunchPayload(block: AgentAssistantToolBlock): StudioLectureTabPayload | null {
+  if (block.type !== 'tool' || block.status !== 'success') return null
+  const command = typeof block.input?.command === 'string' ? block.input.command : ''
+  if (!command.includes('wiki/.agent/bin/lecture.ts') || !/\slaunch(\s|$)/.test(command)) return null
+  const parsed = typeof block.output === 'string' ? parseJsonObject(block.output) : null
+  const result = parsed && typeof parsed.result === 'object' && parsed.result ? (parsed.result as Record<string, unknown>) : null
+  const session = result && typeof result.session === 'object' && result.session ? (result.session as Record<string, unknown>) : null
+  const questionCard = result && typeof result.questionCard === 'object' && result.questionCard ? (result.questionCard as Record<string, unknown>) : null
+  const content = questionCard && typeof questionCard.content === 'object' && questionCard.content ? (questionCard.content as Record<string, unknown>) : null
+  const sessionId = typeof session?.id === 'string' ? session.id : ''
+  const cardID = typeof session?.cardID === 'string' ? session.cardID : ''
+  const studioDocumentID = typeof session?.studioDocumentID === 'string' ? session.studioDocumentID : ''
+  if (!sessionId || !cardID || !studioDocumentID) return null
+  return {
+    lectureSessionId: sessionId,
+    cardID,
+    studioDocumentID,
+    originAgentSessionID: typeof session?.originAgentSessionID === 'string' ? session.originAgentSessionID : null,
+    title: typeof content?.stem === 'string' && content.stem.trim() ? content.stem.trim() : '题目讲解',
+  }
 }
 
 function stringifyToolValue(value: unknown): string {
@@ -638,13 +679,25 @@ const AssistantNaturalFlow: React.FC<{
   msg: any
   onCitationClick?: (citation: AgentCitationAnchor) => void
   onOpenWorkroomFile?: (path: string) => Promise<void> | void
-}> = React.memo(({ msg, onCitationClick, onOpenWorkroomFile }) => {
+  onOpenLectureSession?: (payload: StudioLectureTabPayload) => void
+}> = React.memo(({ msg, onCitationClick, onOpenWorkroomFile, onOpenLectureSession }) => {
   const blocks = useMemo(() => {
     if (Array.isArray(msg.parts)) {
       return deriveAssistantBlocks(msg.parts) ?? []
     }
     return Array.isArray(msg.assistantBlocks) ? (msg.assistantBlocks as AgentAssistantBlock[]) : []
   }, [msg.parts, msg.assistantBlocks])
+  const lectureLaunchPayload = useMemo(
+    () => {
+      for (const block of blocks) {
+        if (block.type !== 'tool') continue
+        const payload = extractLectureLaunchPayload(block as AgentAssistantToolBlock)
+        if (payload) return payload
+      }
+      return null
+    },
+    [blocks],
+  )
   const visibleBlocks = blocks.filter((block) => {
     if (block.type === 'text' || block.type === 'commentary' || block.type === 'final_answer') {
       return String(block.text || '').trim().length > 0
@@ -681,6 +734,26 @@ const AssistantNaturalFlow: React.FC<{
             )
           })}
 
+          {lectureLaunchPayload && onOpenLectureSession ? (
+            <div className="rounded-[18px] border border-amber-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_100%)] p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[13px] font-semibold text-amber-900">讲解入口已准备好</div>
+                  <div className="mt-1 text-[12px] leading-6 text-amber-800">
+                    讲解不会发生在对话侧栏里。点击后会在中间 Studio 新开讲解标签页，并用独立讲解 session 运行。
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenLectureSession(lectureLaunchPayload)}
+                  className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-600"
+                >
+                  在 Studio 中打开
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {visibleBlocks.length === 0 && fallbackContent.trim() && (
             <div className="max-w-none text-[15px] leading-relaxed text-[var(--ui-text-primary)]">
               <InlineCitationMarkdown
@@ -711,6 +784,7 @@ const AssistantNaturalFlow: React.FC<{
   && prev.msg?.citations === next.msg?.citations
   && prev.msg?.citationStatus === next.msg?.citationStatus
   && prev.onOpenWorkroomFile === next.onOpenWorkroomFile
+  && prev.onOpenLectureSession === next.onOpenLectureSession
 ))
 
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
@@ -724,13 +798,13 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   width = 480,
   onResize,
   appendToken,
-  onAgUiEvent: _onAgUiEvent,
   onAppendTokenConsumed,
   onDocumentResolved,
   preferredSessionId,
   onSessionResolved,
   onCitationClick,
   onOpenWorkroomFile,
+  onOpenLectureSession,
   modelSettingsRevision = 0,
 }) => {
   const { t } = useTranslation()
@@ -1241,9 +1315,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           msg={msg}
           onCitationClick={onCitationClick}
           onOpenWorkroomFile={onOpenWorkroomFile}
+          onOpenLectureSession={onOpenLectureSession}
         />
       )),
-    [onCitationClick, onOpenWorkroomFile],
+    [onCitationClick, onOpenLectureSession, onOpenWorkroomFile],
   )
 
   const UserMessage: React.FC<{ msg: any }> = useMemo(
@@ -1552,7 +1627,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                                       pendingInteraction?.request.questions.map((question, index) => {
                                         const fieldId = `q${index}`
                                         const value = hitlFormValues[fieldId] ?? ''
-                                        if (question.multiple || question.custom) {
+                                        if (question.multiple || question.custom !== false) {
                                           return (
                                             <div key={fieldId} className="flex flex-col gap-1">
                                               <label className="text-xs text-[var(--ui-text-primary)]">{question.header || question.question}</label>

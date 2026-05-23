@@ -9,6 +9,7 @@ export const Parameters = Schema.Struct({
 
 type Metadata = {
   answers: ReadonlyArray<Question.Answer>
+  freeText: ReadonlyArray<string | null>
 }
 
 export const QuestionTool = Tool.define<typeof Parameters, Metadata, Question.Service>(
@@ -21,21 +22,31 @@ export const QuestionTool = Tool.define<typeof Parameters, Metadata, Question.Se
       parameters: Parameters,
       execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context<Metadata>) =>
         Effect.gen(function* () {
-          const answers = yield* question.ask({
+          const responses = yield* question.ask({
             sessionID: ctx.sessionID,
             questions: params.questions,
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
           })
 
           const formatted = params.questions
-            .map((q, i) => `"${q.question}"="${answers[i]?.length ? answers[i].join(", ") : "Unanswered"}"`)
+            .map((q, i) => {
+              const response = responses[i]
+              const answerText = response?.answers.length ? response.answers.join(", ") : "Unanswered"
+              const freeText = response?.freeText?.trim()
+              if (!freeText) return `"${q.question}"="${answerText}"`
+              if (response?.answers.length === 1 && response.answers[0] === freeText) {
+                return `"${q.question}"=free text "${freeText}"`
+              }
+              return `"${q.question}"="${answerText}" (free text: "${freeText}")`
+            })
             .join(", ")
 
           return {
             title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
             output: `User has answered your questions: ${formatted}. You can now continue with the user's answers in mind.`,
             metadata: {
-              answers,
+              answers: responses.map((response) => response.answers),
+              freeText: responses.map((response) => response.freeText),
             },
           }
         }).pipe(Effect.orDie),

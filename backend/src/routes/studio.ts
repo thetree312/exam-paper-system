@@ -10,7 +10,12 @@ import {
   studioQuestionCardsCommands,
   type StudioQuestionCardsCommand,
 } from "../domains/studio/command-bridge"
-import { createQuestionByIntent, insertQuestionByIntent } from "../domains/studio/question-write-service"
+import {
+  createQuestionByIntent,
+  getQuestionCardDetailByNumber,
+  insertQuestionByIntent,
+  similarQuestionByIntent,
+} from "../domains/studio/question-write-service"
 import { StudioEvents } from "../domains/studio/events"
 import { StudioRevisionRepository } from "../domains/studio/revision-repository"
 import { StudioService } from "../domains/studio/service"
@@ -40,14 +45,43 @@ const bridgeCommandBodySchema = z.object({
 const bridgeQuestionActionSchema = z.enum(["create", "insert"])
 
 const bridgeQuestionBodySchema = z.object({
-  stem: z.string().min(1),
+  text: z.string().min(1).optional(),
+  stem: z.string().min(1).optional(),
   answer: z.string().optional().nullable(),
   explanation: z.string().optional().nullable(),
+  questionType: z.string().optional().nullable(),
+  difficulty: z.string().optional().nullable(),
+  knowledgePoints: z.array(z.string().min(1)).optional(),
   options: z.array(z.string().min(1)).optional(),
   page: z.number().int().min(1).optional(),
   questionNumber: z.number().int().min(1).optional(),
   placement: z.enum(["before", "after"]).optional(),
 })
+
+const bridgeQuestionSearchSchema = z.object({
+  query: z.string().min(1),
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+const bridgeQuestionGetSchema = z
+  .object({
+    cardID: z.string().min(1).optional(),
+    questionNumber: z.number().int().min(1).optional(),
+    full: z.boolean().optional(),
+  })
+  .refine((value) => Boolean(value.cardID) || value.questionNumber != null, {
+    message: "cardID or questionNumber is required",
+    path: ["cardID"],
+  })
+
+function missingRequiredArgument(field: string) {
+  const error = new Error(`MISSING_REQUIRED_ARGUMENT: ${field}`)
+  ;(error as Error & { detail?: unknown }).detail = {
+    field,
+    expected: "required",
+  }
+  return error
+}
 
 const normalizedRegionSchema = z.object({
   page: z.number().int().min(1),
@@ -324,33 +358,161 @@ studioRoutes.post("/question-cards/bridge/:command", async (c) => {
   }
 })
 
+studioRoutes.post("/question-cards/question/search", async (c) => {
+  const bridge = await requireStudioBridgeAuth(c)
+  const body = bridgeQuestionSearchSchema.parse(await c.req.json())
+  try {
+    const result = await executeStudioQuestionCardsCommand("search-cards", {
+      userID: bridge.userID,
+      workroomID: bridge.workroomID,
+      query: body.query,
+      limit: body.limit,
+    })
+    return c.json({
+      ok: true,
+      action: "search",
+      result,
+    })
+  } catch (error) {
+    const parsed = asStructuredError(error)
+    return c.json(
+      {
+        ok: false,
+        action: "search",
+        error: parsed.message,
+        code: parsed.code,
+        detail: parsed.detail ?? null,
+      },
+      parsed.code === "INVALID_ARGUMENT" || parsed.code === "INVALID_INPUT" ? 400 : 500,
+    )
+  }
+})
+
+studioRoutes.post("/question-cards/question/get", async (c) => {
+  const bridge = await requireStudioBridgeAuth(c)
+  const body = bridgeQuestionGetSchema.parse(await c.req.json())
+  try {
+    const result =
+      body.cardID != null
+        ? await executeStudioQuestionCardsCommand("get-card", {
+            userID: bridge.userID,
+            workroomID: bridge.workroomID,
+            cardID: body.cardID,
+            full: body.full === true,
+          })
+        : await getQuestionCardDetailByNumber({
+            userID: bridge.userID,
+            workroomID: bridge.workroomID,
+            questionNumber: body.questionNumber as number,
+            full: body.full === true,
+          })
+    return c.json({
+      ok: true,
+      action: "get",
+      result,
+    })
+  } catch (error) {
+    const parsed = asStructuredError(error)
+    return c.json(
+      {
+        ok: false,
+        action: "get",
+        error: parsed.message,
+        code: parsed.code,
+        detail: parsed.detail ?? null,
+      },
+      parsed.code === "INVALID_ARGUMENT" || parsed.code === "INVALID_INPUT" ? 400 : 500,
+    )
+  }
+})
+
+studioRoutes.post("/question-cards/question/similar", async (c) => {
+  const bridge = await requireStudioBridgeAuth(c)
+  const body = bridgeQuestionBodySchema.parse(await c.req.json())
+  try {
+    if (body.questionNumber == null) {
+      throw missingRequiredArgument("questionNumber")
+    }
+    if (body.placement == null) {
+      throw missingRequiredArgument("placement")
+    }
+    const result = await similarQuestionByIntent({
+      userID: bridge.userID,
+      workroomID: bridge.workroomID,
+      text: body.text,
+      stem: body.stem,
+      answer: body.answer,
+      explanation: body.explanation,
+      questionType: body.questionType,
+      difficulty: body.difficulty,
+      knowledgePoints: body.knowledgePoints,
+      options: body.options,
+      page: body.page,
+      questionNumber: body.questionNumber,
+      placement: body.placement,
+    })
+    return c.json({
+      ok: true,
+      action: "similar",
+      result,
+    })
+  } catch (error) {
+    const parsed = asStructuredError(error)
+    return c.json(
+      {
+        ok: false,
+        action: "similar",
+        error: parsed.message,
+        code: parsed.code,
+        detail: parsed.detail ?? null,
+      },
+      parsed.code === "INVALID_ARGUMENT" || parsed.code === "MISSING_REQUIRED_ARGUMENT" ? 400 : 500,
+    )
+  }
+})
+
 studioRoutes.post("/question-cards/question/:action", async (c) => {
   const bridge = await requireStudioBridgeAuth(c)
   const action = bridgeQuestionActionSchema.parse(c.req.param("action"))
   const body = bridgeQuestionBodySchema.parse(await c.req.json())
 
   try {
+    if (action === "insert" && body.questionNumber == null) {
+      throw missingRequiredArgument("questionNumber")
+    }
+    if (action === "insert" && body.placement == null) {
+      throw missingRequiredArgument("placement")
+    }
+
     const result =
       action === "create"
         ? await createQuestionByIntent({
             userID: bridge.userID,
             workroomID: bridge.workroomID,
+            text: body.text,
             stem: body.stem,
             answer: body.answer,
             explanation: body.explanation,
+            questionType: body.questionType,
+            difficulty: body.difficulty,
+            knowledgePoints: body.knowledgePoints,
             options: body.options,
             page: body.page,
           })
         : await insertQuestionByIntent({
             userID: bridge.userID,
             workroomID: bridge.workroomID,
+            text: body.text,
             stem: body.stem,
             answer: body.answer,
             explanation: body.explanation,
+            questionType: body.questionType,
+            difficulty: body.difficulty,
+            knowledgePoints: body.knowledgePoints,
             options: body.options,
             page: body.page,
-            questionNumber: body.questionNumber ?? 0,
-            placement: body.placement ?? "after",
+            questionNumber: body.questionNumber as number,
+            placement: body.placement as "before" | "after",
           })
 
     return c.json({
@@ -368,7 +530,7 @@ studioRoutes.post("/question-cards/question/:action", async (c) => {
         code: parsed.code,
         detail: parsed.detail ?? null,
       },
-      parsed.code === "INVALID_ARGUMENT" ? 400 : 500,
+      parsed.code === "INVALID_ARGUMENT" || parsed.code === "MISSING_REQUIRED_ARGUMENT" ? 400 : 500,
     )
   }
 })
@@ -382,6 +544,7 @@ studioRoutes.get("/question-cards/:cardID/detail", async (c) => {
       userID: user.id,
       workroomID,
       cardID: c.req.param("cardID"),
+      full: true,
     }),
   )
 })

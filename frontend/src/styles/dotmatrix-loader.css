@@ -1,0 +1,45 @@
+.dmx-root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  --dmx-cycle: 1500ms;
+  --dmx-opacity-base: 0.16;
+  --dmx-opacity-mid: 0.32;
+  --dmx-opacity-peak: 1;
+  --dmx-halo-level: 0;
+}
+
+.dmx-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+}
+
+.dmx-dot {
+  display: block;
+  border-radius: 999px;
+  background: var(--dmx-dot-fill, currentColor);
+  clip-path: none;
+  transform-origin: center;
+  will-change: opacity, filter;
+}
+
+.dmx-bloom .dmx-dot {
+  filter:
+    drop-shadow(0 0 calc(var(--dmx-dot-size, 3px) * 0.75 * max(var(--dmx-bloom-level, 0), var(--dmx-halo-level, 0))) currentColor)
+    drop-shadow(0 0 calc(var(--dmx-dot-size, 3px) * 1.35 * max(var(--dmx-bloom-level, 0), var(--dmx-halo-level, 0))) currentColor);
+}
+
+.dmx-root.dmx-bloom-halo.dmx-bloom .dmx-dot {
+  filter:
+    drop-shadow(0 0 calc(var(--dmx-dot-size, 3px) * 0.92 * max(var(--dmx-bloom-level, 0), var(--dmx-halo-level, 0))) currentColor)
+    drop-shadow(0 0 calc(var(--dmx-dot-size, 3px) * 1.62 * max(var(--dmx-bloom-level, 0), var(--dmx-halo-level, 0))) currentColor)
+    drop-shadow(0 0 calc(var(--dmx-dot-size, 3px) * 2.55 * max(var(--dmx-bloom-level, 0), var(--dmx-halo-level, 0))) currentColor);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmx-dot {
+    transition: none !important;
+  }
+}

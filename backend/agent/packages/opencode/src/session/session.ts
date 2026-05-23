@@ -364,6 +364,7 @@ export interface Interface {
     sessionID: SessionID
     messageID: MessageID
     partID: PartID
+    partType?: MessageV2.Part["type"]
     field: string
     delta: string
   }) => Effect.Effect<void>
@@ -650,6 +651,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service> =
       sessionID: SessionID
       messageID: MessageID
       partID: PartID
+      partType?: MessageV2.Part["type"]
       field: string
       delta: string
     }) {

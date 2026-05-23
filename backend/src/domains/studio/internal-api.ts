@@ -108,7 +108,11 @@ export const StudioQuestionCardApi = {
     return StudioService.listQuestionCards(input)
   },
 
-  async getStudioQuestionCard(input: { userID: string; workroomID: string; cardID: string }) {
+  async searchStudioQuestionCards(input: { userID: string; workroomID: string; studioDocumentID: string; query: string }) {
+    return StudioService.searchQuestionCards(input)
+  },
+
+  async getStudioQuestionCard(input: { userID: string; workroomID: string; cardID: string; full?: boolean }) {
     return StudioService.getQuestionCardDetail(input)
   },
 }

@@ -17,6 +17,16 @@ afterEach(async () => {
 })
 
 describe("tool.registry", () => {
+  it.live("includes the lecture checkpoint builtin tool", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const registry = yield* ToolRegistry.Service
+        const ids = yield* registry.ids()
+        expect(ids).toContain("lecture_checkpoint")
+      }),
+    ),
+  )
+
   it.live("loads tools from .opencode/tool (singular)", () =>
     provideTmpdirInstance((dir) =>
       Effect.gen(function* () {

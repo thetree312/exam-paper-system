@@ -1,0 +1,249 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+const LONG_COT_STEPS = [
+  "> [0.0s] 正在接收复杂推理请求：高并发场景下的数据一致性方案评估...",
+  "> [0.4s] 分析主从架构延迟：由于主从同步延迟的存在，读写分离场景可能导致强一致性失效。",
+  "> [0.8s] 评估 Raft 共识协议：强一致性协议写入吞吐量受限于主节点，高并发下存在瓶颈。",
+  "> [1.2s] 评估 Redis 锁方案：若使用 Redlock 算法进行分布式锁分配，需详细处理红锁边界。 ",
+  "> [1.7s] 时钟漂移排查：NTP 同步误差会直接影响分布式锁的 TTL 和续期判断逻辑。",
+  "> [2.2s] 异常容错设计：若 Redis 节点瞬时崩溃，需自动降级回滚并触发本地补偿机制。",
+  "> [2.6s] 极限性能估算：多并发写入锁冲突概率高，可能导致主线程阻塞达到 5-10ms 级别。",
+  "> [3.1s] 权衡 CAP 定理：为保障极高并发可用性（AP），推荐采用基于版本号的乐观锁方案。",
+  "> [3.5s] 细化双删缓存：设定 500ms 的延迟队列以执行二次删除，完美覆盖数据库从库复制时差。",
+  "> [3.9s] 异常边界模拟：模拟 Split-brain 网络分区场景，校验多数派写入共识保护机制。",
+  "> [4.3s] 最终方案完成：确认混合一致性模型最优，准备输出最终架构设计建议。"
+];
+
+const ANSWER_TEXT = `针对高并发下的数据一致性问题，推荐采用**延迟双删 + 乐观锁版本号**的混合同步方案：
+
+1. **核心数据写操作**：强绑定版本号 \`version\`，更新时必须携带上一次读取的版本。
+2. **缓存一致性**：更新数据库后，立刻删除缓存；同时向延迟队列投递一个 500ms 的延迟任务，进行第二次异步删除，彻底规避主从延迟导致的脏数据。
+3. **降级预案**：在高并发极端冲突下，自动降级至本地消息表保证最终一致性。`;
+
+export default function App() {
+  const [cotText, setCotText] = useState('');
+  const [finalText, setFinalText] = useState('');
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [status, setStatus] = useState('thinking'); // thinking | collapsing | responding | idle
+  const [thinkingTime, setThinkingTime] = useState(0.0);
+  
+  const timerRef = useRef(null);
+  const clockRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    startSequence();
+    return () => {
+      clearTimeout(timerRef.current);
+      clearInterval(clockRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [cotText]);
+
+  const startSequence = () => {
+    setCotText('');
+    setFinalText('');
+    setIsExpanded(true);
+    setStatus('thinking');
+    setThinkingTime(0.0);
+
+    const startTime = Date.now();
+    clockRef.current = setInterval(() => {
+      setThinkingTime(+((Date.now() - startTime) / 1000).toFixed(1));
+    }, 100);
+
+    let stepIdx = 0;
+    let charIdx = 0;
+
+    const streamCot = () => {
+      if (stepIdx >= LONG_COT_STEPS.length) {
+        clearInterval(clockRef.current);
+        setStatus('collapsing');
+        
+        // 平滑折叠过渡时间
+        timerRef.current = setTimeout(() => {
+          setIsExpanded(false);
+          setStatus('responding');
+          streamAnswer();
+        }, 600);
+        return;
+      }
+
+      const currentLine = LONG_COT_STEPS[stepIdx] + '\n';
+      if (charIdx < currentLine.length) {
+        setCotText(prev => prev + currentLine[charIdx]);
+        charIdx++;
+        timerRef.current = setTimeout(streamCot, 8 + Math.random() * 6);
+      } else {
+        stepIdx++;
+        charIdx = 0;
+        timerRef.current = setTimeout(streamCot, 120); // 思考步骤停顿
+      }
+    };
+
+    let answerIdx = 0;
+    const streamAnswer = () => {
+      if (answerIdx < ANSWER_TEXT.length) {
+        const chunkSize = Math.floor(Math.random() * 2) + 2;
+        const nextIdx = Math.min(answerIdx + chunkSize, ANSWER_TEXT.length);
+        setFinalText(ANSWER_TEXT.substring(0, nextIdx));
+        answerIdx = nextIdx;
+        timerRef.current = setTimeout(streamAnswer, 12 + Math.random() * 8);
+      } else {
+        setStatus('idle');
+      }
+    };
+
+    streamCot();
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-zinc-300 font-sans antialiased p-8 md:p-24 flex justify-center selection:bg-zinc-800 selection:text-zinc-100">
+      <div className="w-full max-w-lg space-y-6">
+        
+        {}
+        {cotText && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                disabled={status === 'thinking' || status === 'collapsing'}
+                onClick={() => setIsExpanded(!isExpanded)}
+                className={`flex items-center gap-2 text-xs font-mono transition-colors focus:outline-none ${
+                  status === 'thinking'
+                    ? 'text-zinc-600 cursor-default'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {status === 'thinking' ? (
+                  <span className="w-1 h-1 rounded-full bg-zinc-500 animate-ping" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+                )}
+                
+                <span>
+                  {status === 'thinking' 
+                    ? `Thinking (${thinkingTime.toFixed(1)}s)` 
+                    : status === 'collapsing'
+                    ? 'Summarizing...'
+                    : `Thought for ${thinkingTime}s`
+                  }
+                </span>
+
+                {status === 'idle' && (
+                  <span className="text-[10px] text-zinc-600">
+                    {isExpanded ? '(click to hide)' : '(click to show)'}
+                  </span>
+                )}
+              </button>
+
+              {/* 重启模拟按钮 */}
+              {status === 'idle' && (
+                <button 
+                  onClick={startSequence}
+                  className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  Restart
+                </button>
+              )}
+            </div>
+
+            {}
+            <div 
+              ref={scrollContainerRef}
+              className="overflow-y-auto pr-1"
+              style={{
+                height: isExpanded ? '144px' : '0px',
+                opacity: isExpanded ? 1 : 0,
+                transition: 'all 500ms cubic-bezier(0.4, 0, 0.2, 1)',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}
+            >
+              {/* 隐藏滚动条样式 */}
+              <style>{`
+                div::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+
+              <pre className="pl-3.5 font-mono text-xs text-zinc-500 leading-relaxed whitespace-pre-wrap">
+                {cotText}
+                {status === 'thinking' && (
+                  <span className="inline-block w-1 h-3 bg-zinc-600 animate-pulse ml-0.5" />
+                )}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {}
+        {(status === 'responding' || finalText) && (
+          <div className="pt-2 animate-in fade-in duration-500">
+            <div className="text-[14px] leading-relaxed text-zinc-300 space-y-4 font-normal">
+              {renderSimpleMarkdown(finalText)}
+              
+              {/* 打字机光标 */}
+              {status === 'responding' && (
+                <span className="inline-block w-1 h-3.5 bg-zinc-500 animate-pulse ml-0.5 align-middle" />
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+function renderSimpleMarkdown(rawText) {
+  if (!rawText) return null;
+  return rawText.split('\n').map((line, i) => {
+    const trimmed = line.trim();
+    if (trimmed === '') return <div key={i} className="h-2.5" />;
+    
+    // 无序列表与数字列表，采用纯块级排版，避免使用可能崩溃的 li 结构
+    if (trimmed.startsWith('* ') || trimmed.match(/^\d+\.\s/)) {
+      const isOrdered = trimmed.match(/^\d+\.\s/);
+      const cleanContent = isOrdered ? trimmed.replace(/^\d+\.\s/, '') : trimmed.replace(/^\*\s/, '');
+      return (
+        <div key={i} className="pl-4 relative text-zinc-400 text-[13.5px] leading-relaxed my-1">
+          <span className="absolute left-0 text-zinc-600">
+            {isOrdered ? trimmed.match(/^\d+\./)[0] : '•'}
+          </span>
+          {parseInline(cleanContent)}
+        </div>
+      );
+    }
+    
+    return <p key={i} className="text-zinc-300 leading-relaxed">{parseInline(line)}</p>;
+  });
+}
+
+function parseInline(text) {
+  let clean = text.replace(/\$/g, '');
+  // 解析行内代码
+  const codeParts = clean.split(/`([^`]+)`/g);
+  return codeParts.map((part, index) => {
+    if (index % 2 === 1) {
+      return (
+        <code key={index} className="font-mono text-[12px] text-zinc-400 bg-zinc-900 px-1 py-0.5 rounded">
+          {part}
+        </code>
+      );
+    }
+    
+    // 解析加粗
+    const boldParts = part.split(/\*\*([^*]+)\*\*/g);
+    return boldParts.map((subPart, subIndex) => {
+      if (subIndex % 2 === 1) {
+        return <strong key={subIndex} className="font-medium text-zinc-100">{subPart}</strong>;
+      }
+      return subPart;
+    });
+  });
+}

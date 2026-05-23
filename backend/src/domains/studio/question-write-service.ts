@@ -1,5 +1,6 @@
 ﻿import { WorkroomService } from "../workrooms/service"
 import { StudioService } from "./service"
+import { ProblemCardService } from "../problem-cards/service"
 import { createLogger } from "../../lib/logger"
 
 type Placement = "before" | "after"
@@ -10,9 +11,13 @@ type QuestionIntentScope = {
 }
 
 type QuestionIntentInput = QuestionIntentScope & {
-  stem: string
+  text?: string | null
+  stem?: string | null
   answer?: string | null
   explanation?: string | null
+  questionType?: string | null
+  difficulty?: string | null
+  knowledgePoints?: string[]
   options?: string[]
   page?: number
 }
@@ -22,6 +27,12 @@ type ResolveBusinessTargetResult = {
   sourceDocumentID: string | null
   title: string
   resolvedBy: "runtime_active" | "single_document"
+}
+
+type GenerationRecommendation = {
+  recommended_difficulty?: string
+  recommended_question_types?: string[]
+  recommended_knowledge_points?: string[]
 }
 
 const logger = createLogger({ domain: "studio-question-command" })
@@ -42,8 +53,11 @@ function normalizeOptions(options?: string[]) {
   return options.map((item) => item.trim()).filter(Boolean)
 }
 
-function buildCardText(input: QuestionIntentInput) {
-  const stem = normalizeRequiredText(input.stem, "stem")
+function resolveQuestionText(input: QuestionIntentInput) {
+  const directText = normalizeOptionalText(input.text)
+  if (directText) return directText
+  const stem = normalizeOptionalText(input.stem)
+  if (!stem) throw new Error("INVALID_ARGUMENT: missing text")
   const options = normalizeOptions(input.options)
   if (options.length === 0) return stem
   const labeled = options.map((item, index) => `${String.fromCharCode(65 + index)}. ${item}`)
@@ -51,13 +65,33 @@ function buildCardText(input: QuestionIntentInput) {
 }
 
 function buildDraft(input: QuestionIntentInput) {
+  const text = resolveQuestionText(input)
   return {
-    text: buildCardText(input),
-    originalText: input.stem.trim(),
+    text,
+    originalText: text,
     page: input.page,
+    questionType: normalizeOptionalText(input.questionType) ?? undefined,
+    difficulty: normalizeOptionalText(input.difficulty) ?? undefined,
+    knowledgePoints: Array.from(new Set((input.knowledgePoints ?? []).map((item) => item.trim()).filter(Boolean))),
     answerText: normalizeOptionalText(input.answer) ?? undefined,
     canonicalAnswer: normalizeOptionalText(input.answer) ?? undefined,
     explanation: normalizeOptionalText(input.explanation) ?? undefined,
+  }
+}
+
+function applyRecommendationToInput(input: QuestionIntentInput, recommendation: GenerationRecommendation | null): QuestionIntentInput {
+  if (!recommendation) return input
+  const recommendedQuestionType = Array.isArray(recommendation.recommended_question_types)
+    ? recommendation.recommended_question_types.map((item) => String(item).trim()).find(Boolean) ?? null
+    : null
+  const recommendedKnowledgePoints = Array.isArray(recommendation.recommended_knowledge_points)
+    ? recommendation.recommended_knowledge_points.map((item) => String(item).trim()).filter(Boolean)
+    : []
+  return {
+    ...input,
+    questionType: input.questionType?.trim() ? input.questionType : recommendedQuestionType,
+    difficulty: input.difficulty?.trim() ? input.difficulty : (recommendation.recommended_difficulty?.trim() ?? null),
+    knowledgePoints: Array.isArray(input.knowledgePoints) && input.knowledgePoints.length > 0 ? input.knowledgePoints : recommendedKnowledgePoints,
   }
 }
 
@@ -82,6 +116,9 @@ function toQuestionCardResult(card: {
     page: card.page ?? null,
     text: card.text,
     preview: compactTextPreview(card.text),
+    questionType: (card as any).questionType ?? null,
+    difficulty: (card as any).difficulty ?? null,
+    knowledgePoints: (card as any).knowledgePoints ?? [],
     answerText: card.answerText ?? card.canonicalAnswer ?? null,
     explanation: card.explanation ?? null,
   }
@@ -145,17 +182,78 @@ async function resolveAnchorByQuestionNumber(input: QuestionIntentScope & { stud
   return anchor
 }
 
+export async function getQuestionCardDetailByNumber(
+  input: QuestionIntentScope & {
+    questionNumber: number
+    full?: boolean
+  },
+) {
+  if (!Number.isInteger(input.questionNumber) || input.questionNumber < 1) {
+    throw new Error("INVALID_ARGUMENT: question-number must be a positive integer")
+  }
+  const target = await resolveBusinessTarget({ userID: input.userID, workroomID: input.workroomID })
+  const anchor = await resolveAnchorByQuestionNumber({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    studioDocumentID: target.studioDocumentID,
+    questionNumber: input.questionNumber,
+  })
+  return StudioService.getQuestionCardDetail({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    cardID: anchor.id,
+    full: input.full === true,
+  })
+}
+
+async function resolveCardRecommendation(input: QuestionIntentScope & { cardID: string }) {
+  const detail = await ProblemCardService.getLearningDetail({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    problemCardID: input.cardID,
+  }).catch(() => null)
+  const state =
+    detail && typeof detail === "object"
+      ? "currentState" in detail
+        ? (detail as { currentState: unknown }).currentState
+        : "learningState" in detail
+          ? (detail as { learningState: unknown }).learningState
+          : null
+      : null
+  if (!state || typeof state !== "object") return null
+  const recommendation = (state as Record<string, unknown>).generation_recommendation
+  if (!recommendation || typeof recommendation !== "object") return null
+  return recommendation as GenerationRecommendation
+}
+
+async function resolveLatestCardRecommendation(input: QuestionIntentScope & { studioDocumentID: string }) {
+  const cards = await StudioService.listQuestionCards({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    studioDocumentID: input.studioDocumentID,
+  })
+  const latest = [...cards].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+  if (!latest) return null
+  return resolveCardRecommendation({ ...input, cardID: latest.id })
+}
+
 export async function createQuestionByIntent(input: QuestionIntentInput) {
   logger.info("create question by intent start", {
     user_id: input.userID,
     workroom_id: input.workroomID,
   })
   const target = await resolveBusinessTarget({ userID: input.userID, workroomID: input.workroomID })
+  const recommendation = await resolveLatestCardRecommendation({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    studioDocumentID: target.studioDocumentID,
+  })
+  const effectiveInput = applyRecommendationToInput(input, recommendation)
   const created = await StudioService.appendQuestionCards({
     userID: input.userID,
     workroomID: input.workroomID,
     studioDocumentID: target.studioDocumentID,
-    drafts: [buildDraft(input)],
+    drafts: [buildDraft(effectiveInput)],
   })
   const card = created[0]
   if (!card) throw new Error("COMMAND_EXECUTION_FAILED: create returned no card")
@@ -193,13 +291,19 @@ export async function insertQuestionByIntent(
     studioDocumentID: target.studioDocumentID,
     questionNumber: input.questionNumber,
   })
+  const recommendation = await resolveCardRecommendation({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    cardID: anchor.id,
+  })
+  const effectiveInput = applyRecommendationToInput(input, recommendation)
   const created = await StudioService.insertQuestionCards({
     userID: input.userID,
     workroomID: input.workroomID,
     studioDocumentID: target.studioDocumentID,
     anchorCardID: anchor.id,
     position: input.placement,
-    drafts: [buildDraft(input)],
+    drafts: [buildDraft(effectiveInput)],
   })
   const card = created[0]
   if (!card) throw new Error("COMMAND_EXECUTION_FAILED: insert returned no card")
@@ -213,6 +317,61 @@ export async function insertQuestionByIntent(
     },
     anchor: {
       id: anchor.id,
+      questionNumber: anchor.sequenceIndex + 1,
+    },
+    placement: input.placement,
+    card: toQuestionCardResult(card),
+  }
+}
+
+export async function similarQuestionByIntent(
+  input: QuestionIntentInput & {
+    questionNumber: number
+    placement: Placement
+  },
+) {
+  if (!Number.isInteger(input.questionNumber) || input.questionNumber < 1) {
+    throw new Error("INVALID_ARGUMENT: question-number must be a positive integer")
+  }
+  logger.info("similar question by intent start", {
+    user_id: input.userID,
+    workroom_id: input.workroomID,
+    question_number: input.questionNumber,
+    placement: input.placement,
+  })
+  const target = await resolveBusinessTarget({ userID: input.userID, workroomID: input.workroomID })
+  const anchor = await resolveAnchorByQuestionNumber({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    studioDocumentID: target.studioDocumentID,
+    questionNumber: input.questionNumber,
+  })
+  const recommendation = await resolveCardRecommendation({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    cardID: anchor.id,
+  })
+  const effectiveInput = applyRecommendationToInput(input, recommendation)
+  const created = await StudioService.insertQuestionCards({
+    userID: input.userID,
+    workroomID: input.workroomID,
+    studioDocumentID: target.studioDocumentID,
+    anchorCardID: anchor.id,
+    position: input.placement,
+    drafts: [buildDraft(effectiveInput)],
+  })
+  const card = created[0]
+  if (!card) throw new Error("COMMAND_EXECUTION_FAILED: similar returned no card")
+  return {
+    mode: "similar" as const,
+    resolvedBy: target.resolvedBy,
+    document: {
+      id: target.studioDocumentID,
+      title: target.title,
+      sourceDocumentID: target.sourceDocumentID,
+    },
+    source: {
+      cardID: anchor.id,
       questionNumber: anchor.sequenceIndex + 1,
     },
     placement: input.placement,

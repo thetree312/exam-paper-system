@@ -9,6 +9,7 @@ const { getLocalSqlite } = await import("../src/lib/local-sqlite")
 const { WorkroomService } = await import("../src/domains/workrooms/service")
 const { StudioService } = await import("../src/domains/studio/service")
 const { QuestionsRepository } = await import("../src/domains/questions/repository")
+const { insertQuestionByIntent } = await import("../src/domains/studio/question-write-service")
 
 const dbPath = process.env.LOCAL_SQLITE_PATH
 
@@ -17,6 +18,11 @@ function resetDb() {
   mkdirSync(path.dirname(dbPath), { recursive: true })
   const db = getLocalSqlite()
   db.exec(`
+    DELETE FROM question_card_study_events;
+    DELETE FROM question_card_learning_states;
+    DELETE FROM question_card_learning_summaries;
+    DELETE FROM question_card_grading_records;
+    DELETE FROM question_card_knowledge_profiles;
     DELETE FROM question_card_weaknesses;
     DELETE FROM question_card_diagnoses;
     DELETE FROM question_card_attempts;
@@ -55,7 +61,7 @@ test("StudioService.appendQuestionCards appends cards and syncs projected questi
     ...fixture,
     drafts: [
       { text: "第一题", page: 1 },
-      { text: "第二题", page: 2, canonicalAnswer: "B", explanation: "解析二" },
+      { text: "第二题", page: 2, canonicalAnswer: "B", explanation: "解析二", questionType: "单选题", difficulty: "medium", knowledgePoints: ["函数"] },
     ],
   })
 
@@ -199,4 +205,86 @@ test("StudioService.attachDerivedPracticeCards and writeQuestionExplanation pers
   })
   const projectedSource = questions.find((item) => item.studioCardID === source.id)
   assert.equal(projectedSource?.explanation, "这是原题讲解")
+})
+
+test("StudioService.searchQuestionCards and getQuestionCardDetail expose compact summary and full learning detail", async () => {
+  const fixture = await createFixture()
+  const [card] = await StudioService.appendQuestionCards({
+    ...fixture,
+    drafts: [{ text: "第8题 二次函数求值", page: 3, answerText: "A", explanation: "解析", questionType: "单选题", difficulty: "easy", knowledgePoints: ["二次函数"] }],
+  })
+
+  const searchResults = await StudioService.searchQuestionCards({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    studioDocumentID: fixture.studioDocumentID,
+    query: "第8题",
+  })
+  assert.equal(searchResults.length, 1)
+  assert.equal(searchResults[0]?.cardID, card.id)
+  assert.match(searchResults[0]?.stemPreview ?? "", /二次函数/)
+  assert.equal(searchResults[0]?.questionType, "单选题")
+  assert.equal(searchResults[0]?.difficulty, "easy")
+  assert.equal(searchResults[0]?.masteryLevel, "unknown")
+
+  const detail = await StudioService.getQuestionCardDetail({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    cardID: card.id,
+  })
+  assert.equal(detail.content.cardID, card.id)
+  assert.equal(detail.content.answer, "A")
+  assert.equal(detail.content.explanation, "解析")
+  assert.equal(detail.content.questionType, "单选题")
+  assert.equal(detail.content.difficulty, "easy")
+  assert.deepEqual(detail.content.knowledgePoints, ["二次函数"])
+  assert.equal(detail.learningProfile.problemCard.id, card.id)
+  assert.ok(Array.isArray(detail.learningProfile.raw_recent_attempts))
+  assert.ok(Array.isArray(detail.learningProfile.summaries.monthly_summaries))
+})
+
+test("insert reuses generation recommendation from learning state when fields are omitted", async () => {
+  const fixture = await createFixture()
+  const [seed] = await StudioService.appendQuestionCards({
+    ...fixture,
+    drafts: [{ text: "第1题 初始题干", page: 1, canonicalAnswer: "A" }],
+  })
+  const db = getLocalSqlite()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO question_card_learning_states
+      (id, user_id, workroom_id, card_id, mastery_level, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, generation_recommendation_json, updated_at, created_at)
+      VALUES
+      (@id, @user_id, @workroom_id, @card_id, 'basic', 3, 1, 0, @last_attempt_at, @last_review_at, '[]', '[]', 'stagnant', 'summary', @generation_recommendation_json, @updated_at, @created_at)`,
+  ).run({
+    id: "learning_state_test_seed",
+    user_id: fixture.userID,
+    workroom_id: fixture.workroomID,
+    card_id: seed.id,
+    last_attempt_at: now,
+    last_review_at: now,
+    generation_recommendation_json: JSON.stringify({
+      recommended_difficulty: "easy",
+      recommended_question_types: ["选择题"],
+      recommended_knowledge_points: ["受迫振动"],
+    }),
+    updated_at: now,
+    created_at: now,
+  })
+
+  const inserted = await insertQuestionByIntent({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    questionNumber: 1,
+    placement: "after",
+    stem: "后续训练题（不显式传题型难度）",
+  })
+
+  assert.ok(inserted.card.questionType)
+  assert.ok(inserted.card.difficulty)
+  assert.ok(Array.isArray(inserted.card.knowledgePoints))
+  assert.ok(inserted.card.knowledgePoints.length > 0)
+  assert.equal(inserted.card.questionType, "选择题")
+  assert.equal(inserted.card.difficulty, "easy")
+  assert.deepEqual(inserted.card.knowledgePoints, ["受迫振动"])
 })

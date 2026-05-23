@@ -11,7 +11,7 @@ const ask = (input: { sessionID: SessionID; questions: ReadonlyArray<Question.In
 
 const list = () => AppRuntime.runPromise(Question.Service.use((svc) => svc.list()))
 
-const reply = (input: { requestID: QuestionID; answers: ReadonlyArray<Question.Answer> }) =>
+const reply = (input: { requestID: QuestionID; answers: ReadonlyArray<Question.Answer>; freeText?: ReadonlyArray<string | null> }) =>
   AppRuntime.runPromise(Question.Service.use((svc) => svc.reply(input)))
 
 const reject = (id: QuestionID) => AppRuntime.runPromise(Question.Service.use((svc) => svc.reject(id)))
@@ -85,7 +85,7 @@ test("ask - adds to pending list", async () => {
 
 // reply tests
 
-test("reply - resolves the pending ask with answers", async () => {
+test("reply - resolves the pending ask with answers and free text", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -112,10 +112,11 @@ test("reply - resolves the pending ask with answers", async () => {
       await reply({
         requestID,
         answers: [["Option 1"]],
+        freeText: ["I do not know"],
       })
 
-      const answers = await promise
-      expect(answers).toEqual([["Option 1"]])
+      const responses = await promise
+      expect(responses).toEqual([{ answers: ["Option 1"], freeText: "I do not know" }])
     },
   })
 })
@@ -277,8 +278,11 @@ test("ask - handles multiple questions", async () => {
         answers: [["Build"], ["Dev"]],
       })
 
-      const answers = await promise
-      expect(answers).toEqual([["Build"], ["Dev"]])
+      const responses = await promise
+      expect(responses).toEqual([
+        { answers: ["Build"], freeText: null },
+        { answers: ["Dev"], freeText: null },
+      ])
     },
   })
 })

@@ -144,13 +144,13 @@ function ensureMigrated() {
           INSERT OR REPLACE INTO studio_question_cards (
             id, user_id, workroom_id, studio_document_id, source_document_id, sequence_index,
             card_group_id,
-            page, text, original_text, answer_content_json, answer_text, canonical_answer, explanation,
+            page, text, original_text, question_type, difficulty, knowledge_points_json, answer_content_json, answer_text, canonical_answer, explanation,
             legend_images_json, derived_from_card_id, relation_type, origin_task_json,
             source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
           ) VALUES (
             @id, @user_id, @workroom_id, @studio_document_id, @source_document_id, @sequence_index,
             @card_group_id,
-            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer, @explanation,
+            @page, @text, @original_text, @question_type, @difficulty, @knowledge_points_json, @answer_content_json, @answer_text, @canonical_answer, @explanation,
             @legend_images_json, @derived_from_card_id, @relation_type, @origin_task_json,
             @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
           )
@@ -166,6 +166,9 @@ function ensureMigrated() {
         page: item.page,
         text: item.text,
         original_text: item.originalText,
+        question_type: (item as any).questionType ?? null,
+        difficulty: (item as any).difficulty ?? null,
+        knowledge_points_json: JSON.stringify((item as any).knowledgePoints ?? []),
         answer_content_json: JSON.stringify(ensureMathContentDocument((item as any).answerContent, item.answerText ?? "")),
         answer_text: mathContentToPromptText(ensureMathContentDocument((item as any).answerContent, item.answerText ?? "")),
         canonical_answer: item.canonicalAnswer ?? "",
@@ -256,6 +259,9 @@ export const StudioRepository = {
         page: Number(row.page),
         text: String(row.text),
         originalText: String(row.original_text),
+        questionType: (row.question_type as string | null) ?? null,
+        difficulty: (row.difficulty as string | null) ?? null,
+        knowledgePoints: parseJsonText<string[]>(String(row.knowledge_points_json ?? "[]"), []),
         answerContent: ensureMathContentDocument(
           parseJsonText(String(row.answer_content_json ?? ""), EMPTY_MATH_DOCUMENT),
           String(row.answer_text ?? ""),
@@ -314,13 +320,13 @@ export const StudioRepository = {
           INSERT INTO studio_question_cards (
             id, user_id, workroom_id, studio_document_id, source_document_id, sequence_index,
             card_group_id,
-            page, text, original_text, answer_content_json, answer_text, canonical_answer, explanation,
+            page, text, original_text, question_type, difficulty, knowledge_points_json, answer_content_json, answer_text, canonical_answer, explanation,
             legend_images_json, derived_from_card_id, relation_type, origin_task_json,
             source_selection_json, answer_evidence_json, learning_snapshot_json, created_at, updated_at
           ) VALUES (
             @id, @user_id, @workroom_id, @studio_document_id, @source_document_id, @sequence_index,
             @card_group_id,
-            @page, @text, @original_text, @answer_content_json, @answer_text, @canonical_answer, @explanation,
+            @page, @text, @original_text, @question_type, @difficulty, @knowledge_points_json, @answer_content_json, @answer_text, @canonical_answer, @explanation,
             @legend_images_json, @derived_from_card_id, @relation_type, @origin_task_json,
             @source_selection_json, @answer_evidence_json, @learning_snapshot_json, @created_at, @updated_at
           )
@@ -339,6 +345,9 @@ export const StudioRepository = {
           page: item.page,
           text: item.text,
           original_text: item.originalText,
+          question_type: item.questionType ?? null,
+          difficulty: item.difficulty ?? null,
+          knowledge_points_json: JSON.stringify(item.knowledgePoints ?? []),
           answer_content_json: JSON.stringify(answerContent),
           answer_text: mathContentToPromptText(answerContent),
           canonical_answer: item.canonicalAnswer ?? "",

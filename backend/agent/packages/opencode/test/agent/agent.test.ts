@@ -30,6 +30,7 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("build")
       expect(names).toContain("plan")
       expect(names).toContain("general")
+      expect(names).toContain("lecture")
       expect(names).toContain("explore")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
@@ -107,6 +108,23 @@ test("general agent denies todo tools", async () => {
       expect(general?.mode).toBe("subagent")
       expect(general?.hidden).toBeUndefined()
       expect(evalPerm(general, "todowrite")).toBe("deny")
+    },
+  })
+})
+
+test("lecture agent is a native subagent with checkpoint permissions", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const lecture = await load(tmp.path, (svc) => svc.get("lecture"))
+      expect(lecture).toBeDefined()
+      expect(lecture?.mode).toBe("subagent")
+      expect(lecture?.native).toBe(true)
+      expect(evalPerm(lecture, "question")).toBe("allow")
+      expect(evalPerm(lecture, "lecture_checkpoint")).toBe("allow")
+      expect(evalPerm(lecture, "todowrite")).toBe("deny")
+      expect(lecture?.prompt).toContain("lecture_checkpoint")
     },
   })
 })

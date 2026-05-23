@@ -1,4 +1,4 @@
-import test, { beforeEach } from "node:test"
+﻿import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import path from "node:path"
 import { mkdirSync } from "node:fs"
@@ -10,7 +10,10 @@ const { getLocalSqlite } = await import("../src/lib/local-sqlite")
 const { WorkroomService } = await import("../src/domains/workrooms/service")
 const { StudioService } = await import("../src/domains/studio/service")
 const { runStudioQuestionCardsCli } = await import("../src/cli/studio-question-cards")
-const { executeStudioQuestionCardsCommand } = await import("../src/domains/studio/command-bridge")
+const {
+  buildAgentBridgeWrapper,
+  buildStudioQuestionCardsCommandGuide,
+} = await import("../src/domains/agent/service")
 
 const dbPath = process.env.LOCAL_SQLITE_PATH
 
@@ -19,6 +22,11 @@ function resetDb() {
   mkdirSync(path.dirname(dbPath), { recursive: true })
   const db = getLocalSqlite()
   db.exec(`
+    DELETE FROM question_card_study_events;
+    DELETE FROM question_card_learning_states;
+    DELETE FROM question_card_learning_summaries;
+    DELETE FROM question_card_grading_records;
+    DELETE FROM question_card_knowledge_profiles;
     DELETE FROM question_card_weaknesses;
     DELETE FROM question_card_diagnoses;
     DELETE FROM question_card_attempts;
@@ -46,321 +54,228 @@ async function createFixture() {
   return { userID, workroomID: workroom.id, studioDocumentID: document.id }
 }
 
-async function createAmbiguousFixture() {
-  const userID = "user-studio-cli"
-  const workroom = await WorkroomService.create({
-    userID,
-    name: "题卡 CLI 歧义测试",
-    rootDirectory: path.join(process.cwd(), "tmp", "tests", "workrooms", `studio-cli-ambiguous-${Date.now()}`),
-  })
-  const first = await StudioService.createDocument({
-    userID,
-    workroomID: workroom.id,
-    title: "题卡集一",
-  })
-  const second = await StudioService.createDocument({
-    userID,
-    workroomID: workroom.id,
-    title: "题卡集二",
-  })
-  return { userID, workroomID: workroom.id, studioDocumentIDs: [first.id, second.id] }
-}
-
 beforeEach(() => {
   resetDb()
 })
 
-test("executeStudioQuestionCardsCommand returns compact cards through query bridge only", async () => {
-  const fixture = await createFixture()
-  await StudioService.appendQuestionCards({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    studioDocumentID: fixture.studioDocumentID,
-    drafts: [{ text: "原题一", page: 1 }, { text: "原题二", page: 1 }],
-  })
-  const existing = await StudioService.listQuestionCards({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    studioDocumentID: fixture.studioDocumentID,
-  })
-  await StudioService.insertQuestionCards({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    studioDocumentID: fixture.studioDocumentID,
-    anchorCardID: existing[0]!.id,
-    position: "after",
-    drafts: [{ text: "插入练习题", page: 1 }],
-  })
+test("old question commands are deprecated", async () => {
+  const stderr = new PassThrough()
+  const chunks: Buffer[] = []
+  stderr.on("data", (c) => chunks.push(Buffer.from(c)))
 
-  const listedResult = (await executeStudioQuestionCardsCommand("list-container-cards", fixture)) as {
-    cards: Array<{ preview: string; sequenceIndex: number; questionNumber: number }>
-  }
-  assert.deepEqual(
-    listedResult.cards.map((item) => item.questionNumber),
-    [1, 2, 3],
-  )
-  assert.deepEqual(
-    listedResult.cards.map((item) => item.sequenceIndex),
-    [0, 1, 2],
-  )
-  assert.match(listedResult.cards[0]?.preview ?? "", /原题一/)
+  const code = await runStudioQuestionCardsCli(["question", "search"], { stderr: stderr as any })
+  assert.equal(code, 1)
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { code: string; error: string }
+  assert.equal(parsed.code, "DEPRECATED_COMMAND")
+  assert.match(parsed.error, /q-search/)
 })
 
-test("runStudioQuestionCardsCli supports compact query stdin json and stdout response", async () => {
-  const fixture = await createFixture()
-  await StudioService.appendQuestionCards({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    studioDocumentID: fixture.studioDocumentID,
-    drafts: [{ text: "CLI 题一", page: 1 }],
-  })
-
-  const stdin = new PassThrough()
+test("q-insert --help exits successfully", async () => {
   const stdout = new PassThrough()
   const stderr = new PassThrough()
-  const outputChunks: Buffer[] = []
-  const errorChunks: Buffer[] = []
-  stdout.on("data", (chunk) => outputChunks.push(Buffer.from(chunk)))
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
-
-  stdin.end(
-    JSON.stringify({
-      userID: fixture.userID,
-      workroomID: fixture.workroomID,
-      studioDocumentID: fixture.studioDocumentID,
-    }),
-  )
-
-  const code = await runStudioQuestionCardsCli(["list-container-cards"], {
-    stdin: stdin as any,
-    stdout: stdout as any,
-    stderr: stderr as any,
-  })
-
-  assert.equal(code, 0, Buffer.concat(errorChunks).toString("utf8"))
-  const parsed = JSON.parse(Buffer.concat(outputChunks).toString("utf8")) as {
-    command: string
-    result: { cards: Array<{ preview: string }> }
-  }
-  assert.equal(parsed.command, "list-container-cards")
-  assert.match(parsed.result.cards[0]?.preview ?? "", /CLI 题一/)
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+  const code = await runStudioQuestionCardsCli(["q-insert", "--help"], { stdout: stdout as any, stderr: stderr as any })
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  assert.match(Buffer.concat(out).toString("utf8"), /q-insert --anchor-question-number/)
 })
 
-test("runStudioQuestionCardsCli returns compact cards for list-container-cards", async () => {
+test("q-search returns compact summaries", async () => {
   const fixture = await createFixture()
   await StudioService.appendQuestionCards({
     userID: fixture.userID,
     workroomID: fixture.workroomID,
     studioDocumentID: fixture.studioDocumentID,
-    drafts: [
-      {
-        text: "这是一个很长的题干，用来验证 list-container-cards 默认不会把完整重字段全部吐给 agent，而是只返回紧凑摘要和必要定位信息。",
-        page: 3,
-        explanation: "完整解析不应该出现在紧凑列表里",
-      },
-    ],
+    drafts: [{ text: "第1题 受迫振动", page: 1, explanation: "解析" }],
   })
 
-  const stdin = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
-  const outputChunks: Buffer[] = []
-  const errorChunks: Buffer[] = []
-  stdout.on("data", (chunk) => outputChunks.push(Buffer.from(chunk)))
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
 
-  stdin.end(
-    JSON.stringify({
-      userID: fixture.userID,
-      workroomID: fixture.workroomID,
-      studioDocumentID: fixture.studioDocumentID,
-    }),
+  const code = await runStudioQuestionCardsCli(
+    ["q-search", "--user-id", fixture.userID, "--workroom-id", fixture.workroomID, "--query", "受迫振动", "--limit", "5"],
+    { stdout: stdout as any, stderr: stderr as any },
   )
-
-  const code = await runStudioQuestionCardsCli(["list-container-cards"], {
-    stdin: stdin as any,
-    stdout: stdout as any,
-    stderr: stderr as any,
-  })
-
-  assert.equal(code, 0, Buffer.concat(errorChunks).toString("utf8"))
-  const parsed = JSON.parse(Buffer.concat(outputChunks).toString("utf8")) as {
-    result: {
-      cards: Array<{
-        id: string
-        questionNumber: number
-        sequenceIndex: number
-        page: number | null
-        preview: string
-        text?: string
-        explanation?: string | null
-      }>
-    }
-  }
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  const parsed = JSON.parse(Buffer.concat(out).toString("utf8")) as { result: { cards: Array<Record<string, unknown>> } }
   assert.equal(parsed.result.cards.length, 1)
-  assert.equal(parsed.result.cards[0]?.questionNumber, 1)
-  assert.equal(parsed.result.cards[0]?.sequenceIndex, 0)
-  assert.equal(parsed.result.cards[0]?.page, 3)
-  assert.ok(parsed.result.cards[0]?.preview.length > 0)
-  assert.equal("text" in (parsed.result.cards[0] ?? {}), false)
-  assert.equal("explanation" in (parsed.result.cards[0] ?? {}), false)
+  assert.equal(Object.hasOwn(parsed.result.cards[0] ?? {}, "explanation"), false)
 })
 
-test("runStudioQuestionCardsCli preserves structured error detail for invalid compact query payload", async () => {
-  const stdin = new PassThrough()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const errorChunks: Buffer[] = []
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
-
-  stdin.end(JSON.stringify({}))
-
-  const code = await runStudioQuestionCardsCli(["list-container-cards"], {
-    stdin: stdin as any,
-    stdout: stdout as any,
-    stderr: stderr as any,
-  })
-
-  assert.equal(code, 1)
-  const parsed = JSON.parse(Buffer.concat(errorChunks).toString("utf8")) as {
-    code: string
-    detail: Array<{ path: string[] }>
-  }
-  assert.equal(parsed.code, "INVALID_INPUT")
-  assert.ok(Array.isArray(parsed.detail))
-  assert.ok(parsed.detail.length > 0)
-})
-
-test("runStudioQuestionCardsCli supports question create with business fields only", async () => {
-  const fixture = await createFixture()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const outputChunks: Buffer[] = []
-  const errorChunks: Buffer[] = []
-  stdout.on("data", (chunk) => outputChunks.push(Buffer.from(chunk)))
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
-
-  const code = await runStudioQuestionCardsCli(
-    [
-      "question",
-      "create",
-      "--user-id",
-      fixture.userID,
-      "--workroom-id",
-      fixture.workroomID,
-      "--stem",
-      "业务题干",
-      "--answer",
-      "B",
-      "--explanation",
-      "这是解析",
-      "--option-a",
-      "选项A",
-      "--option-b",
-      "选项B",
-      "--option-c",
-      "选项C",
-      "--option-d",
-      "选项D",
-    ],
-    { stdout: stdout as any, stderr: stderr as any },
-  )
-
-  assert.equal(code, 0, Buffer.concat(errorChunks).toString("utf8"))
-  const parsed = JSON.parse(Buffer.concat(outputChunks).toString("utf8")) as {
-    command: string
-    result: {
-      mode: string
-      card: { questionNumber: number; answerText: string | null; explanation: string | null; text: string }
-    }
-  }
-  assert.equal(parsed.command, "question")
-  assert.equal(parsed.result.mode, "create")
-  assert.equal(parsed.result.card.questionNumber, 1)
-  assert.equal(parsed.result.card.answerText, "B")
-  assert.equal(parsed.result.card.explanation, "这是解析")
-  assert.match(parsed.result.card.text, /A\.\s*选项A/)
-
-  const detail = await StudioService.getQuestionCardDetail({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    cardID: parsed.result.card.id,
-  })
-  assert.equal(detail.card.canonicalAnswer, "B")
-  assert.equal(detail.card.explanation, "这是解析")
-})
-
-test("runStudioQuestionCardsCli requires inline question text and does not accept file-style question input", async () => {
-  const fixture = await createFixture()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const errorChunks: Buffer[] = []
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
-
-  const code = await runStudioQuestionCardsCli(
-    [
-      "question",
-      "create",
-      "--user-id",
-      fixture.userID,
-      "--workroom-id",
-      fixture.workroomID,
-      "--stem-file",
-      "stem_temp.txt",
-    ],
-    { stdout: stdout as any, stderr: stderr as any },
-  )
-
-  assert.equal(code, 1)
-  const parsed = JSON.parse(Buffer.concat(errorChunks).toString("utf8")) as {
-    code: string
-    error: string
-  }
-  assert.equal(parsed.code, "INVALID_ARGUMENT")
-  assert.match(parsed.error, /missing stem/)
-})
-
-test("runStudioQuestionCardsCli supports question insert by 1-based question number", async () => {
+test("q-get supports --question-number without search fallback", async () => {
   const fixture = await createFixture()
   await StudioService.appendQuestionCards({
     userID: fixture.userID,
     workroomID: fixture.workroomID,
     studioDocumentID: fixture.studioDocumentID,
-    drafts: [{ text: "第一题", page: 1 }, { text: "第二题", page: 1 }, { text: "第三题", page: 1 }],
+    drafts: [{ text: "第一题", page: 1, answerText: "A", explanation: "解析A" }],
   })
 
   const stdout = new PassThrough()
   const stderr = new PassThrough()
-  const outputChunks: Buffer[] = []
-  const errorChunks: Buffer[] = []
-  stdout.on("data", (chunk) => outputChunks.push(Buffer.from(chunk)))
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
 
-  let code = await runStudioQuestionCardsCli(
-    [
-      "question",
-      "insert",
-      "--user-id",
-      fixture.userID,
-      "--workroom-id",
-      fixture.workroomID,
-      "--question-number",
-      "3",
-      "--placement",
-      "after",
-      "--stem",
-      "第三题后插入",
-    ],
+  const code = await runStudioQuestionCardsCli(
+    ["q-get", "--user-id", fixture.userID, "--workroom-id", fixture.workroomID, "--question-number", "1", "--json"],
     { stdout: stdout as any, stderr: stderr as any },
   )
-  assert.equal(code, 0, Buffer.concat(errorChunks).toString("utf8"))
-  outputChunks.length = 0
-  errorChunks.length = 0
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  const parsed = JSON.parse(Buffer.concat(out).toString("utf8")) as {
+    result: {
+      anchor: { questionNumber: number }
+      content: { answer: string; explanation: string | null }
+      learningProfile: { currentState: { total_attempts: number } | null }
+    }
+  }
+  assert.equal(parsed.result.anchor.questionNumber, 1)
+  assert.equal(parsed.result.content.answer, "A")
+  assert.equal(parsed.result.content.explanation, "解析A")
+  assert.equal(parsed.result.learningProfile.currentState?.total_attempts ?? 0, 0)
+})
 
-  code = await runStudioQuestionCardsCli(
+test("q-get outputs plain text by default", async () => {
+  const fixture = await createFixture()
+  await StudioService.appendQuestionCards({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    studioDocumentID: fixture.studioDocumentID,
+    drafts: [{ text: "第一题", page: 1 }],
+  })
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+  const code = await runStudioQuestionCardsCli(
+    ["q-get", "--user-id", fixture.userID, "--workroom-id", fixture.workroomID, "--question-number", "1"],
+    { stdout: stdout as any, stderr: stderr as any },
+  )
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  const text = Buffer.concat(out).toString("utf8")
+  assert.match(text, /cardID:/)
+  assert.match(text, /定位信息:/)
+  assert.match(text, /原题:/)
+  assert.match(text, /答案:/)
+  assert.match(text, /解析:/)
+  assert.match(text, /建议出题:/)
+  assert.match(text, /建议难度:/)
+  assert.match(text, /上次做错原因:/)
+  assert.equal(text.includes('"ok"'), false)
+})
+
+test("q-get --full is rejected in the agent bridge", async () => {
+  const fixture = await createFixture()
+  await StudioService.appendQuestionCards({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    studioDocumentID: fixture.studioDocumentID,
+    drafts: [{ text: "第一题", page: 1 }],
+  })
+
+  const stderr = new PassThrough()
+  const err: Buffer[] = []
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+
+  const code = await runStudioQuestionCardsCli(
+    ["q-get", "--user-id", fixture.userID, "--workroom-id", fixture.workroomID, "--question-number", "1", "--full"],
+    { stderr: stderr as any },
+  )
+  assert.equal(code, 1)
+  const parsed = JSON.parse(Buffer.concat(err).toString("utf8")) as { code: string; error: string }
+  assert.equal(parsed.code, "COMMAND_EXECUTION_FAILED")
+  assert.match(parsed.error, /UNSUPPORTED_ARGUMENT: q-get --full is disabled/i)
+})
+
+test("q-get payload avoids duplicate stem and diagnosis", async () => {
+  const fixture = await createFixture()
+  const [card] = await StudioService.appendQuestionCards({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    studioDocumentID: fixture.studioDocumentID,
+    drafts: [{ text: "第一题", page: 1 }],
+  })
+  await StudioService.submitAttempt({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    cardID: card.id,
+    answerText: "A",
+  })
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+  const code = await runStudioQuestionCardsCli(
+    ["q-get", "--user-id", fixture.userID, "--workroom-id", fixture.workroomID, "--question-number", "1", "--json"],
+    { stdout: stdout as any, stderr: stderr as any },
+  )
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  const body = Buffer.concat(out).toString("utf8")
+  assert.match(body, /"cardID":/)
+  assert.match(body, /"anchor":/)
+  assert.match(body, /"content":/)
+})
+
+test("agent question-card guide makes q-get launch-ready", () => {
+  const guide = buildStudioQuestionCardsCommandGuide({
+    userID: "user-studio-cli",
+    workroomID: "workroom-studio-cli",
+    workroomRootDirectory: "D:/Exam-paper/backend/local-data/workrooms/workroom-studio-cli",
+  })
+  assert.equal(guide.includes("[--full]"), false)
+  assert.match(
+    guide,
+    /q-get returns a launch-ready detail view by default: cardID, question number, original question text, answer, explanation, grading-AI question recommendation, suggested difficulty, and the latest wrong-reason summary\./,
+  )
+  assert.match(guide, /After q-get --question-number <n>, use the returned cardID directly\./)
+  assert.match(guide, /Debugging must go to backend logs or request dumps, not back into agent tool context\./)
+})
+
+test("agent bridge wrapper is emitted as a valid module with top-level await", () => {
+  const wrapper = buildAgentBridgeWrapper({
+    bridgeBaseURL: "http://127.0.0.1:3000",
+    bridgeToken: "token-demo",
+    userID: "user-studio-cli",
+    workroomID: "workroom-studio-cli",
+    cliImportPath: "D:/Exam-paper/backend/src/cli/lecture.ts",
+    entrypoint: "runLectureCli",
+  })
+
+  assert.match(wrapper, /^export \{\}\n/m)
+  assert.match(wrapper, /const \{ runLectureCli \} = await import\("D:\/Exam-paper\/backend\/src\/cli\/lecture\.ts"\)/)
+  assert.match(wrapper, /const exitCode = await runLectureCli\(process\.argv\.slice\(2\)\)/)
+})
+
+test("q-similar inserts around question number in one command", async () => {
+  const fixture = await createFixture()
+  await StudioService.appendQuestionCards({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    studioDocumentID: fixture.studioDocumentID,
+    drafts: [{ text: "第一题", page: 1 }, { text: "第二题", page: 1 }],
+  })
+
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  stdout.on("data", (c) => out.push(Buffer.from(c)))
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+
+  const code = await runStudioQuestionCardsCli(
     [
-      "question",
-      "insert",
+      "q-similar",
       "--user-id",
       fixture.userID,
       "--workroom-id",
@@ -368,84 +283,53 @@ test("runStudioQuestionCardsCli supports question insert by 1-based question num
       "--question-number",
       "1",
       "--placement",
-      "before",
-      "--stem",
-      "第一题前插入",
+      "after",
+      "--text",
+      "类似题",
     ],
     { stdout: stdout as any, stderr: stderr as any },
   )
-  assert.equal(code, 0, Buffer.concat(errorChunks).toString("utf8"))
-
-  const listedCards = await StudioService.listQuestionCards({
-    userID: fixture.userID,
-    workroomID: fixture.workroomID,
-    studioDocumentID: fixture.studioDocumentID,
-  })
-  assert.deepEqual(
-    listedCards.map((item) => item.text),
-    ["第一题前插入", "第一题", "第二题", "第三题", "第三题后插入"],
-  )
+  assert.equal(code, 0, Buffer.concat(err).toString("utf8"))
+  const parsed = JSON.parse(Buffer.concat(out).toString("utf8")) as { result: { mode: string; source: { questionNumber: number } } }
+  assert.equal(parsed.result.mode, "similar")
+  assert.equal(parsed.result.source.questionNumber, 1)
 })
 
-test("runStudioQuestionCardsCli rejects ambiguous target and out-of-range question number", async () => {
-  const ambiguous = await createAmbiguousFixture()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const errorChunks: Buffer[] = []
-  stderr.on("data", (chunk) => errorChunks.push(Buffer.from(chunk)))
-
-  let code = await runStudioQuestionCardsCli(
-    [
-      "question",
-      "create",
-      "--user-id",
-      ambiguous.userID,
-      "--workroom-id",
-      ambiguous.workroomID,
-      "--stem",
-      "无法确定目标",
-    ],
-    { stdout: stdout as any, stderr: stderr as any },
-  )
-  assert.equal(code, 1)
-  let parsed = JSON.parse(Buffer.concat(errorChunks).toString("utf8")) as {
-    code: string
-    detail: { totalDocuments?: number } | null
-  }
-  assert.equal(parsed.code, "TARGET_STUDIO_DOCUMENT_AMBIGUOUS")
-  assert.equal(parsed.detail?.totalDocuments, 2)
-
-  errorChunks.length = 0
+test("q-insert out-of-range returns structured error", async () => {
   const fixture = await createFixture()
   await StudioService.appendQuestionCards({
     userID: fixture.userID,
     workroomID: fixture.workroomID,
     studioDocumentID: fixture.studioDocumentID,
-    drafts: [{ text: "唯一题目", page: 1 }],
+    drafts: [{ text: "唯一题", page: 1 }],
   })
-  code = await runStudioQuestionCardsCli(
+
+  const stderr = new PassThrough()
+  const err: Buffer[] = []
+  stderr.on("data", (c) => err.push(Buffer.from(c)))
+
+  const code = await runStudioQuestionCardsCli(
     [
-      "question",
-      "insert",
+      "q-insert",
       "--user-id",
       fixture.userID,
       "--workroom-id",
       fixture.workroomID,
       "--question-number",
-      "5",
+      "9",
       "--placement",
       "after",
-      "--stem",
-      "越界插入",
+      "--text",
+      "越界题",
     ],
-    { stdout: stdout as any, stderr: stderr as any },
+    { stderr: stderr as any },
   )
   assert.equal(code, 1)
-  parsed = JSON.parse(Buffer.concat(errorChunks).toString("utf8")) as {
+  const parsed = JSON.parse(Buffer.concat(err).toString("utf8")) as {
     code: string
     detail: { requested?: number; totalAvailable?: number } | null
   }
   assert.equal(parsed.code, "QUESTION_NUMBER_OUT_OF_RANGE")
-  assert.equal(parsed.detail?.requested, 5)
+  assert.equal(parsed.detail?.requested, 9)
   assert.equal(parsed.detail?.totalAvailable, 1)
 })

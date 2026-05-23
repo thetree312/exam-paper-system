@@ -80,6 +80,66 @@ const sanitizeSchema: RehypeSanitizeOptions = (() => {
   }
 })()
 
+function getNodeText(node: any): string {
+  if (!node) return ''
+  if (typeof node.value === 'string') return node.value
+  if (!Array.isArray(node.children)) return ''
+  return node.children.map(getNodeText).join('')
+}
+
+function hasKatexErrorClass(node: any): boolean {
+  if (node?.tagName === 'merror') return true
+  const className = node?.properties?.className
+  if (typeof className === 'string') return className.split(/\s+/).includes('katex-error')
+  if (Array.isArray(className)) return className.map(String).includes('katex-error')
+  return false
+}
+
+function rehypeRecoverKatexErrors() {
+  return (tree: any) => {
+    const visit = (node: any, parent: any, index: number | null) => {
+      if (!node || !Array.isArray(node.children)) return
+      for (let i = 0; i < node.children.length; i += 1) {
+        const child = node.children[i]
+        if (hasKatexErrorClass(child)) {
+          node.children[i] = {
+            type: 'element',
+            tagName: child.tagName === 'span' ? 'code' : 'code',
+            properties: {
+              className: ['math-katex-error-fallback'],
+            },
+            children: [
+              {
+                type: 'text',
+                value: getNodeText(child).trim(),
+              },
+            ],
+          }
+          continue
+        }
+        visit(child, node, i)
+      }
+      if (parent && index != null && hasKatexErrorClass(node)) {
+        parent.children[index] = {
+          type: 'element',
+          tagName: 'code',
+          properties: {
+            className: ['math-katex-error-fallback'],
+          },
+          children: [
+            {
+              type: 'text',
+              value: getNodeText(node).trim(),
+            },
+          ],
+        }
+      }
+    }
+
+    visit(tree, null, null)
+  }
+}
+
 const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?: boolean }> = ({
   children,
   className,
@@ -99,7 +159,9 @@ const MarkdownWithMathComponent: React.FC<MarkdownWithMathProps & { disableMath?
   const remarkPlugins = disableMath ? [remarkGfm] : [remarkMath, remarkGfm]
   
   // 数学渲染路径下只使用 rehype-katex，避免 rehype-sanitize 将 KaTeX 生成的 SVG / MathML 结构裁剪掉
-  const rehypePlugins: any[] = disableMath ? [[rehypeSanitize, sanitizeSchema]] : [[rehypeKatex]]
+  const rehypePlugins: any[] = disableMath
+    ? [[rehypeSanitize, sanitizeSchema]]
+    : [[rehypeKatex], rehypeRecoverKatexErrors]
 
   const mergedComponents: Components = {
     p: ({ children }) => (

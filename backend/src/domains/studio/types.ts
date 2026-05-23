@@ -44,6 +44,9 @@ export type StudioQuestionCardRecord = {
   page: number
   text: string
   originalText: string
+  questionType?: string | null
+  difficulty?: string | null
+  knowledgePoints: string[]
   answerContent: MathContentDocument
   answerText: string
   canonicalAnswer: string

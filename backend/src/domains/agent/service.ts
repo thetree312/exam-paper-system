@@ -62,13 +62,36 @@ function mergeAgentConfig(base: Record<string, unknown>, override: Record<string
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const studioQuestionCardsCliPath = path.join(repoRoot, "backend", "src", "cli", "studio-question-cards.ts")
+const lectureCliPath = path.join(repoRoot, "backend", "src", "cli", "lecture.ts")
 const localModelsCatalogPath = path.join(repoRoot, "backend", "vendor", "models.dev", "dist", "_api.json")
 const logger = createLogger({ domain: "agent", source: "runtime" })
-export const STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION = "studio-question-cards-bridge@v8"
+export const STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION = "studio-question-cards-bridge@v15"
 let initializePromise: Promise<void> | undefined
 let opencodeModulesPromise: Promise<any> | undefined
 const instanceBootstrapByDirectory = new Map<string, Promise<void>>()
 const opencodeImportBase = "@/"
+
+export function buildAgentBridgeWrapper(input: {
+  bridgeBaseURL: string
+  bridgeToken: string
+  userID: string
+  workroomID: string
+  cliImportPath: string
+  entrypoint: string
+}) {
+  return [
+    "export {}",
+    "",
+    `process.env.STUDIO_QUESTION_CARDS_BRIDGE_BASE_URL = ${JSON.stringify(input.bridgeBaseURL)}`,
+    `process.env.STUDIO_QUESTION_CARDS_BRIDGE_TOKEN = ${JSON.stringify(input.bridgeToken)}`,
+    `process.env.STUDIO_QUESTION_CARDS_SCOPE_USER_ID = ${JSON.stringify(input.userID)}`,
+    `process.env.STUDIO_QUESTION_CARDS_SCOPE_WORKROOM_ID = ${JSON.stringify(input.workroomID)}`,
+    `const { ${input.entrypoint} } = await import(${JSON.stringify(input.cliImportPath.replace(/\\/g, "/"))})`,
+    `const exitCode = await ${input.entrypoint}(process.argv.slice(2))`,
+    `if (typeof exitCode === "number" && exitCode !== 0) process.exit(exitCode)`,
+    "",
+  ].join("\n")
+}
 
 async function importOpencode(modulePath: string) {
   return import(`${opencodeImportBase}${modulePath}`)
@@ -451,20 +474,32 @@ async function materializeAgentCommandBridges(input: {
   const relativeWrapperPath = path.join("wiki", ".agent", "bin", "studio-question-cards.ts")
   const wrapperPath = path.join(input.rootDirectory, relativeWrapperPath)
   await fs.mkdir(path.dirname(wrapperPath), { recursive: true })
-  const cliImportPath = JSON.stringify(studioQuestionCardsCliPath.replace(/\\/g, "/"))
-  const wrapper = [
-    `process.env.STUDIO_QUESTION_CARDS_BRIDGE_BASE_URL = ${JSON.stringify(input.bridgeBaseURL)}`,
-    `process.env.STUDIO_QUESTION_CARDS_BRIDGE_TOKEN = ${JSON.stringify(input.bridgeToken)}`,
-    `process.env.STUDIO_QUESTION_CARDS_SCOPE_USER_ID = ${JSON.stringify(input.userID)}`,
-    `process.env.STUDIO_QUESTION_CARDS_SCOPE_WORKROOM_ID = ${JSON.stringify(input.workroomID)}`,
-    `const { runStudioQuestionCardsCli } = await import(${cliImportPath})`,
-    `const exitCode = await runStudioQuestionCardsCli(process.argv.slice(2))`,
-    `if (typeof exitCode === "number" && exitCode !== 0) process.exit(exitCode)`,
-    "",
-  ].join("\n")
+  const wrapper = buildAgentBridgeWrapper({
+    bridgeBaseURL: input.bridgeBaseURL,
+    bridgeToken: input.bridgeToken,
+    userID: input.userID,
+    workroomID: input.workroomID,
+    cliImportPath: studioQuestionCardsCliPath,
+    entrypoint: "runStudioQuestionCardsCli",
+  })
   const current = await fs.readFile(wrapperPath, "utf8").catch(() => null)
   if (current === wrapper) return
   await fs.writeFile(wrapperPath, wrapper, "utf8")
+
+  const lectureWrapperPath = path.join(input.rootDirectory, "wiki", ".agent", "bin", "lecture.ts")
+  await fs.mkdir(path.dirname(lectureWrapperPath), { recursive: true })
+  const lectureWrapper = buildAgentBridgeWrapper({
+    bridgeBaseURL: input.bridgeBaseURL,
+    bridgeToken: input.bridgeToken,
+    userID: input.userID,
+    workroomID: input.workroomID,
+    cliImportPath: lectureCliPath,
+    entrypoint: "runLectureCli",
+  })
+  const currentLecture = await fs.readFile(lectureWrapperPath, "utf8").catch(() => null)
+  if (currentLecture !== lectureWrapper) {
+    await fs.writeFile(lectureWrapperPath, lectureWrapper, "utf8")
+  }
 }
 
 export function buildStudioQuestionCardsCommandGuide(input: {
@@ -476,13 +511,77 @@ export function buildStudioQuestionCardsCommandGuide(input: {
   return [
     `[guide-version:${STUDIO_QUESTION_CARDS_BRIDGE_GUIDE_VERSION}]`,
     `Bridge scope is already fixed to userID=${JSON.stringify(input.userID)} and workroomID=${JSON.stringify(input.workroomID)} in agent runtime. Do not invent studioDocumentID, sourceDocumentID, anchorCardID, cardID, or other internal IDs.`,
-    `For question-card writing, only use: bun ${commandPath} question create ... or bun ${commandPath} question insert ...`,
+    `Available question-card commands: bun ${commandPath} q-search --query <text> [--limit <n>] ; bun ${commandPath} q-get --card-id <id> | --question-number <n> ; bun ${commandPath} q-create ... ; bun ${commandPath} q-insert ... ; bun ${commandPath} q-similar ...`,
     "Question commands call the backend question API directly.",
-    "Pass only inline business intent: stem, optional answer, optional explanation, optional options, plus question-number and placement for insert.",
-    "Do not request card lists before insert unless the human explicitly asks to inspect current questions.",
+    "q-search returns only compact card summaries. q-get returns a launch-ready detail view by default: cardID, question number, original question text, answer, explanation, grading-AI question recommendation, suggested difficulty, and the latest wrong-reason summary.",
+    "After q-get --question-number <n>, use the returned cardID directly. Do not search again for the card ID.",
+    "Debugging must go to backend logs or request dumps, not back into agent tool context.",
+    "Pass the full question body with --text whenever you create or insert a card. Use --stem only as a compatibility fallback.",
+    "Optional answer, explanation, and metadata are allowed. Options are only a compatibility input and must not replace the full question text.",
+    "Do not use any list-style command to enumerate all cards. Use q-search only when fuzzy lookup is needed.",
     "Do not base64-encode question text. Do not write temporary files.",
-    "Use question create for append. Use question insert for insertion around a 1-based question number.",
+    "Use q-create for append. Use q-insert for insertion around a 1-based question number. Use q-similar for one-shot generate-and-insert around a 1-based question number.",
   ].join("\n")
+}
+
+export function buildLectureCommandGuide(input: {
+  sessionID: string
+  studioDocumentID?: string | null
+}) {
+  const commandPath = "wiki/.agent/bin/lecture.ts"
+  return [
+    "[guide-version:lecture-bridge@v2]",
+    "If the user asks to explain a question, teach a question, walk through a question like a teacher, or requests 讲解/讲题/像老师一样讲, do not answer with a full explanation directly in the chat sidebar.",
+    "For explanation intent, you must enter lecture flow first: resolve the target card with studio-question-cards q-get or q-search, then run lecture launch.",
+    "When the user references a numbered question such as 第一题/第1题/question 1, resolve it with q-get --question-number <n> before launching lecture. Do not fabricate card IDs.",
+    "lecture launch only creates or recovers the lecture container. The actual teaching must come from a native opencode child task delegated by the parent agent.",
+    "Do not use lecture append-block, answer, render-html, complete, or any other lecture bridge command from the parent session.",
+    "After launch succeeds, immediately delegate a native task subagent of type lecture. Do not answer the question in the parent chat sidebar.",
+    "Use the launch result JSON fields taskDescription and taskPrompt verbatim for the delegated lecture child task. Do not rewrite them in the parent chat.",
+    "The delegated task prompt must carry the launch result JSON fields you just received, especially question text and available highlight targets.",
+    "Use a short task description that names the lecture topic or question without embedding internal session ids.",
+    `Use bun ${commandPath} launch --card-id <cardID> --origin-agent-session-id ${JSON.stringify(input.sessionID)} to create or recover a lecture session.`,
+    input.studioDocumentID
+      ? `Current studioDocumentID is ${JSON.stringify(input.studioDocumentID)}. Pass --studio-document-id ${JSON.stringify(input.studioDocumentID)} whenever you already know the target card is in the current题卡集.`
+      : "If studioDocumentID is unknown, launch can infer it from cardID.",
+    "Do not fabricate lectureSessionID, cardID, studioDocumentID, or target ids. Use the q-get output cardID and the launch result JSON; do not search again for card IDs.",
+    "For the lecture child task, do not pass --session-id to lecture bridge commands. The bridge resolves the current lecture container automatically.",
+    "When the lecture child writes text that contains LaTeX, it must preserve literal `$...$` / `$$...$$` delimiters. Use UTF-8 temp files or single-quoted here-strings in PowerShell; do not write lecture text through double-quoted PowerShell strings.",
+    "When the lecture child appends or answers with source highlights, it must pass `--highlight-spans-env <ENV>` and provide a JSON array of exact quotes from the current source blocks. Do not leave highlight spans empty when quoting the question stem or options.",
+  ].join("\n")
+}
+
+export function analyzeLectureIntentPrompt(promptText: string) {
+  const normalized = promptText.trim()
+  const isLectureIntent =
+    /讲解|讲题|像老师一样讲|带我做|带我分析|引导我|一步一步讲|walk through|teach me|explain (this|the) question|socratic/i.test(
+      normalized,
+    )
+  const numbered =
+    normalized.match(/第\s*(\d+)\s*题/) ??
+    normalized.match(/\bquestion\s*(\d+)\b/i) ??
+    normalized.match(/\bq\s*(\d+)\b/i)
+  return {
+    isLectureIntent,
+    questionNumber: numbered ? Number(numbered[1]) : null,
+  }
+}
+
+export function buildLectureIntentDirective(input: {
+  questionNumber?: number | null
+}) {
+  return [
+    "[lecture-intent:confirmed]",
+    "This turn is confirmed lecture intent.",
+    "You must complete lecture entry in this turn instead of answering directly in the parent chat sidebar.",
+    input.questionNumber != null
+      ? `Resolve the target card with q-get --question-number ${input.questionNumber} unless the user already supplied a concrete card id.`
+      : "Resolve the target card with q-get or q-search before launching lecture.",
+    "After launch succeeds, immediately delegate the lecture child subagent with the launch result taskDescription and taskPrompt.",
+    "The parent chat may only tell the user that the lecture entrance is ready. The actual teaching must happen in the delegated lecture child session.",
+  ]
+    .filter(Boolean)
+    .join("\n")
 }
 
 export async function withAgentScope<T>(

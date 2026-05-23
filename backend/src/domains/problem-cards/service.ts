@@ -34,6 +34,22 @@ type ProgressSignal =
   | "relapse"
   | "deeper_confusion"
 
+type QuestionGenerationRecommendation = {
+  strategy: "remedial" | "stabilize" | "advance"
+  recommended_difficulty: "easy" | "medium" | "hard"
+  recommended_question_types: string[]
+  recommended_knowledge_points: string[]
+  recommended_relation_type: "practice_generated" | "variant" | "explanation_followup"
+  target_ability: string[]
+  avoid_patterns: string[]
+  prompt_hints: string[]
+  reason_summary: string
+  confidence: number
+  based_on_attempt_id: string
+  based_on_attempt_index: number
+  updated_at: string
+}
+
 function computeMasterySnapshot(input: {
   totalAttempts: number
   correctAttempts: number
@@ -191,10 +207,132 @@ function appendUniqueTextArray(raw: string | null | undefined, value: string) {
   return Array.from(new Set([...existing, next]))
 }
 
+function normalizeWeaknessKey(text: string) {
+  const raw = text.trim()
+  if (!raw) return ""
+  const compact = raw
+    .toLowerCase()
+    .replace(/[，。、“”"'‘’（）()【】\[\]\s\-_,.:：;；!?！？]/g, "")
+  if (!compact) return ""
+  if ((compact.includes("固有频率") && compact.includes("决定")) || compact.includes("受迫振动频率")) {
+    return "固有频率与受迫振动频率区分"
+  }
+  if (compact.includes("共振") && (compact.includes("条件") || compact.includes("发生"))) {
+    return "共振条件理解"
+  }
+  if (compact.includes("多普勒") && compact.includes("频率")) {
+    return "多普勒频率变化判断"
+  }
+  if ((compact.includes("概念") && compact.includes("错误")) || compact.includes("concept")) {
+    return "概念理解错误"
+  }
+  return compact
+}
+
+function dedupeWeaknessLabels(labels: string[]) {
+  const map = new Map<string, string>()
+  for (const label of labels.map((item) => item.trim()).filter(Boolean)) {
+    const key = normalizeWeaknessKey(label)
+    if (!key) continue
+    const existing = map.get(key)
+    if (!existing || label.length > existing.length) {
+      map.set(key, label)
+    }
+  }
+  return map
+}
+
+function mapDifficultyFromMastery(masteryLevel: string, unresolvedWeaknessCount: number): "easy" | "medium" | "hard" {
+  const level = masteryLevel.toLowerCase()
+  if (level === "unmastered" || level === "weak") return "easy"
+  if (level === "basic") return unresolvedWeaknessCount > 0 ? "easy" : "medium"
+  if (level === "good") return unresolvedWeaknessCount > 0 ? "medium" : "hard"
+  if (level === "proficient") return "hard"
+  return "medium"
+}
+
+function buildGenerationRecommendation(input: {
+  now: string
+  attemptID: string
+  attemptIndex: number
+  masteryLevel: string
+  progressSignal: ProgressSignal
+  unresolvedWeaknesses: string[]
+  repeatedMistakes: string[]
+  knowledgePoints: string[]
+  mistakeType?: string | null
+}) {
+  const unresolvedCount = input.unresolvedWeaknesses.length
+  const strategy: QuestionGenerationRecommendation["strategy"] =
+    input.progressSignal === "breakthrough" || input.progressSignal === "stabilizing"
+      ? "advance"
+      : input.progressSignal === "partial_repair" || input.progressSignal === "stagnant"
+        ? "stabilize"
+        : "remedial"
+  const recommended_difficulty = mapDifficultyFromMastery(input.masteryLevel, unresolvedCount)
+  const recommended_question_types =
+    strategy === "remedial"
+      ? ["选择题", "判断题"]
+      : strategy === "stabilize"
+        ? ["选择题", "填空题"]
+        : ["填空题", "简答题"]
+  const target_ability =
+    strategy === "remedial"
+      ? ["概念辨析", "基础审题"]
+      : strategy === "stabilize"
+        ? ["步骤稳定性", "易错点修复"]
+        : ["变式迁移", "综合推理"]
+  const avoid_patterns = Array.from(
+    new Set([
+      unresolvedCount > 0 ? "避免跨越当前薄弱点直接提难度" : "",
+      input.repeatedMistakes.length > 0 ? "避免重复同构题干与选项排列" : "",
+      input.progressSignal === "deeper_confusion" ? "避免多知识点混合新题" : "",
+      input.progressSignal === "relapse" ? "避免直接升级题型复杂度" : "",
+    ].filter(Boolean)),
+  )
+  const prompt_hints = Array.from(
+    new Set([
+      recommended_difficulty === "easy" ? "优先单知识点、短题干、低干扰选项" : "",
+      recommended_difficulty === "medium" ? "保持单核心知识点，可加入一步变式" : "",
+      recommended_difficulty === "hard" ? "允许跨表示转换与多步骤推理" : "",
+      input.mistakeType ? `覆盖错因类型:${input.mistakeType}` : "",
+    ].filter(Boolean)),
+  )
+  const recommended_knowledge_points = input.knowledgePoints.length > 0 ? input.knowledgePoints : input.unresolvedWeaknesses.slice(0, 3)
+  const recommended_relation_type: QuestionGenerationRecommendation["recommended_relation_type"] =
+    strategy === "advance" ? "variant" : "practice_generated"
+  const reason_summary =
+    strategy === "remedial"
+      ? "当前薄弱点仍未收敛，建议先做低难度巩固题。"
+      : strategy === "stabilize"
+        ? "学习状态处于修复/稳定阶段，建议中低难度巩固变式。"
+        : "近期表现稳定，可做更高难度迁移题。"
+  const confidence = Number((0.55 + Math.min(0.35, input.attemptIndex * 0.05)).toFixed(2))
+  return {
+    strategy,
+    recommended_difficulty,
+    recommended_question_types,
+    recommended_knowledge_points,
+    recommended_relation_type,
+    target_ability,
+    avoid_patterns,
+    prompt_hints,
+    reason_summary,
+    confidence,
+    based_on_attempt_id: input.attemptID,
+    based_on_attempt_index: input.attemptIndex,
+    updated_at: input.now,
+  } satisfies QuestionGenerationRecommendation
+}
+
 const FIRST_GRADING_PROMPT = [
   "你是题卡批改系统。输出 JSON，字段：grading_record, knowledge_profile。",
   "grading_record 字段：is_correct, score, diagnosis, mistake_type, careless_points, conceptual_errors, fixed_previous_errors, remaining_weaknesses, new_mistakes, comparison_with_previous_attempt, next_action_suggestion。",
   "knowledge_profile 字段：knowledge_points, knowledge_system_path, common_traps, confusing_points, solution_strategies, prerequisite_knowledge, difficulty_estimate。",
+  "next_action_suggestion 不是复习建议，而是“下一道练习题如何生成”的约束说明。",
+  "next_action_suggestion 必须优先保留原题题干中的核心主题锚点与题型结构，不得擅自替换原题中的并列核心概念。",
+  "next_action_suggestion 禁止输出“复习某章节/某模块/某专题”这类泛化表述，必须直接说明下一题该保留什么主题、强化什么误区、控制什么难度与题型。",
+  "next_action_suggestion 长度控制在 1 到 2 句，尽量短，不要写成长段教学解释。",
   "不要输出 markdown。",
 ].join("\n")
 
@@ -202,8 +340,238 @@ const REPEAT_GRADING_PROMPT = [
   "你是题卡批改系统。输出 JSON，字段仅 grading_record。",
   "grading_record 字段：is_correct, score, diagnosis, mistake_type, careless_points, conceptual_errors, fixed_previous_errors, remaining_weaknesses, new_mistakes, comparison_with_previous_attempt, next_action_suggestion。",
   "comparison_with_previous_attempt 必须给出“相较上一次作答”的明确评估结论（进步/退步/持平 + 原因）。",
+  "next_action_suggestion 不是复习建议，而是“下一道练习题如何生成”的约束说明。",
+  "next_action_suggestion 必须优先保留原题题干中的核心主题锚点与题型结构，不得擅自替换原题中的并列核心概念。",
+  "next_action_suggestion 禁止输出“复习某章节/某模块/某专题”这类泛化表述，必须直接说明下一题该保留什么主题、强化什么误区、控制什么难度与题型。",
+  "next_action_suggestion 长度控制在 1 到 2 句，尽量短，不要写成长段教学解释。",
   "不要输出 markdown。",
 ].join("\n")
+
+const MONTHLY_COMPRESSION_PROMPT = [
+  "你是学习档案压缩器。请把连续作答记录压缩为月度摘要。",
+  "仅输出 JSON，字段：summary_text,key_weaknesses,progress_assessment,next_generation_strategy,risk_flags。",
+  "summary_text 必须简洁，描述阶段性变化与结论。",
+  "next_generation_strategy 应给出下一阶段出题建议。",
+  "不要输出 markdown，不要输出额外解释。",
+].join("\n")
+
+const YEARLY_COMPRESSION_PROMPT = [
+  "你是学习档案压缩器。请把多条月度摘要压缩为年度摘要。",
+  "仅输出 JSON，字段：summary_text,yearly_trend,persistent_weaknesses,strategy_adjustments,next_year_focus。",
+  "summary_text 需要概括全年学习轨迹，不要冗长。",
+  "不要输出 markdown，不要输出额外解释。",
+].join("\n")
+
+type LearningSummaryRow = {
+  id: string
+  summary_level: "monthly" | "yearly"
+  marker: string
+  summary_period_json: string
+  content_json: string
+  source_count: number
+  compressed_at: string
+  compressed_by_model: string | null
+  folded_in_summary_id: string | null
+}
+
+function normalizeSummaryLevel(value: string): "monthly" | "yearly" {
+  return value === "yearly" ? "yearly" : "monthly"
+}
+
+async function maybeCompressLearningHistory(input: {
+  userID: string
+  workroomID: string
+  problemCardID: string
+  now: string
+}) {
+  const db = getLocalSqlite()
+  const attempts = db
+    .prepare(
+      `SELECT attempt_index, answer_text, judgement, score_percent, reasoning, submitted_at
+       FROM question_card_attempts
+       WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id
+       ORDER BY attempt_index ASC`,
+    )
+    .all({
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.problemCardID,
+    }) as Array<Record<string, unknown>>
+  const gradingByIndex = new Map<number, Record<string, unknown>>(
+    (
+      db
+        .prepare(
+          `SELECT attempt_index, diagnosis, mistake_type, remaining_weaknesses_json, new_mistakes_json, comparison_with_previous_attempt
+           FROM question_card_grading_records
+           WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`,
+        )
+        .all({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+        }) as Array<Record<string, unknown>>
+    ).map((row) => [Number(row.attempt_index), row]),
+  )
+  const summaries = db
+    .prepare(
+      `SELECT id, summary_level, marker, summary_period_json, content_json, source_count, compressed_at, compressed_by_model, folded_in_summary_id
+       FROM question_card_learning_summaries
+       WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id
+       ORDER BY compressed_at ASC`,
+    )
+    .all({
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.problemCardID,
+    }) as Array<LearningSummaryRow>
+
+  const monthlySummaries = summaries.filter((item) => normalizeSummaryLevel(item.summary_level) === "monthly")
+  const coveredAttemptMax = monthlySummaries.reduce((max, item) => {
+    const period = parseJsonText<{ end_attempt_index?: number }>(item.summary_period_json, {})
+    return Math.max(max, Number(period.end_attempt_index ?? 0))
+  }, 0)
+  const uncoveredAttempts = attempts.filter((item) => Number(item.attempt_index) > coveredAttemptMax)
+
+  if (uncoveredAttempts.length >= 30) {
+    const chunk = uncoveredAttempts.slice(0, 30)
+    const startAttemptIndex = Number(chunk[0]?.attempt_index ?? 0)
+    const endAttemptIndex = Number(chunk[chunk.length - 1]?.attempt_index ?? 0)
+    const llmInput = chunk.map((item) => {
+      const idx = Number(item.attempt_index)
+      const grading = gradingByIndex.get(idx)
+      return {
+        attempt_index: idx,
+        answer_text: String(item.answer_text ?? ""),
+        judgement: String(item.judgement ?? "uncertain"),
+        score_percent: Number(item.score_percent ?? 0),
+        submitted_at: String(item.submitted_at ?? ""),
+        diagnosis: grading ? String(grading.diagnosis ?? "") : null,
+        mistake_type: grading ? (grading.mistake_type == null ? null : String(grading.mistake_type)) : null,
+        remaining_weaknesses: grading ? parseJsonText(String(grading.remaining_weaknesses_json ?? "[]"), []) : [],
+        new_mistakes: grading ? parseJsonText(String(grading.new_mistakes_json ?? "[]"), []) : [],
+      }
+    })
+    const compressed = (await QuestionLlmService.chatJson({
+      userID: input.userID,
+      capability: "question_grading",
+      system: MONTHLY_COMPRESSION_PROMPT,
+      user: JSON.stringify({
+        task: "monthly_learning_summary",
+        card_id: input.problemCardID,
+        attempt_range: { start_attempt_index: startAttemptIndex, end_attempt_index: endAttemptIndex },
+        attempts: llmInput,
+      }),
+      temperature: 0.2,
+      topP: 0.8,
+      timeoutMs: 90_000,
+      retries: 1,
+    })) as Record<string, unknown>
+    db.prepare(
+      `INSERT INTO question_card_learning_summaries
+       (id, user_id, workroom_id, card_id, summary_level, marker, summary_period_json, content_json, source_count, compressed_at, compressed_by_model, folded_in_summary_id, created_at, updated_at)
+       VALUES
+       (@id, @user_id, @workroom_id, @card_id, 'monthly', 'MONTHLY_COMPRESSED', @summary_period_json, @content_json, @source_count, @compressed_at, @compressed_by_model, NULL, @created_at, @updated_at)`,
+    ).run({
+      id: createID("learning_summary"),
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.problemCardID,
+      summary_period_json: JSON.stringify({
+        start_attempt_index: startAttemptIndex,
+        end_attempt_index: endAttemptIndex,
+      }),
+      content_json: JSON.stringify({
+        summary_text: String(compressed.summary_text ?? ""),
+        key_weaknesses: Array.isArray(compressed.key_weaknesses) ? compressed.key_weaknesses : [],
+        progress_assessment: compressed.progress_assessment ?? null,
+        next_generation_strategy: compressed.next_generation_strategy ?? null,
+        risk_flags: Array.isArray(compressed.risk_flags) ? compressed.risk_flags : [],
+      }),
+      source_count: chunk.length,
+      compressed_at: input.now,
+      compressed_by_model: null,
+      created_at: input.now,
+      updated_at: input.now,
+    })
+  }
+
+  const latestMonthly = db
+    .prepare(
+      `SELECT id, summary_period_json, content_json, compressed_at
+       FROM question_card_learning_summaries
+       WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id AND summary_level='monthly' AND folded_in_summary_id IS NULL
+       ORDER BY compressed_at ASC`,
+    )
+    .all({
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.problemCardID,
+    }) as Array<{ id: string; summary_period_json: string; content_json: string; compressed_at: string }>
+
+  if (latestMonthly.length >= 12) {
+    const batch = latestMonthly.slice(0, 12)
+    const firstPeriod = parseJsonText<{ start_attempt_index?: number }>(batch[0]!.summary_period_json, {})
+    const lastPeriod = parseJsonText<{ end_attempt_index?: number }>(batch[batch.length - 1]!.summary_period_json, {})
+    const compressed = (await QuestionLlmService.chatJson({
+      userID: input.userID,
+      capability: "question_grading",
+      system: YEARLY_COMPRESSION_PROMPT,
+      user: JSON.stringify({
+        task: "yearly_learning_summary",
+        card_id: input.problemCardID,
+        monthly_summaries: batch.map((item) => ({
+          id: item.id,
+          period: parseJsonText(item.summary_period_json, {}),
+          content: parseJsonText(item.content_json, {}),
+          compressed_at: item.compressed_at,
+        })),
+      }),
+      temperature: 0.2,
+      topP: 0.8,
+      timeoutMs: 90_000,
+      retries: 1,
+    })) as Record<string, unknown>
+    const yearlyID = createID("learning_summary")
+    db.prepare(
+      `INSERT INTO question_card_learning_summaries
+       (id, user_id, workroom_id, card_id, summary_level, marker, summary_period_json, content_json, source_count, compressed_at, compressed_by_model, folded_in_summary_id, created_at, updated_at)
+       VALUES
+       (@id, @user_id, @workroom_id, @card_id, 'yearly', 'YEARLY_COMPRESSED', @summary_period_json, @content_json, @source_count, @compressed_at, @compressed_by_model, NULL, @created_at, @updated_at)`,
+    ).run({
+      id: yearlyID,
+      user_id: input.userID,
+      workroom_id: input.workroomID,
+      card_id: input.problemCardID,
+      summary_period_json: JSON.stringify({
+        start_attempt_index: Number(firstPeriod.start_attempt_index ?? 0),
+        end_attempt_index: Number(lastPeriod.end_attempt_index ?? 0),
+      }),
+      content_json: JSON.stringify({
+        summary_text: String(compressed.summary_text ?? ""),
+        yearly_trend: compressed.yearly_trend ?? null,
+        persistent_weaknesses: Array.isArray(compressed.persistent_weaknesses) ? compressed.persistent_weaknesses : [],
+        strategy_adjustments: compressed.strategy_adjustments ?? null,
+        next_year_focus: compressed.next_year_focus ?? null,
+      }),
+      source_count: batch.length,
+      compressed_at: input.now,
+      compressed_by_model: null,
+      created_at: input.now,
+      updated_at: input.now,
+    })
+    for (const monthly of batch) {
+      db.prepare(
+        `UPDATE question_card_learning_summaries
+         SET folded_in_summary_id=@folded_in_summary_id, updated_at=@updated_at
+         WHERE id=@id`,
+      ).run({
+        id: monthly.id,
+        folded_in_summary_id: yearlyID,
+        updated_at: input.now,
+      })
+    }
+  }
+}
 
 export const ProblemCardService = {
   async recordEvent(input: {
@@ -261,8 +629,8 @@ export const ProblemCardService = {
     if (!state) {
       db.prepare(
         `INSERT INTO question_card_learning_states
-         (id, user_id, workroom_id, card_id, mastery_level, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, updated_at, created_at)
-         VALUES (@id, @user_id, @workroom_id, @card_id, 'unknown', 0, 0, 0, NULL, @last_review_at, '[]', '[]', NULL, NULL, @updated_at, @created_at)`,
+         (id, user_id, workroom_id, card_id, mastery_level, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, generation_recommendation_json, updated_at, created_at)
+         VALUES (@id, @user_id, @workroom_id, @card_id, 'unknown', 0, 0, 0, NULL, @last_review_at, '[]', '[]', NULL, NULL, '{}', @updated_at, @created_at)`,
       ).run({
         id: createID("learning_state"),
         user_id: input.userID,
@@ -418,6 +786,10 @@ export const ProblemCardService = {
             detect_fixed_errors: true,
             detect_remaining_weaknesses: true,
             do_not_regenerate_knowledge_profile: true,
+            next_action_suggestion_is_generation_instruction: true,
+            preserve_original_topic_anchor: true,
+            forbid_chapter_level_advice: true,
+            keep_next_action_suggestion_brief: true,
           },
         }
       : {
@@ -441,6 +813,10 @@ export const ProblemCardService = {
             grade_answer: true,
             generate_knowledge_profile: true,
             diagnose_mistake: true,
+            next_action_suggestion_is_generation_instruction: true,
+            preserve_original_topic_anchor: true,
+            forbid_chapter_level_advice: true,
+            keep_next_action_suggestion_brief: true,
           },
         }
 
@@ -544,19 +920,19 @@ export const ProblemCardService = {
         workroom_id: input.workroomID,
         card_id: input.problemCardID,
       }) as Array<Record<string, unknown>>
-    const fixedSet = new Set(fixed.map((item) => item.trim()).filter(Boolean))
-    const detectedLabels = Array.from(
-      new Set(
-        [...remaining, ...newly, ...conceptual, ...careless, ...(mistakeType ? [mistakeType] : [])]
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ),
-    )
+    const fixedSet = new Set(fixed.map((item) => normalizeWeaknessKey(item)).filter(Boolean))
+    const detectedByKey = dedupeWeaknessLabels([
+      ...remaining,
+      ...newly,
+      ...conceptual,
+      ...careless,
+      ...(mistakeType ? [mistakeType] : []),
+    ])
     for (const weakness of existingWeaknesses) {
-      const key = String(weakness.weakness_key ?? "").trim()
+      const key = normalizeWeaknessKey(String(weakness.weakness_key ?? "").trim())
       const label = String(weakness.label ?? "").trim()
       if (!key) continue
-      if (!fixedSet.has(key) && !fixedSet.has(label)) continue
+      if (!fixedSet.has(key) && !fixedSet.has(normalizeWeaknessKey(label))) continue
       db.prepare(
         `UPDATE question_card_weaknesses
          SET status='resolved',
@@ -571,11 +947,11 @@ export const ProblemCardService = {
         evidence_diagnosis_ids_json: JSON.stringify(appendUniqueTextArray(String(weakness.evidence_diagnosis_ids_json ?? "[]"), gradingID)),
       })
     }
-    for (const weaknessLabel of detectedLabels) {
+    for (const [normalizedWeaknessKey, weaknessLabel] of detectedByKey.entries()) {
       const existingWeakness = existingWeaknesses.find(
         (item) =>
-          String(item.weakness_key ?? "").trim() === weaknessLabel ||
-          String(item.label ?? "").trim() === weaknessLabel,
+          normalizeWeaknessKey(String(item.weakness_key ?? "").trim()) === normalizedWeaknessKey ||
+          normalizeWeaknessKey(String(item.label ?? "").trim()) === normalizedWeaknessKey,
       )
       const nextStatus =
         existingWeakness && String(existingWeakness.status) === "resolved"
@@ -586,7 +962,8 @@ export const ProblemCardService = {
       if (existingWeakness) {
         db.prepare(
           `UPDATE question_card_weaknesses
-           SET label=@label,
+           SET weakness_key=@weakness_key,
+               label=@label,
                category=@category,
                status=@status,
                count=@count,
@@ -599,6 +976,7 @@ export const ProblemCardService = {
         ).run({
           id: String(existingWeakness.id),
           label: weaknessLabel,
+          weakness_key: normalizedWeaknessKey,
           category: toRootCause(mistakeType),
           status: nextStatus,
           count: Number(existingWeakness.count ?? 0) + 1,
@@ -620,7 +998,7 @@ export const ProblemCardService = {
         user_id: input.userID,
         workroom_id: input.workroomID,
         card_id: input.problemCardID,
-        weakness_key: weaknessLabel,
+        weakness_key: normalizedWeaknessKey,
         label: weaknessLabel,
         category: toRootCause(mistakeType),
         status: nextStatus,
@@ -692,10 +1070,26 @@ export const ProblemCardService = {
     if (!stateExisting) {
       db.prepare(
         `INSERT INTO question_card_learning_states
-        (id, user_id, workroom_id, card_id, mastery_level, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, updated_at, created_at)
+        (id, user_id, workroom_id, card_id, mastery_level, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, generation_recommendation_json, updated_at, created_at)
         VALUES
-        (@id, @user_id, @workroom_id, @card_id, @mastery_level, @total_attempts, @correct_attempts, @consecutive_correct_count, @last_attempt_at, @last_review_at, @unresolved_weaknesses_json, @repeated_mistakes_json, @progress_signal, @progress_summary, @updated_at, @created_at)`,
+        (@id, @user_id, @workroom_id, @card_id, @mastery_level, @total_attempts, @correct_attempts, @consecutive_correct_count, @last_attempt_at, @last_review_at, @unresolved_weaknesses_json, @repeated_mistakes_json, @progress_signal, @progress_summary, @generation_recommendation_json, @updated_at, @created_at)`,
       ).run({
+        ...(() => {
+          const recommendation = buildGenerationRecommendation({
+            now,
+            attemptID,
+            attemptIndex,
+            masteryLevel: mastery.masteryLevel,
+            progressSignal: progress.signal,
+            unresolvedWeaknesses: unresolvedWeaknesses.map((item) => item.label),
+            repeatedMistakes: Array.from(new Set(repeatedMistakes.map((item) => item.category))),
+            knowledgePoints: Array.isArray((llm as any)?.knowledge_profile?.knowledge_points)
+              ? ((llm as any).knowledge_profile.knowledge_points as unknown[]).map((item) => String(item).trim()).filter(Boolean)
+              : [],
+            mistakeType,
+          })
+          return { generation_recommendation_json: JSON.stringify(recommendation) }
+        })(),
         id: createID("learning_state"),
         user_id: input.userID,
         workroom_id: input.workroomID,
@@ -716,9 +1110,25 @@ export const ProblemCardService = {
     } else {
       db.prepare(
         `UPDATE question_card_learning_states
-         SET mastery_level=@mastery_level, total_attempts=@total_attempts, correct_attempts=@correct_attempts, consecutive_correct_count=@consecutive_correct_count, last_attempt_at=@last_attempt_at, last_review_at=@last_review_at, unresolved_weaknesses_json=@unresolved_weaknesses_json, repeated_mistakes_json=@repeated_mistakes_json, progress_signal=@progress_signal, progress_summary=@progress_summary, updated_at=@updated_at
+         SET mastery_level=@mastery_level, total_attempts=@total_attempts, correct_attempts=@correct_attempts, consecutive_correct_count=@consecutive_correct_count, last_attempt_at=@last_attempt_at, last_review_at=@last_review_at, unresolved_weaknesses_json=@unresolved_weaknesses_json, repeated_mistakes_json=@repeated_mistakes_json, progress_signal=@progress_signal, progress_summary=@progress_summary, generation_recommendation_json=@generation_recommendation_json, updated_at=@updated_at
          WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`,
       ).run({
+        ...(() => {
+          const recommendation = buildGenerationRecommendation({
+            now,
+            attemptID,
+            attemptIndex,
+            masteryLevel: mastery.masteryLevel,
+            progressSignal: progress.signal,
+            unresolvedWeaknesses: unresolvedWeaknesses.map((item) => item.label),
+            repeatedMistakes: Array.from(new Set(repeatedMistakes.map((item) => item.category))),
+            knowledgePoints: Array.isArray((llm as any)?.knowledge_profile?.knowledge_points)
+              ? ((llm as any).knowledge_profile.knowledge_points as unknown[]).map((item) => String(item).trim()).filter(Boolean)
+              : [],
+            mistakeType,
+          })
+          return { generation_recommendation_json: JSON.stringify(recommendation) }
+        })(),
         user_id: input.userID,
         workroom_id: input.workroomID,
         card_id: input.problemCardID,
@@ -736,6 +1146,17 @@ export const ProblemCardService = {
       })
     }
 
+    try {
+      await maybeCompressLearningHistory({
+        userID: input.userID,
+        workroomID: input.workroomID,
+        problemCardID: input.problemCardID,
+        now,
+      })
+    } catch {
+      // Keep grading flow successful even if compression fails; retry can happen on next submit.
+    }
+
     return this.getLearningDetail({
       userID: input.userID,
       workroomID: input.workroomID,
@@ -743,7 +1164,7 @@ export const ProblemCardService = {
     })
   },
 
-  async getLearningDetail(input: { userID: string; workroomID: string; problemCardID: string }) {
+  async getLearningDetail(input: { userID: string; workroomID: string; problemCardID: string; full?: boolean }) {
     const db = getLocalSqlite()
     const card = db
       .prepare(`SELECT * FROM studio_question_cards WHERE user_id=@user_id AND workroom_id=@workroom_id AND id=@id`)
@@ -824,12 +1245,24 @@ export const ProblemCardService = {
         card_id: input.problemCardID,
       }) as { count: number }
     const reviewHeatmap180d = buildReviewHeatmap180d(attempts.map((item) => String(item.submitted_at)))
+    const summaries = db
+      .prepare(
+        `SELECT summary_level, marker, summary_period_json, content_json, source_count, compressed_at, folded_in_summary_id
+         FROM question_card_learning_summaries
+         WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id
+         ORDER BY compressed_at DESC`,
+      )
+      .all({
+        user_id: input.userID,
+        workroom_id: input.workroomID,
+        card_id: input.problemCardID,
+      }) as Array<Record<string, unknown>>
 
     const repeatedMistakesList = learningState
       ? parseJsonText(String(learningState.repeated_mistakes_json ?? "[]"), [])
       : []
     const unresolvedWeaknessList = learningState
-      ? parseJsonText(String(learningState.unresolved_weaknesses_json ?? "[]"), [])
+      ? Array.from(dedupeWeaknessLabels(parseJsonText(String(learningState.unresolved_weaknesses_json ?? "[]"), [])).values())
       : []
     const duplicateRecentAnswer =
       attempts.length >= 2 &&
@@ -845,7 +1278,7 @@ export const ProblemCardService = {
       lastAttemptAt: (learningState?.last_attempt_at as string | undefined) ?? null,
     })
 
-    return {
+    const base = {
       problemCard: {
         id: String(card.id),
         source_document_id: String(card.source_document_id ?? ""),
@@ -887,6 +1320,7 @@ export const ProblemCardService = {
             repeated_mistakes: repeatedMistakesList,
             progress_signal: learningState.progress_signal == null ? null : String(learningState.progress_signal),
             progress_summary: learningState.progress_summary == null ? null : String(learningState.progress_summary),
+            generation_recommendation: parseJsonText(String(learningState.generation_recommendation_json ?? "{}"), {}),
             updated_at: String(learningState.updated_at),
           }
         : null,
@@ -942,18 +1376,49 @@ export const ProblemCardService = {
         reasoning: attempt.reasoning == null ? null : String(attempt.reasoning),
         submitted_at: String(attempt.submitted_at),
       })),
-      weaknesses: weaknesses.map((weakness) => ({
-        id: String(weakness.id),
-        weakness_key: String(weakness.weakness_key),
-        label: String(weakness.label),
-        category: String(weakness.category),
-        status: String(weakness.status),
-        severity: String(weakness.severity),
-        count: Number(weakness.count ?? 0),
-        first_seen_at: String(weakness.first_seen_at),
-        last_seen_at: String(weakness.last_seen_at),
-        resolved_at: weakness.resolved_at == null ? null : String(weakness.resolved_at),
-      })),
+      weaknesses: (() => {
+        const merged = new Map<string, {
+          id: string
+          weakness_key: string
+          label: string
+          category: string
+          status: string
+          severity: string
+          count: number
+          first_seen_at: string
+          last_seen_at: string
+          resolved_at: string | null
+        }>()
+        for (const weakness of weaknesses) {
+          const label = String(weakness.label ?? "")
+          const storedKey = String(weakness.weakness_key ?? "")
+          const canonicalKey = normalizeWeaknessKey(storedKey || label)
+          if (!canonicalKey) continue
+          const current = {
+            id: String(weakness.id),
+            weakness_key: canonicalKey,
+            label,
+            category: String(weakness.category),
+            status: String(weakness.status),
+            severity: String(weakness.severity),
+            count: Number(weakness.count ?? 0),
+            first_seen_at: String(weakness.first_seen_at),
+            last_seen_at: String(weakness.last_seen_at),
+            resolved_at: weakness.resolved_at == null ? null : String(weakness.resolved_at),
+          }
+          const existing = merged.get(canonicalKey)
+          if (!existing) {
+            merged.set(canonicalKey, current)
+            continue
+          }
+          existing.count += current.count
+          if (current.label.length > existing.label.length) existing.label = current.label
+          if (current.last_seen_at > existing.last_seen_at) existing.last_seen_at = current.last_seen_at
+          if (current.first_seen_at < existing.first_seen_at) existing.first_seen_at = current.first_seen_at
+          if (!existing.resolved_at && current.resolved_at) existing.resolved_at = current.resolved_at
+        }
+        return Array.from(merged.values()).sort((a, b) => b.count - a.count || b.last_seen_at.localeCompare(a.last_seen_at))
+      })(),
       reviewHeatmap180d,
       attemptStats: {
         total_attempts: attempts.length,
@@ -969,5 +1434,39 @@ export const ProblemCardService = {
         created_at: String(item.created_at),
       })),
     }
+    const compact = {
+      problemCard: base.problemCard,
+      knowledgeProfile: base.knowledgeProfile,
+      currentState: base.learningState,
+      latestGradingRecord: base.latestGradingRecord,
+      raw_recent_attempts: base.attempts.slice(0, 5),
+      weaknesses: base.weaknesses,
+      summaries: {
+        monthly_summaries: summaries
+          .filter((item) => String(item.summary_level) === "monthly")
+          .map((item) => ({
+            summary_level: "monthly",
+            marker: String(item.marker ?? "MONTHLY_COMPRESSED"),
+            summary_period: parseJsonText(String(item.summary_period_json ?? "{}"), {}),
+            content: parseJsonText(String(item.content_json ?? "{}"), {}),
+            source_count: Number(item.source_count ?? 0),
+            compressed_at: String(item.compressed_at ?? ""),
+            folded_in_summary_id: item.folded_in_summary_id == null ? null : String(item.folded_in_summary_id),
+          })),
+        yearly_summaries: summaries
+          .filter((item) => String(item.summary_level) === "yearly")
+          .map((item) => ({
+            summary_level: "yearly",
+            marker: String(item.marker ?? "YEARLY_COMPRESSED"),
+            summary_period: parseJsonText(String(item.summary_period_json ?? "{}"), {}),
+            content: parseJsonText(String(item.content_json ?? "{}"), {}),
+            source_count: Number(item.source_count ?? 0),
+            compressed_at: String(item.compressed_at ?? ""),
+          })),
+      },
+      attemptStats: base.attemptStats,
+      reviewStats: base.reviewStats,
+    }
+    return input.full ? base : compact
   },
 }

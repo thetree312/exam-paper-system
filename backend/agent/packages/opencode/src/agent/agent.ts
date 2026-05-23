@@ -22,6 +22,7 @@ import * as OtelTracer from "@effect/opentelemetry/Tracer"
 const PROMPT_GENERATE = loadTextAsset(import.meta.url, "./generate.txt")
 const PROMPT_COMPACTION = loadTextAsset(import.meta.url, "./prompt/compaction.txt")
 const PROMPT_EXPLORE = loadTextAsset(import.meta.url, "./prompt/explore.txt")
+const PROMPT_LECTURE = loadTextAsset(import.meta.url, "./prompt/lecture.txt")
 const PROMPT_SUMMARY = loadTextAsset(import.meta.url, "./prompt/summary.txt")
 const PROMPT_TITLE = loadTextAsset(import.meta.url, "./prompt/title.txt")
 
@@ -157,6 +158,23 @@ export namespace Agent {
                 }),
                 user,
               ),
+              options: {},
+              mode: "subagent",
+              native: true,
+            },
+            lecture: {
+              name: "lecture",
+              description:
+                "Interactive lecture agent for Studio teaching containers. Use this for delegated question explanation flows that must teach inside the lecture container and use native question interactions.",
+              permission: Permission.merge(
+                defaults,
+                Permission.fromConfig({
+                  question: "allow",
+                  todowrite: "deny",
+                }),
+                user,
+              ),
+              prompt: PROMPT_LECTURE,
               options: {},
               mode: "subagent",
               native: true,

@@ -7,6 +7,7 @@ import {
   type MathContentDocument,
 } from "../../lib/math-content"
 import { DocumentsService } from "../documents/service"
+import { ProblemCardService } from "../problem-cards/service"
 import { QuestionLlmService } from "../questions/llm-service"
 import { WorkroomService } from "../workrooms/service"
 import { StudioEvents } from "./events"
@@ -48,10 +49,18 @@ function normalizeOptionalText(input?: string | null) {
   return normalized ? normalized : null
 }
 
+function normalizeStringArray(values?: string[] | null) {
+  if (!Array.isArray(values)) return []
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)))
+}
+
 type StudioQuestionCardDraft = {
   text: string
   page?: number | null
   originalText?: string | null
+  questionType?: string | null
+  difficulty?: string | null
+  knowledgePoints?: string[]
   answerContent?: MathContentDocument
   answerText?: string | null
   canonicalAnswer?: string | null
@@ -71,6 +80,9 @@ function normalizeDraft(input: StudioQuestionCardDraft) {
     text,
     originalText: normalizeText(input.originalText) || text,
     page: input.page && input.page > 0 ? input.page : 1,
+    questionType: normalizeOptionalText(input.questionType),
+    difficulty: normalizeOptionalText(input.difficulty),
+    knowledgePoints: normalizeStringArray(input.knowledgePoints),
     answerContent,
     answerText,
     canonicalAnswer: normalizeOptionalText(input.canonicalAnswer) ?? normalizeOptionalText(answerText) ?? "",
@@ -79,6 +91,183 @@ function normalizeDraft(input: StudioQuestionCardDraft) {
     derivedFromCardID: normalizeOptionalText(input.derivedFromCardID),
     relationType: input.relationType ?? "primary",
     originTask: input.originTask ?? null,
+  }
+}
+
+function compactTextPreview(text: string, max = 80) {
+  const normalized = text.replace(/\s+/g, " ").trim()
+  return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1)}…`
+}
+
+function normalizeWeaknessText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[，。、“”"'‘’（）()【】\[\]\s\-_,.:：;；!?！？]/g, "")
+    .trim()
+}
+
+function severityRank(value: string) {
+  if (value === "high") return 3
+  if (value === "medium") return 2
+  if (value === "low") return 1
+  return 0
+}
+
+function dedupeWeaknessRecords(
+  list: Array<{
+    id: string
+    weakness_key: string
+    label: string
+    category: string
+    status: string
+    severity: string
+    count: number
+    first_seen_at: string
+    last_seen_at: string
+    resolved_at: string | null
+  }>,
+) {
+  const map = new Map<string, (typeof list)[number]>()
+  for (const item of list) {
+    const key = normalizeWeaknessText(item.weakness_key || item.label || "")
+    if (!key) continue
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, { ...item })
+      continue
+    }
+    existing.count += Number(item.count ?? 0)
+    if (severityRank(item.severity) > severityRank(existing.severity)) {
+      existing.severity = item.severity
+    }
+    if (String(item.last_seen_at) > String(existing.last_seen_at)) {
+      existing.last_seen_at = item.last_seen_at
+    }
+    if (String(item.first_seen_at) < String(existing.first_seen_at)) {
+      existing.first_seen_at = item.first_seen_at
+    }
+    if (!existing.resolved_at && item.resolved_at) {
+      existing.resolved_at = item.resolved_at
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count || b.last_seen_at.localeCompare(a.last_seen_at))
+}
+
+function dedupeStringList(values: unknown) {
+  if (!Array.isArray(values)) return []
+  const map = new Map<string, string>()
+  for (const raw of values) {
+    const text = String(raw ?? "").trim()
+    if (!text) continue
+    const key = normalizeWeaknessText(text)
+    if (!key) continue
+    if (!map.has(key)) map.set(key, text)
+  }
+  return Array.from(map.values())
+}
+
+function buildSlimLearningProfile(raw: any, full: boolean) {
+  const profile = raw && typeof raw === "object" ? raw : {}
+  const currentState = (profile.currentState ?? profile.learningState ?? null) as Record<string, unknown> | null
+  const latestGradingRecord = (profile.latestGradingRecord ?? null) as Record<string, unknown> | null
+  const attemptsSource = Array.isArray(profile.raw_recent_attempts)
+    ? profile.raw_recent_attempts
+    : Array.isArray(profile.attempts)
+      ? profile.attempts
+      : []
+  const weaknessesSource = Array.isArray(profile.weaknesses) ? profile.weaknesses : []
+  const summaries = (profile.summaries ?? {}) as Record<string, unknown>
+
+  const learning = {
+    currentState: currentState
+      ? {
+          ...currentState,
+          unresolved_weaknesses: dedupeStringList(currentState.unresolved_weaknesses),
+          repeated_mistakes: dedupeStringList(currentState.repeated_mistakes),
+        }
+      : null,
+    latestGradingRecord: latestGradingRecord
+      ? {
+          id: latestGradingRecord.id ?? null,
+          attempt_index: latestGradingRecord.attempt_index ?? null,
+          is_correct: latestGradingRecord.is_correct ?? null,
+          score: latestGradingRecord.score ?? null,
+          diagnosis: latestGradingRecord.diagnosis ?? null,
+          mistake_type: latestGradingRecord.mistake_type ?? null,
+          next_action_suggestion: latestGradingRecord.next_action_suggestion ?? null,
+          created_at: latestGradingRecord.created_at ?? null,
+        }
+      : null,
+    recentAttempts: attemptsSource.slice(0, 5).map((item: any) => ({
+      id: item.id ?? null,
+      attempt_index: item.attempt_index ?? null,
+      user_answer: item.user_answer ?? null,
+      judgement: item.judgement ?? null,
+      score_percent: item.score_percent ?? null,
+      submitted_at: item.submitted_at ?? null,
+    })),
+    weaknesses: dedupeWeaknessRecords(
+      weaknessesSource.map((item: any) => ({
+        id: String(item.id ?? ""),
+        weakness_key: String(item.weakness_key ?? item.label ?? ""),
+        label: String(item.label ?? item.weakness_key ?? ""),
+        category: String(item.category ?? "unknown"),
+        status: String(item.status ?? "open"),
+        severity: String(item.severity ?? "medium"),
+        count: Number(item.count ?? 0),
+        first_seen_at: String(item.first_seen_at ?? ""),
+        last_seen_at: String(item.last_seen_at ?? ""),
+        resolved_at: item.resolved_at == null ? null : String(item.resolved_at),
+      })),
+    ),
+    summaries: {
+      monthly_summaries: Array.isArray(summaries.monthly_summaries) ? summaries.monthly_summaries : [],
+      yearly_summaries: Array.isArray(summaries.yearly_summaries) ? summaries.yearly_summaries : [],
+    },
+    stats: {
+      attemptStats: profile.attemptStats ?? null,
+      reviewStats: profile.reviewStats ?? null,
+    },
+  } as Record<string, unknown>
+
+  if (full) {
+    learning.debug = {
+      timelineEvents: Array.isArray(profile.timelineEvents) ? profile.timelineEvents : [],
+      gradingRecords: Array.isArray(profile.gradingRecords)
+        ? profile.gradingRecords
+            .filter((item: any) => String(item?.id ?? "") !== String(latestGradingRecord?.id ?? ""))
+            .map((item: any) => ({
+              id: item.id ?? null,
+              attempt_index: item.attempt_index ?? null,
+              is_correct: item.is_correct ?? null,
+              score: item.score ?? null,
+              diagnosis: item.diagnosis ?? null,
+              mistake_type: item.mistake_type ?? null,
+              created_at: item.created_at ?? null,
+            }))
+        : [],
+    }
+  }
+
+  return learning
+}
+
+function buildQuestionCardContent(card: StudioQuestionCardRecord, fallback?: { difficulty?: string | null; knowledgePoints?: string[] | null }) {
+  return {
+    cardID: card.id,
+    studioDocumentID: card.studioDocumentID,
+    sourceDocumentID: card.sourceDocumentID ?? null,
+    sequenceIndex: card.sequenceIndex,
+    cardGroupID: card.cardGroupID,
+    stem: card.text,
+    answer: card.answerText?.trim() || card.canonicalAnswer?.trim() || "",
+    explanation: card.explanation ?? null,
+    questionType: card.questionType ?? null,
+    difficulty: card.difficulty ?? fallback?.difficulty ?? null,
+    knowledgePoints: card.knowledgePoints.length > 0 ? card.knowledgePoints : normalizeStringArray(fallback?.knowledgePoints),
+    legendImages: card.legendImages ?? [],
+    derivedFromCardID: card.derivedFromCardID ?? null,
+    relationType: card.relationType ?? null,
   }
 }
 
@@ -424,20 +613,83 @@ export const StudioService = {
       .sort((left, right) => left.sequenceIndex - right.sequenceIndex || left.createdAt.localeCompare(right.createdAt))
   },
 
-  async getQuestionCardDetail(input: { userID: string; workroomID: string; cardID: string }) {
+  async searchQuestionCards(input: { userID: string; workroomID: string; studioDocumentID: string; query: string; limit?: number }) {
+    const query = input.query.trim()
+    if (!query) throw new Error("INVALID_ARGUMENT: missing query")
+    const cards = await this.listQuestionCards(input)
+    const normalizedQuery = query.replace(/\s+/g, " ").trim().toLowerCase()
+    const numberMatches = Array.from(query.matchAll(/\d+/g))
+      .map((match) => Number.parseInt(match[0], 10))
+      .filter((value) => Number.isInteger(value) && value > 0)
+    const results = cards
+      .map((card) => {
+        const normalizedText = card.text.replace(/\s+/g, " ").trim().toLowerCase()
+        const textMatched = normalizedText.includes(normalizedQuery)
+        const numberMatched = numberMatches.some((value) => card.sequenceIndex + 1 === value)
+        if (!textMatched && !numberMatched) return null
+        return {
+          cardID: card.id,
+          sequenceIndex: card.sequenceIndex,
+          stemPreview: compactTextPreview(card.text),
+          questionType: card.questionType ?? null,
+          difficulty: card.difficulty ?? null,
+          masteryLevel: card.learningSnapshot.masteryLevel,
+          updatedAt: card.updatedAt,
+          _rank: numberMatched ? 0 : 1,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((left, right) => left._rank - right._rank || right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, Math.max(1, Math.min(input.limit ?? 5, 10)))
+
+    return results.map(({ _rank, ...item }) => item)
+  },
+
+  async getQuestionCardDetail(input: { userID: string; workroomID: string; cardID: string; full?: boolean }) {
     const cards = await StudioRepository.readQuestionCards()
     const card = cards.items.find((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.id === input.cardID)
     if (!card) throw new Error(`Studio question card not found: ${input.cardID}`)
-    const attempts = (await StudioRepository.readAttempts()).items
-      .filter((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.cardID === card.id)
-      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
-    const diagnoses = (await StudioRepository.readDiagnoses()).items
-      .filter((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.cardID === card.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    const weaknesses = (await StudioRepository.readWeaknesses()).items
-      .filter((item) => item.userID === input.userID && item.workroomID === input.workroomID && item.cardID === card.id)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    return { card, attempts, diagnoses, weaknesses, reviewHeatmap180d: card.learningSnapshot.reviewHeatmap180d }
+    const learningProfile = await ProblemCardService.getLearningDetail({
+      userID: input.userID,
+      workroomID: input.workroomID,
+      problemCardID: input.cardID,
+      full: input.full === true,
+    })
+    const profileKnowledge = (learningProfile as { knowledgeProfile?: Record<string, unknown> | null }).knowledgeProfile
+    const content = buildQuestionCardContent(card, {
+      difficulty:
+        profileKnowledge && typeof profileKnowledge.difficulty_estimate === "string"
+          ? profileKnowledge.difficulty_estimate
+          : null,
+      knowledgePoints:
+        profileKnowledge && Array.isArray(profileKnowledge.knowledge_points)
+          ? profileKnowledge.knowledge_points.map((item) => String(item))
+          : [],
+    })
+    const anchor = {
+      cardID: card.id,
+      questionNumber: card.sequenceIndex + 1,
+      studioDocumentID: card.studioDocumentID,
+      sourceDocumentID: card.sourceDocumentID ?? null,
+      cardGroupID: card.cardGroupID,
+      sequenceIndex: card.sequenceIndex,
+      page: card.page,
+      relationType: card.relationType ?? null,
+      derivedFromCardID: card.derivedFromCardID ?? null,
+      sourceSelection: card.sourceSelection,
+      answerEvidence: card.answerEvidence,
+      timestamps: {
+        createdAt: card.createdAt,
+        updatedAt: card.updatedAt,
+      },
+    }
+    const learning = buildSlimLearningProfile(learningProfile, input.full === true)
+    return {
+      anchor,
+      content,
+      card: content,
+      learningProfile: learning,
+    }
   },
 
   async appendQuestionCards(input: {
@@ -480,6 +732,9 @@ export const StudioService = {
         page: normalized.page,
         text: normalized.text,
         originalText: normalized.originalText,
+        questionType: normalized.questionType,
+        difficulty: normalized.difficulty,
+        knowledgePoints: normalized.knowledgePoints,
         answerContent: normalized.answerContent,
         answerText: normalized.answerText,
         canonicalAnswer: normalized.canonicalAnswer,
@@ -575,6 +830,9 @@ export const StudioService = {
           page: normalized.page,
           text: normalized.text,
           originalText: normalized.originalText,
+          questionType: normalized.questionType,
+          difficulty: normalized.difficulty,
+          knowledgePoints: normalized.knowledgePoints,
           answerContent: normalized.answerContent,
           answerText: normalized.answerText,
           canonicalAnswer: normalized.canonicalAnswer,
@@ -861,6 +1119,9 @@ export const StudioService = {
       page: input.regions[0]?.page ?? 1,
       text: recognition.text,
       originalText: recognition.text,
+      questionType: null,
+      difficulty: null,
+      knowledgePoints: [],
       answerContent: createTextMathDocument(""),
       answerText: "",
       canonicalAnswer: "",
@@ -955,6 +1216,9 @@ export const StudioService = {
         page: draft.page,
         text: draft.text,
         originalText: draft.originalText,
+        questionType: null,
+        difficulty: null,
+        knowledgePoints: [],
         answerContent: createTextMathDocument(""),
         answerText: "",
         canonicalAnswer: "",

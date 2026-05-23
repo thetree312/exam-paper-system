@@ -183,6 +183,7 @@ export const LocalAuthRepository = {
       "question_card_knowledge_profiles",
       "question_card_study_events",
       "question_card_learning_states",
+      "question_card_learning_summaries",
       "questions",
       "favorites",
       "learning_artifacts",

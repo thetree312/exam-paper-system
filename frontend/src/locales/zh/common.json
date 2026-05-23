@@ -387,7 +387,7 @@
       "ocr": "OCR 与解析"
     },
     "capability_label": {
-      "question_split": "智能拆题",
+      "question_split": "拆分题卡",
       "question_grading": "智能批改",
       "flashcard_generation": "闪卡生成",
       "flashcard_long_outline": "长文闪卡提纲",
@@ -643,8 +643,14 @@
     "version_label": "版本 {{current}}/{{total}}",
     "version_old": "旧版",
     "button_delete": "删除",
-    "button_split": "智能拆题",
-    "button_split_in_progress": "智能拆题进行中",
+    "button_split": "拆分题卡",
+    "button_split_in_progress": "拆分题卡进行中",
+    "button_learning_profile": "学习档案",
+    "learning_profile_title": "学习档案",
+    "mastery_level": "掌握等级",
+    "mastery_score": "掌握分",
+    "loading": "加载中...",
+    "load_failed": "加载失败",
     "button_send_to_copilot": "发送到 Ordis",
     "button_copy": "复制",
     "grading_status": {
