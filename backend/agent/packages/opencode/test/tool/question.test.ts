@@ -111,6 +111,31 @@ describe("tool.question", () => {
     ),
   )
 
+  it.live("should treat custom-only replies as free text instead of a selected option", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const question = yield* Question.Service
+        const toolInfo = yield* QuestionTool
+        const tool = yield* toolInfo.init()
+        const questions = [
+          {
+            question: "What part is unclear?",
+            header: "Unclear",
+            options: [{ label: "Formula", description: "The formula is unclear" }],
+          },
+        ]
+
+        const fiber = yield* tool.execute({ questions }, ctx).pipe(Effect.forkScoped)
+        const item = yield* pending(question)
+        yield* question.reply({ requestID: item.id, answers: [[]], freeText: ["I do not know"] })
+
+        const result = yield* Fiber.join(fiber)
+        expect(result.output).toContain(`"What part is unclear?"=free text "I do not know"`)
+        expect(result.output).not.toContain(`"Unanswered"`)
+      }),
+    ),
+  )
+
   // intentionally removed the zod validation due to tool call errors, hoping prompting is gonna be good enough
   //   test("should throw an Error for header exceeding 30 characters", async () => {
   //     const tool = await QuestionTool.init()

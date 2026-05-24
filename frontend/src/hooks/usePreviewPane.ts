@@ -11,7 +11,7 @@ interface UsePreviewPaneReturn {
   isMobileOrTablet: boolean
   collapsePreview: () => void
   expandPreview: () => void
-  startResize: () => void
+  startResize: (edge?: 'left' | 'right') => void
 }
 
 export const usePreviewPane = (): UsePreviewPaneReturn => {
@@ -28,6 +28,7 @@ export const usePreviewPane = (): UsePreviewPaneReturn => {
 
   const leftPaneRef = useRef<HTMLElement | null>(null)
   const pendingLeftWidthRef = useRef<number | null>(null)
+  const resizeEdgeRef = useRef<'left' | 'right'>('right')
 
   useEffect(() => {
     const handleResize = () => {
@@ -44,7 +45,14 @@ export const usePreviewPane = (): UsePreviewPaneReturn => {
       if (!isResizing) return
       const minWidth = 320
       const maxWidth = 700
-      const newWidth = Math.min(maxWidth, Math.max(minWidth, event.clientX))
+      const rect = leftPaneRef.current?.getBoundingClientRect()
+      const rawWidth =
+        resizeEdgeRef.current === 'left' && rect
+          ? rect.right - event.clientX
+          : rect
+            ? event.clientX - rect.left
+            : event.clientX
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, rawWidth))
       pendingLeftWidthRef.current = newWidth
       const pane = leftPaneRef.current
       if (pane) {
@@ -92,8 +100,9 @@ export const usePreviewPane = (): UsePreviewPaneReturn => {
     setAppView('editor')
   }, [setAppView, setIsPreviewCollapsed])
 
-  const startResize = useCallback(() => {
+  const startResize = useCallback((edge: 'left' | 'right' = 'right') => {
     if (isMobileOrTablet) return
+    resizeEdgeRef.current = edge
     setIsResizing(true)
   }, [isMobileOrTablet, setIsResizing])
 

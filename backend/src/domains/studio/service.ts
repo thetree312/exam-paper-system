@@ -125,6 +125,7 @@ function dedupeWeaknessRecords(
     first_seen_at: string
     last_seen_at: string
     resolved_at: string | null
+    note?: string | null
   }>,
 ) {
   const map = new Map<string, (typeof list)[number]>()
@@ -148,6 +149,9 @@ function dedupeWeaknessRecords(
     }
     if (!existing.resolved_at && item.resolved_at) {
       existing.resolved_at = item.resolved_at
+    }
+    if (!existing.note && item.note) {
+      existing.note = item.note
     }
   }
   return Array.from(map.values()).sort((a, b) => b.count - a.count || b.last_seen_at.localeCompare(a.last_seen_at))
@@ -179,7 +183,16 @@ function buildSlimLearningProfile(raw: any, full: boolean) {
   const summaries = (profile.summaries ?? {}) as Record<string, unknown>
 
   const learning = {
+    problemCard: profile.problemCard ?? null,
+    knowledgeProfile: profile.knowledgeProfile ?? null,
     currentState: currentState
+      ? {
+          ...currentState,
+          unresolved_weaknesses: dedupeStringList(currentState.unresolved_weaknesses),
+          repeated_mistakes: dedupeStringList(currentState.repeated_mistakes),
+        }
+      : null,
+    learningState: currentState
       ? {
           ...currentState,
           unresolved_weaknesses: dedupeStringList(currentState.unresolved_weaknesses),
@@ -218,8 +231,16 @@ function buildSlimLearningProfile(raw: any, full: boolean) {
         first_seen_at: String(item.first_seen_at ?? ""),
         last_seen_at: String(item.last_seen_at ?? ""),
         resolved_at: item.resolved_at == null ? null : String(item.resolved_at),
+        note: item.note == null ? null : String(item.note),
       })),
     ),
+    gradingRecords: Array.isArray(profile.gradingRecords) ? profile.gradingRecords : [],
+    attempts: Array.isArray(profile.attempts) ? profile.attempts : attemptsSource,
+    raw_recent_attempts: attemptsSource.slice(0, 5),
+    reviewHeatmap180d: Array.isArray(profile.reviewHeatmap180d) ? profile.reviewHeatmap180d : [],
+    attemptStats: profile.attemptStats ?? null,
+    reviewStats: profile.reviewStats ?? null,
+    timelineEvents: Array.isArray(profile.timelineEvents) ? profile.timelineEvents : [],
     summaries: {
       monthly_summaries: Array.isArray(summaries.monthly_summaries) ? summaries.monthly_summaries : [],
       yearly_summaries: Array.isArray(summaries.yearly_summaries) ? summaries.yearly_summaries : [],
@@ -502,6 +523,7 @@ async function rebuildSnapshot(input: {
       status: w.status,
       severity: w.severity,
       count: w.count,
+      note: w.note ?? null,
     })),
     reviewHeatmap180d: buildHeatmap180d(relatedAttempts),
   }

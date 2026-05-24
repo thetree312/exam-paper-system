@@ -598,12 +598,15 @@ agentRoutes.get("/session/:sessionID", async (c) => {
 
 agentRoutes.patch("/session/:sessionID", async (c) => {
   const { user } = await requireAuth(c)
-  const { AppRuntime, Session, SessionID } = await loadAgentRuntimeModules()
   const body = sessionUpdateSchema.parse(await c.req.json())
-  const sessionID = SessionID.make(c.req.param("sessionID"))
+  const rawSessionID = c.req.param("sessionID")
+  const needsRuntimeSessionUpdate = body.title !== undefined || body.archived !== undefined
+  let session: any = { id: rawSessionID }
 
-  const session = await withAgentScope({ userID: user.id, workroomID: body.workroomID }, async () =>
-    (async () => {
+  if (needsRuntimeSessionUpdate) {
+    const { AppRuntime, Session, SessionID } = await loadAgentRuntimeModules()
+    const sessionID = SessionID.make(rawSessionID)
+    session = await withAgentScope({ userID: user.id, workroomID: body.workroomID, syncUserSettings: false }, async () => {
       if (body.title !== undefined) {
         await AppRuntime.runPromise(Session.Service.use((svc: any) => svc.setTitle({ sessionID, title: body.title })))
       }
@@ -614,22 +617,23 @@ agentRoutes.patch("/session/:sessionID", async (c) => {
           ),
         )
       }
-      if (body.selectedModel !== undefined) {
-        await AgentSessionModelSelectionService.put({
-          userID: user.id,
-          workroomID: body.workroomID,
-          sessionID: c.req.param("sessionID"),
-          selectedModel: body.selectedModel,
-        })
-      }
       return AppRuntime.runPromise(Session.Service.use((svc: any) => svc.get(sessionID)))
-    })(),
-  )
+    })
+  }
+
+  if (body.selectedModel !== undefined) {
+    await AgentSessionModelSelectionService.put({
+      userID: user.id,
+      workroomID: body.workroomID,
+      sessionID: rawSessionID,
+      selectedModel: body.selectedModel,
+    })
+  }
 
   const selectedModel = await AgentSessionModelSelectionService.get({
     userID: user.id,
     workroomID: body.workroomID,
-    sessionID: c.req.param("sessionID"),
+    sessionID: rawSessionID,
   })
 
   return c.json({

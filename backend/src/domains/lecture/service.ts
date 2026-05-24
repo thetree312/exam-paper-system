@@ -3,6 +3,7 @@ import {
   loadAgentRuntimeModules,
   withAgentScope,
 } from "../agent/service"
+import { ProblemCardService, type LectureLearningAssessment } from "../problem-cards/service"
 import { StudioService } from "../studio/service"
 import { LectureEvents } from "./events"
 import {
@@ -472,20 +473,25 @@ export function buildLectureTaskPrompt(input: {
     "- 先判断题目最自然的入口，再展开推导；每一步只讲一个新观察、新关系或新决策。",
     "- 课堂互动用 question tool 完成，结构化选项保持简短中性；`question.custom` 默认允许自由回答，只有要封闭题时才设为 `false`。",
     "- 学生回答后先回应他的想法，再继续主线，不要直接跳到最终答案。",
+    "- 讲解收束前必须用 question tool 做最后确认：选项只保留“懂了，可以结束”和“还不懂，我想继续说一下”；第二项必须允许自由输入并继续讲解，不提交学习评分。",
     "",
     "【可视化原则】",
     "- 过程、机制、动态变化、空间关系、参数影响等内容，优先用自包含的交互式 HTML canvas 动画；静态示意图和纯标签层再用 SVG。",
     "- 只选一种表达路径：canvas、text 或 none。首次可视化必须是完整可运行片段，后续更新才使用 `render-html-patch`。",
     "- `render-html` 只接收 `#lecture-visualization-root` 内部 fragment，不提交完整文档壳；可视化内容要适配讲解面板尺寸，不依赖固定全屏布局。",
-    "- canvas 由 `LectureCanvasRuntime.mountCanvas(canvas, drawScene)` 承载，绘制函数只负责世界坐标内容；viewport 视为相机状态，在 draw 里处理 zoom / pan / DPR / 重绘。",
+    "- canvas runtime 已由宿主注入为 `window.LectureCanvasRuntime`；不要写 importmap，不要从 `/wiki/.agent/lib/...` import。",
+    "- canvas 由 `window.LectureCanvasRuntime.mountCanvas(canvas, drawScene)` 承载；`drawScene(ctx, width, height, dpr, viewport)` 只负责绘制内容，重绘时调用返回对象的 `requestDraw()`。",
     "- SVG 需要稳定 `viewBox` 和响应式宽高，缩放和平移交给宿主，不要靠 CSS transform 放大整页。",
-    "- 所有中文图形文字使用 CJK 字体栈，canvas 优先用 `LectureCanvasRuntime.setTextStyle(ctx, size, weight)` 或 `LectureCanvasRuntime.fontStack`。",
+    "- 所有中文图形文字使用 CJK 字体栈，canvas 优先用 `window.LectureCanvasRuntime.setTextStyle(ctx, size, weight)` 或 `window.LectureCanvasRuntime.fontStack`。",
     "",
     "【写作与传输】",
     "- 公式、方程、比例、推导、指数、下标、单位换算一律写成 LaTeX，独立成行优先用 `$$...$$`。",
     "- 中文、TeX、长文本、HTML 和 patch 统一走 UTF-8 临时文件 + `--delete-after-read` 作为唯一主通道。",
     "- 在 PowerShell 里写临时文件时，必须用单引号 here-string `@'... '@`、`Set-Content -Encoding utf8`，或 `[System.IO.File]::WriteAllText(..., [System.Text.Encoding]::UTF8)`；不要把 LaTeX 放进双引号字符串，否则 `$...$` 会被变量展开吞掉。",
     "- 普通讲解正文直接正常输出，系统会原生流式投影到讲解容器；不要再用 lecture bridge 写 lecture 正文。",
+    "- 只有学生在最后确认选择“懂了，可以结束”后，才调用 lecture complete，并提交本节课学习评分表；如果学生选择“不懂”或填写自由反馈，先回应反馈并继续讲解。",
+    "- complete 的学习评分表由你基于本次讲解和学生互动填写；它不是计数器，而是教师课后记录。",
+    "- 提交评分表时把 JSON 写入 UTF-8 临时文件，并使用 `complete --teaching-summary-file <file> --learning-assessment-file <json-file> --delete-after-read`。",
     "- 渲染可视化时使用 `render-html --html-file <utf8-file> --delete-after-read`，增量更新时使用 `render-html-patch --patch-file <utf8-file> --delete-after-read`。",
     "- 正文讲解直接引用正在讲的原文，系统会从讲解正文中自动推断高亮；不要为了高亮再调用 `append-block`。",
     "- 不要传 `--session-id`；lecture bridge 会自动绑定当前 lecture container。",
@@ -494,6 +500,8 @@ export function buildLectureTaskPrompt(input: {
     "- 讲解内容写入讲解容器，引导问题用 question tool，后续根据学生回答继续推进。",
     "- 当你使用 question tool 生成可选项时，保持选项简短清晰，必要时可以附上简短说明，不要写长篇诊断。",
     "- 要学生自由回答时，利用 `question.custom` 的原生默认语义；只有要显式封闭时才设为 `false`。",
+    "- 评分表字段：masteryLevel 可写 unknown/struggling/reviewing/good/mastered 或现有内部等级；learningStage 只能是 初学/补漏/复习；progressSummary/latestDiagnosisSummary 写自然语言；weaknesses/resolvedWeaknesses 以自然语言备注为主；generationRecommendation 可覆盖下一题生成建议；evidence 写本次课堂证据。",
+    "- 禁止把 lecture 当作一次作答计数：不要更新 attempt/correct/consecutive 语义，只提交评分表。",
     '- 高亮 spans 使用 JSON 数组，形如 [{"sourceId":"stem","quote":"原文片段"}]。',
     "",
     "【题目上下文】",
@@ -771,6 +779,16 @@ function buildReasoningDraftRecord(input: {
   }
 }
 
+function isSameRuntimePart(
+  current: { messageID: string | null; partID: string | null } | undefined,
+  next: { messageID: string | null; partID: string | null },
+) {
+  if (!current) return false
+  if (next.partID || current.partID) return Boolean(next.partID && current.partID === next.partID)
+  if (next.messageID || current.messageID) return Boolean(next.messageID && current.messageID === next.messageID)
+  return false
+}
+
 async function resolveLectureAgentSessionID(session: LectureSessionRecord) {
   if (session.lectureAgentSessionID) return session.lectureAgentSessionID
   if (!session.originAgentSessionID) return null
@@ -847,11 +865,14 @@ export const LectureService = {
       }
       if (reasoningPart.partID) draft.reasoningPartIDs.add(reasoningPart.partID)
       runtimeLectureDrafts.set(draftKey, draft)
+      const previousReasoningDraft = runtimeLectureReasoningDrafts.get(draftKey)
       const reasoningDraft = {
         messageID: reasoningPart.messageID,
         partID: reasoningPart.partID,
         text: reasoningPart.text,
-        startedAt: runtimeLectureReasoningDrafts.get(draftKey)?.startedAt ?? new Date().toISOString(),
+        startedAt: isSameRuntimePart(previousReasoningDraft, reasoningPart)
+          ? previousReasoningDraft!.startedAt
+          : new Date().toISOString(),
       }
       runtimeLectureReasoningDrafts.set(draftKey, reasoningDraft)
       await LectureEvents.publish(lectureSession.id, {
@@ -896,14 +917,15 @@ export const LectureService = {
         return null
       }
       if (textDelta.partID && draft.reasoningPartIDs.has(textDelta.partID)) {
-        const reasoningDraft =
-          runtimeLectureReasoningDrafts.get(draftKey) ??
-          {
-            messageID: textDelta.messageID,
-            partID: textDelta.partID,
-            text: "",
-            startedAt: new Date().toISOString(),
-          }
+        const previousReasoningDraft = runtimeLectureReasoningDrafts.get(draftKey)
+        const reasoningDraft = isSameRuntimePart(previousReasoningDraft, textDelta)
+          ? previousReasoningDraft!
+          : {
+              messageID: textDelta.messageID,
+              partID: textDelta.partID,
+              text: "",
+              startedAt: new Date().toISOString(),
+            }
         reasoningDraft.messageID = textDelta.messageID ?? reasoningDraft.messageID
         reasoningDraft.partID = textDelta.partID ?? reasoningDraft.partID
         reasoningDraft.text += textDelta.text
@@ -1239,6 +1261,7 @@ export const LectureService = {
     lectureSessionID: string
     teachingSummary: string
     nextSuggestion?: string | null
+    learningAssessment?: Omit<LectureLearningAssessment, "lectureSessionID"> | null
   }) {
     const session = await requireSession(input.userID, input.workroomID, input.lectureSessionID)
     const blocks = await LectureRepository.listBlocks(input.userID, input.workroomID, input.lectureSessionID)
@@ -1258,6 +1281,17 @@ export const LectureService = {
       completedAt: new Date().toISOString(),
     })
     if (!next) throw new Error("LECTURE_SESSION_UPDATE_FAILED")
+    if (input.learningAssessment) {
+      await ProblemCardService.applyLectureAssessment({
+        userID: input.userID,
+        workroomID: input.workroomID,
+        problemCardID: session.cardID,
+        assessment: {
+          ...input.learningAssessment,
+          lectureSessionID: session.id,
+        },
+      })
+    }
     const payload = await buildSessionPayloadCore(next, blocks)
     await LectureEvents.publish(session.id, {
       type: "lecture.completed",

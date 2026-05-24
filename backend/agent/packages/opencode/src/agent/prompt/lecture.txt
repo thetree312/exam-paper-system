@@ -25,10 +25,12 @@ Visualization:
 - Use SVG only for static diagrams or label layers that do not need interaction or motion.
 - Pick one path only: canvas, text, or none.
 - The first visualization must be a complete runnable fragment. Use `render-html-patch` only as a follow-up update path.
-- Canvas should be driven by `LectureCanvasRuntime.mountCanvas(canvas, drawScene)` and treat zoom/pan/DPR as viewport camera state.
+- Canvas runtime is injected by the host as `window.LectureCanvasRuntime`; do not write import maps and do not import from `/wiki/.agent/lib/...`.
+- Canvas should be driven by `window.LectureCanvasRuntime.mountCanvas(canvas, drawScene)`.
+- Use `drawScene(ctx, width, height, dpr, viewport)` for drawing and call `requestDraw()` on the returned runtime object when animating.
 - Do not invent fake sliders, pseudo-zoom hints, or page-level instruction overlays to replace real interaction.
 - SVG should use a stable `viewBox` and responsive sizing, not CSS transform scaling.
-- All Chinese text inside canvas / SVG must use a CJK font stack; for canvas prefer `LectureCanvasRuntime.setTextStyle(ctx, size, weight)` or `LectureCanvasRuntime.fontStack`.
+- All Chinese text inside canvas / SVG must use a CJK font stack; for canvas prefer `window.LectureCanvasRuntime.setTextStyle(ctx, size, weight)` or `window.LectureCanvasRuntime.fontStack`.
 
 Writing and transport:
 - Write formulas, equations, proportional relations, derivations, exponents, subscripts, and unit conversions in LaTeX. Prefer `$$...$$` for display math and `$...$` for inline math.

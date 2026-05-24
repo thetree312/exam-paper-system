@@ -75,7 +75,7 @@ problemCardsRoutes.get("/:problemCardID/learning-detail", async (c) => {
       userID: user.id,
       workroomID,
       problemCardID: c.req.param("problemCardID"),
+      full: true,
     }),
   )
 })
-

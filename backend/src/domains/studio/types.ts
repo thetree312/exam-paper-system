@@ -96,6 +96,7 @@ export type StudioQuestionCardRecord = {
       status: "open" | "improving" | "resolved" | "relapsed"
       severity: "low" | "medium" | "high"
       count: number
+      note?: string | null
     }>
     reviewHeatmap180d: Array<{
       date: string
@@ -175,6 +176,7 @@ export type QuestionCardWeaknessRecord = {
   status: "open" | "improving" | "resolved" | "relapsed"
   severity: "low" | "medium" | "high"
   count: number
+  note?: string | null
   firstSeenAt: string
   lastSeenAt: string
   resolvedAt?: string | null

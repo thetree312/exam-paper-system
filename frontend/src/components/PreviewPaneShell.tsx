@@ -12,6 +12,7 @@ import type { UITheme } from '../lib/theme'
 interface PreviewPaneShellProps {
   leftPaneRef: React.RefObject<HTMLElement>
   style: React.CSSProperties
+  variant?: 'full' | 'rail' | 'content'
   isPreviewCollapsed: boolean
   isMobileOrTablet: boolean
   appView: 'editor' | 'favorites'
@@ -58,6 +59,7 @@ interface PreviewPaneShellProps {
 export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
   leftPaneRef,
   style,
+  variant = 'full',
   isPreviewCollapsed,
   isMobileOrTablet,
   appView,
@@ -210,13 +212,24 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
     </div>
   )
 
+  if (variant === 'rail') {
+    return (
+      <aside
+        className="flex w-11 shrink-0 border-r border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)]"
+        style={{ width: 44, minWidth: 44 }}
+      >
+        {renderPreviewRail()}
+      </aside>
+    )
+  }
+
   return (
     <aside
       className="bg-[var(--ui-bg-panel)] border-b lg:border-b-0 lg:border-r border-[var(--ui-border-default)] flex relative"
       ref={leftPaneRef}
       style={style}
     >
-      {!isMobileOrTablet && renderPreviewRail()}
+      {!isMobileOrTablet && variant === 'full' && renderPreviewRail()}
 
       {!isPreviewCollapsed && appView === 'editor' && (
         <div className="relative flex min-w-0 flex-1 flex-col">
@@ -283,7 +296,7 @@ export const PreviewPaneShell: React.FC<PreviewPaneShellProps> = ({
         </div>
       )}
 
-      {isMobileOrTablet && isPreviewCollapsed && renderPreviewRail()}
+      {isMobileOrTablet && variant === 'full' && isPreviewCollapsed && renderPreviewRail()}
     </aside>
   )
 }

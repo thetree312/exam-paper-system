@@ -12,6 +12,24 @@ type Metadata = {
   freeText: ReadonlyArray<string | null>
 }
 
+export function formatQuestionResponses(
+  questions: ReadonlyArray<Question.Prompt>,
+  responses: ReadonlyArray<Question.Response>,
+) {
+  return questions
+    .map((q, i) => {
+      const response = responses[i]
+      const answerText = response?.answers.length ? response.answers.join(", ") : "Unanswered"
+      const freeText = response?.freeText?.trim()
+      if (!freeText) return `"${q.question}"="${answerText}"`
+      if (!response?.answers.length || (response.answers.length === 1 && response.answers[0] === freeText)) {
+        return `"${q.question}"=free text "${freeText}"`
+      }
+      return `"${q.question}"="${answerText}" (free text: "${freeText}")`
+    })
+    .join(", ")
+}
+
 export const QuestionTool = Tool.define<typeof Parameters, Metadata, Question.Service>(
   "question",
   Effect.gen(function* () {
@@ -28,18 +46,7 @@ export const QuestionTool = Tool.define<typeof Parameters, Metadata, Question.Se
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
           })
 
-          const formatted = params.questions
-            .map((q, i) => {
-              const response = responses[i]
-              const answerText = response?.answers.length ? response.answers.join(", ") : "Unanswered"
-              const freeText = response?.freeText?.trim()
-              if (!freeText) return `"${q.question}"="${answerText}"`
-              if (response?.answers.length === 1 && response.answers[0] === freeText) {
-                return `"${q.question}"=free text "${freeText}"`
-              }
-              return `"${q.question}"="${answerText}" (free text: "${freeText}")`
-            })
-            .join(", ")
+            const formatted = formatQuestionResponses(params.questions, responses)
 
           return {
             title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,

@@ -19,6 +19,7 @@ const {
   analyzeLectureIntentPrompt,
   buildLectureIntentDirective,
 } = await import("../src/domains/agent/service")
+const { ProblemCardService } = await import("../src/domains/problem-cards/service")
 
 const dbPath = process.env.LOCAL_SQLITE_PATH
 
@@ -98,6 +99,8 @@ test("LectureService.launchSession reuses only the matching origin message", { c
   assert.equal(first.taskDescription, "Lecture 1")
   assert.ok(!first.taskPrompt.includes("[lecture-session-id:"))
   assert.ok(first.taskPrompt.includes("原生 question tool"))
+  assert.ok(first.taskPrompt.includes("最后确认"))
+  assert.ok(first.taskPrompt.includes("--learning-assessment-file"))
 
   const second = await LectureService.launchSession({
     ...fixture,
@@ -240,6 +243,113 @@ test("LectureService.appendBlock repairs bare math lines and infers highlights f
   assert.ok(payload.session.activeHighlightSpans.some((span) => span.sourceId === "stem"))
 })
 
+test("ProblemCardService.applyLectureAssessment writes teacher assessment without changing attempt counters", { concurrency: false }, async () => {
+  const fixture = await createFixture()
+  const db = getLocalSqlite()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO question_card_learning_states
+      (id, user_id, workroom_id, card_id, mastery_level, learning_stage, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, generation_recommendation_json, updated_at, created_at)
+      VALUES
+      (@id, @user_id, @workroom_id, @card_id, 'weak', '补漏', 4, 1, 0, @last_attempt_at, @last_review_at, '["半长轴公式不稳"]', '[]', 'stagnant', '旧摘要', '{}', @updated_at, @created_at)`,
+  ).run({
+    id: "learning_state_lecture_seed",
+    user_id: fixture.userID,
+    workroom_id: fixture.workroomID,
+    card_id: fixture.cardID,
+    last_attempt_at: now,
+    last_review_at: now,
+    updated_at: now,
+    created_at: now,
+  })
+  db.prepare(
+    `INSERT INTO question_card_weaknesses
+      (id, user_id, workroom_id, card_id, weakness_key, label, category, status, severity, count, note, first_seen_at, last_seen_at, resolved_at, evidence_attempt_ids_json, evidence_diagnosis_ids_json, created_at, updated_at)
+      VALUES
+      ('weakness_old', @user_id, @workroom_id, @card_id, '半长轴公式不稳', '半长轴公式不稳', 'method_gap', 'open', 'medium', 7, '旧备注', @first_seen_at, @last_seen_at, NULL, '[]', '[]', @created_at, @updated_at)`,
+  ).run({
+    user_id: fixture.userID,
+    workroom_id: fixture.workroomID,
+    card_id: fixture.cardID,
+    first_seen_at: now,
+    last_seen_at: now,
+    created_at: now,
+    updated_at: now,
+  })
+
+  await ProblemCardService.applyLectureAssessment({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    problemCardID: fixture.cardID,
+    assessment: {
+      lectureSessionID: "lecture-session-1",
+      masteryLevel: "good",
+      learningStage: "复习",
+      progressSummary: "学生能主动说明先求半长轴，再用开普勒第三定律验证。",
+      latestDiagnosisSummary: "讲解后半长轴入口已修复，周期映射还需巩固。",
+      generationRecommendation: {
+        strategy: "stabilize",
+        recommended_difficulty: "medium",
+        recommended_question_types: ["选择题"],
+        recommended_knowledge_points: ["开普勒第三定律"],
+        reason_summary: "继续用相邻变式确认半长轴到周期的迁移。",
+      },
+      weaknesses: [
+        {
+          label: "周期与半长轴三次方关系迁移不稳",
+          category: "method_gap",
+          status: "open",
+          severity: "medium",
+          note: "学生已会求半长轴，但把 a=6 直接看成 T=6 的倾向仍存在。",
+        },
+      ],
+      resolvedWeaknesses: [
+        {
+          label: "半长轴公式不稳",
+          note: "学生已经能从近日点和远日点平均得到半长轴。",
+        },
+      ],
+      evidence: {
+        final_confirmation: "懂",
+        student_signals: ["能解释 5AU 和 7AU 的平均含义"],
+      },
+    },
+  })
+
+  const state = db
+    .prepare(`SELECT * FROM question_card_learning_states WHERE card_id=@card_id`)
+    .get({ card_id: fixture.cardID }) as Record<string, unknown>
+  assert.equal(state.mastery_level, "good")
+  assert.equal(state.learning_stage, "复习")
+  assert.equal(state.total_attempts, 4)
+  assert.equal(state.correct_attempts, 1)
+  assert.equal(state.consecutive_correct_count, 0)
+  assert.equal(state.progress_summary, "学生能主动说明先求半长轴，再用开普勒第三定律验证。")
+  assert.deepEqual(JSON.parse(String(state.unresolved_weaknesses_json)), ["周期与半长轴三次方关系迁移不稳"])
+  assert.equal(JSON.parse(String(state.generation_recommendation_json)).reason_summary, "继续用相邻变式确认半长轴到周期的迁移。")
+
+  const weaknesses = db
+    .prepare(`SELECT weakness_key, label, status, count, note FROM question_card_weaknesses WHERE card_id=@card_id ORDER BY weakness_key`)
+    .all({ card_id: fixture.cardID }) as Array<Record<string, unknown>>
+  assert.equal(weaknesses.find((item) => item.label === "半长轴公式不稳")?.status, "resolved")
+  assert.equal(weaknesses.find((item) => item.label === "半长轴公式不稳")?.count, 7)
+  assert.equal(weaknesses.find((item) => item.label === "半长轴公式不稳")?.note, "学生已经能从近日点和远日点平均得到半长轴。")
+  assert.equal(weaknesses.find((item) => item.label === "周期与半长轴三次方关系迁移不稳")?.status, "open")
+
+  const event = db
+    .prepare(`SELECT * FROM question_card_study_events WHERE card_id=@card_id AND event_type='lecture_assessment'`)
+    .get({ card_id: fixture.cardID }) as Record<string, unknown>
+  assert.equal(JSON.parse(String(event.payload_json)).lecture_session_id, "lecture-session-1")
+
+  const card = db
+    .prepare(`SELECT learning_snapshot_json FROM studio_question_cards WHERE id=@card_id`)
+    .get({ card_id: fixture.cardID }) as Record<string, unknown>
+  const snapshot = JSON.parse(String(card.learning_snapshot_json))
+  assert.equal(snapshot.masteryLevel, "good")
+  assert.equal(snapshot.latestDiagnosisSummary, "讲解后半长轴入口已修复，周期映射还需巩固。")
+  assert.equal(snapshot.weaknessSummary.length, 2)
+})
+
 test("LectureService.answerQuestion updates active highlights and completeSession stores summary", { concurrency: false }, async () => {
   const fixture = await createFixture()
   const launched = await LectureService.launchSession({
@@ -278,6 +388,57 @@ test("LectureService.answerQuestion updates active highlights and completeSessio
   assert.equal(completed.summary?.completed, true)
   assert.equal(completed.summary?.cardID, fixture.cardID)
   assert.match(completed.summary?.teachingSummary ?? "", /两点定函数/)
+})
+
+test("LectureService.completeSession applies lecture learning assessment when supplied", { concurrency: false }, async () => {
+  const fixture = await createFixture()
+  const launched = await LectureService.launchSession({
+    ...fixture,
+    originAgentSessionID: "agent-session-assessment",
+  })
+
+  await LectureService.completeSession({
+    userID: fixture.userID,
+    workroomID: fixture.workroomID,
+    lectureSessionID: launched.session.id,
+    teachingSummary: "学生已经理解两点定函数的主线。",
+    nextSuggestion: "下一题用相邻变式巩固。",
+    learningAssessment: {
+      masteryLevel: "reviewing",
+      learningStage: "补漏",
+      progressSummary: "学生能复述入口，但还需要练一次迁移。",
+      latestDiagnosisSummary: "讲解后入口已清楚，迁移仍需巩固。",
+      generationRecommendation: {
+        strategy: "stabilize",
+        recommended_difficulty: "easy",
+        recommended_question_types: ["选择题"],
+        recommended_knowledge_points: ["一次函数"],
+        reason_summary: "用低干扰选择题确认两点式入口。",
+      },
+      weaknesses: [
+        {
+          label: "迁移到新点验证时容易跳步",
+          status: "open",
+          note: "学生能跟上讲解，但独立迁移证据不足。",
+        },
+      ],
+      evidence: {
+        final_confirmation: "懂",
+      },
+    },
+  })
+
+  const db = getLocalSqlite()
+  const state = db
+    .prepare(`SELECT * FROM question_card_learning_states WHERE card_id=@card_id`)
+    .get({ card_id: fixture.cardID }) as Record<string, unknown>
+  assert.equal(state.mastery_level, "reviewing")
+  assert.equal(state.learning_stage, "补漏")
+
+  const event = db
+    .prepare(`SELECT * FROM question_card_study_events WHERE card_id=@card_id AND event_type='lecture_assessment'`)
+    .get({ card_id: fixture.cardID }) as Record<string, unknown>
+  assert.equal(JSON.parse(String(event.payload_json)).lecture_session_id, launched.session.id)
 })
 
 test("LectureService.closeSession preserves recoverable session state", { concurrency: false }, async () => {
@@ -689,6 +850,85 @@ test("LectureService.projectRuntimeStreamEvent classifies reasoning deltas even 
     { type: "lecture.reasoning.streaming", text: "这段是模型思考，不应该进入正文。", status: "thinking" },
     { type: "lecture.block.streaming", text: "正式讲解。", status: null },
   ])
+})
+
+test("LectureService.projectRuntimeStreamEvent starts a fresh reasoning draft for each reasoning part", { concurrency: false }, async () => {
+  const fixture = await createFixture()
+  const launched = await LectureService.launchSession({
+    ...fixture,
+    originAgentSessionID: "agent-session-segmented-reasoning-parent",
+    originMessageID: "origin-message-segmented-reasoning",
+  })
+  await LectureRepository.updateSession(fixture.userID, fixture.workroomID, launched.session.id, {
+    lectureAgentSessionID: "agent-session-segmented-reasoning-child",
+  })
+
+  const events: Array<{ id: string | null; text: string | null; createdAt: string | null }> = []
+  const unsubscribe = LectureEvents.subscribe(launched.session.id, (event) => {
+    if (event.type !== "lecture.reasoning.streaming") return
+    events.push({
+      id: event.reasoningDraft?.id ?? null,
+      text: event.reasoningDraft?.text ?? null,
+      createdAt: event.reasoningDraft?.createdAt ?? null,
+    })
+  })
+
+  try {
+    await LectureService.projectRuntimeStreamEvent({
+      userID: fixture.userID,
+      workroomID: fixture.workroomID,
+      agentSessionID: "agent-session-segmented-reasoning-child",
+      event: {
+        type: "message.started",
+        properties: {
+          info: { id: "msg-segmented-reasoning", role: "assistant" },
+        },
+      },
+    })
+    await LectureService.projectRuntimeStreamEvent({
+      userID: fixture.userID,
+      workroomID: fixture.workroomID,
+      agentSessionID: "agent-session-segmented-reasoning-child",
+      event: {
+        type: "message.part.delta",
+        properties: {
+          messageID: "msg-segmented-reasoning",
+          partID: "part-reasoning-a",
+          partType: "reasoning",
+          field: "text",
+          delta: "第一段思考",
+        },
+      },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await LectureService.projectRuntimeStreamEvent({
+      userID: fixture.userID,
+      workroomID: fixture.workroomID,
+      agentSessionID: "agent-session-segmented-reasoning-child",
+      event: {
+        type: "message.part.delta",
+        properties: {
+          messageID: "msg-segmented-reasoning",
+          partID: "part-reasoning-b",
+          partType: "reasoning",
+          field: "text",
+          delta: "第二段思考",
+        },
+      },
+    })
+  } finally {
+    unsubscribe()
+  }
+
+  assert.equal(events.length, 2)
+  assert.deepEqual(
+    events.map((event) => ({ id: event.id, text: event.text })),
+    [
+      { id: "reasoning.part-reasoning-a", text: "第一段思考" },
+      { id: "reasoning.part-reasoning-b", text: "第二段思考" },
+    ],
+  )
+  assert.notEqual(events[0]?.createdAt, events[1]?.createdAt)
 })
 
 test("buildLectureTaskPrompt keeps lecture child focused on runtime streamed text and bridge side effects", { concurrency: false }, async () => {

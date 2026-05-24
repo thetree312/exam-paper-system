@@ -26,6 +26,39 @@ const completeSchema = z.object({
   workroomID: z.string().min(1),
   teachingSummary: z.string().min(1),
   nextSuggestion: z.string().optional().nullable(),
+  learningAssessment: z
+    .object({
+      masteryLevel: z.string().optional().nullable(),
+      masteryScore: z.number().optional().nullable(),
+      learningStage: z.enum(["初学", "补漏", "复习"]).optional().nullable(),
+      progressSummary: z.string().optional().nullable(),
+      latestDiagnosisSummary: z.string().optional().nullable(),
+      generationRecommendation: z.record(z.string(), z.unknown()).optional().nullable(),
+      weaknesses: z
+        .array(
+          z.object({
+            weaknessKey: z.string().optional().nullable(),
+            label: z.string().min(1),
+            category: z.string().optional().nullable(),
+            status: z.enum(["open", "improving", "resolved", "relapsed"]),
+            severity: z.enum(["low", "medium", "high"]).optional().nullable(),
+            note: z.string().optional().nullable(),
+          }),
+        )
+        .optional(),
+      resolvedWeaknesses: z
+        .array(
+          z.object({
+            weaknessKey: z.string().optional().nullable(),
+            label: z.string().optional().nullable(),
+            note: z.string().optional().nullable(),
+          }),
+        )
+        .optional(),
+      evidence: z.record(z.string(), z.unknown()).optional(),
+    })
+    .optional()
+    .nullable(),
 })
 
 const appendBlockSchema = z.object({
@@ -476,6 +509,7 @@ lectureRoutes.post("/:sessionID/complete", async (c) => {
       lectureSessionID: c.req.param("sessionID"),
       teachingSummary: body.teachingSummary,
       nextSuggestion: body.nextSuggestion,
+      learningAssessment: body.learningAssessment,
     }),
   )
 })

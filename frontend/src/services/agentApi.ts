@@ -1137,14 +1137,16 @@ export async function updateAgentSession(
     selectedModel?: { providerID: string; modelID: string } | null
   },
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    workroomID: String(payload.workroomId),
+  }
+  if (payload.title !== undefined) body.title = payload.title
+  if (payload.archived !== undefined) body.archived = payload.archived
+  if (payload.selectedModel !== undefined) body.selectedModel = payload.selectedModel
+
   await apiFetch(`${baseUrl}/api/agent/session/${sessionId}`, {
     method: 'PATCH',
-    ...withJsonBody({
-      workroomID: String(payload.workroomId),
-      title: payload.title,
-      archived: payload.archived,
-      selectedModel: payload.selectedModel,
-    }),
+    ...withJsonBody(body),
   })
 }
 

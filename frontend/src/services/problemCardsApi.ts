@@ -1,5 +1,11 @@
 import { apiJson, withJsonBody } from '../lib/api'
 
+type ProblemCardLearningStateDto = ProblemCardLearningDetailDto['learningState']
+type ProblemCardGradingRecordDto = ProblemCardLearningDetailDto['gradingRecords'][number]
+type ProblemCardAttemptDto = ProblemCardLearningDetailDto['attempts'][number]
+type ProblemCardWeaknessDto = ProblemCardLearningDetailDto['weaknesses'][number]
+type ProblemCardTimelineEventDto = ProblemCardLearningDetailDto['timelineEvents'][number]
+
 export interface ProblemCardLearningDetailDto {
   problemCard: {
     id: string
@@ -116,6 +122,56 @@ export interface ProblemCardLearningDetailDto {
   }>
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
+function normalizeLearningDetail(raw: unknown): ProblemCardLearningDetailDto {
+  const source = asRecord(raw) ?? {}
+  const latestGradingRecord = (asRecord(source.latestGradingRecord) ??
+    asRecord(source.latest_grading_record)) as ProblemCardGradingRecordDto | null
+  const learningState = (asRecord(source.learningState) ??
+    asRecord(source.currentState) ??
+    asRecord(source.current_state)) as ProblemCardLearningStateDto
+
+  return {
+    ...(source as ProblemCardLearningDetailDto),
+    learningState: learningState ?? null,
+    gradingRecords: asArray<ProblemCardGradingRecordDto>(source.gradingRecords),
+    latestGradingRecord: latestGradingRecord ?? null,
+    attempts:
+      asArray<ProblemCardAttemptDto>(source.attempts).length > 0
+        ? asArray<ProblemCardAttemptDto>(source.attempts)
+        : asArray<ProblemCardAttemptDto>(source.raw_recent_attempts),
+    weaknesses: asArray<ProblemCardWeaknessDto>(source.weaknesses),
+    reviewHeatmap180d:
+      asArray<{ date: string; intensity: number }>(source.reviewHeatmap180d).length > 0
+        ? asArray<{ date: string; intensity: number }>(source.reviewHeatmap180d)
+        : asArray<{ date: string; intensity: number }>(source.review_heatmap_180d),
+    attemptStats:
+      asRecord(source.attemptStats) != null
+        ? (source.attemptStats as ProblemCardLearningDetailDto['attemptStats'])
+        : {
+            total_attempts: asArray<ProblemCardAttemptDto>(source.attempts).length || asArray<ProblemCardAttemptDto>(source.raw_recent_attempts).length,
+          },
+    reviewStats:
+      asRecord(source.reviewStats) != null
+        ? (source.reviewStats as ProblemCardLearningDetailDto['reviewStats'])
+        : {
+            review_count: 0,
+            grading_count: asArray<ProblemCardGradingRecordDto>(source.gradingRecords).length || (latestGradingRecord ? 1 : 0),
+          },
+    timelineEvents:
+      asArray<ProblemCardTimelineEventDto>(source.timelineEvents).length > 0
+        ? asArray<ProblemCardTimelineEventDto>(source.timelineEvents)
+        : asArray<ProblemCardTimelineEventDto>(source.timeline_events),
+  }
+}
+
 export async function getProblemCardLearningDetail(
   baseUrl: string,
   params: { workroomID: string; problemCardID: string },
@@ -123,9 +179,10 @@ export async function getProblemCardLearningDetail(
   const search = new URLSearchParams({
     workroom_id: params.workroomID,
   })
-  return apiJson(`${baseUrl}/api/problem-cards/${params.problemCardID}/learning-detail?${search.toString()}`, {
+  const raw = await apiJson<unknown>(`${baseUrl}/api/problem-cards/${params.problemCardID}/learning-detail?${search.toString()}`, {
     method: 'GET',
   })
+  return normalizeLearningDetail(raw)
 }
 
 export async function enterProblemCardAnswerMode(

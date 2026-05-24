@@ -9,6 +9,7 @@ type EventType =
   | "start_review"
   | "submit_answer"
   | "finish_review"
+  | "lecture_assessment"
   | "remove_from_studio"
 
 function nowIso() {
@@ -48,6 +49,36 @@ type QuestionGenerationRecommendation = {
   based_on_attempt_id: string
   based_on_attempt_index: number
   updated_at: string
+}
+
+export type LearningStage = "初学" | "补漏" | "复习"
+
+type LectureAssessmentWeakness = {
+  weaknessKey?: string | null
+  label: string
+  category?: string | null
+  status: "open" | "improving" | "resolved" | "relapsed"
+  severity?: "low" | "medium" | "high" | null
+  note?: string | null
+}
+
+type LectureResolvedWeakness = {
+  weaknessKey?: string | null
+  label?: string | null
+  note?: string | null
+}
+
+export type LectureLearningAssessment = {
+  lectureSessionID: string
+  masteryLevel?: string | null
+  masteryScore?: number | null
+  learningStage?: LearningStage | null
+  progressSummary?: string | null
+  latestDiagnosisSummary?: string | null
+  generationRecommendation?: Record<string, unknown> | null
+  weaknesses?: LectureAssessmentWeakness[]
+  resolvedWeaknesses?: LectureResolvedWeakness[]
+  evidence?: Record<string, unknown>
 }
 
 function computeMasterySnapshot(input: {
@@ -227,6 +258,54 @@ function normalizeWeaknessKey(text: string) {
     return "概念理解错误"
   }
   return compact
+}
+
+function normalizeLearningStage(value: string | null | undefined): LearningStage {
+  if (value === "初学" || value === "补漏" || value === "复习") return value
+  return "初学"
+}
+
+function normalizeWeaknessStatus(value: string | null | undefined): LectureAssessmentWeakness["status"] {
+  if (value === "open" || value === "improving" || value === "resolved" || value === "relapsed") return value
+  return "open"
+}
+
+function normalizeWeaknessSeverity(value: string | null | undefined): NonNullable<LectureAssessmentWeakness["severity"]> {
+  if (value === "low" || value === "medium" || value === "high") return value
+  return "medium"
+}
+
+function normalizeWeaknessCategory(value: string | null | undefined) {
+  if (
+    value === "concept_gap" ||
+    value === "misread_question" ||
+    value === "method_gap" ||
+    value === "calculation_error" ||
+    value === "expression_issue" ||
+    value === "careless_mistake" ||
+    value === "unknown"
+  ) {
+    return value
+  }
+  return toRootCause(value)
+}
+
+function mapLearningStateLevelToSnapshotLevel(value: string | null | undefined) {
+  const level = String(value ?? "unknown").trim()
+  if (level === "mastered" || level === "proficient") return "mastered"
+  if (level === "good") return "good"
+  if (level === "reviewing" || level === "basic") return "reviewing"
+  if (level === "struggling" || level === "weak" || level === "unmastered") return "struggling"
+  return "unknown"
+}
+
+function defaultMasteryScoreForLevel(value: string | null | undefined) {
+  const level = mapLearningStateLevelToSnapshotLevel(value)
+  if (level === "mastered") return 90
+  if (level === "good") return 76
+  if (level === "reviewing") return 56
+  if (level === "struggling") return 25
+  return 0
 }
 
 function dedupeWeaknessLabels(labels: string[]) {
@@ -653,6 +732,276 @@ export const ProblemCardService = {
         updated_at: now,
       })
     }
+    return this.getLearningDetail(input)
+  },
+
+  async applyLectureAssessment(input: {
+    userID: string
+    workroomID: string
+    problemCardID: string
+    assessment: LectureLearningAssessment
+  }) {
+    const db = getLocalSqlite()
+    const card = db
+      .prepare(`SELECT * FROM studio_question_cards WHERE user_id=@user_id AND workroom_id=@workroom_id AND id=@id`)
+      .get({
+        user_id: input.userID,
+        workroom_id: input.workroomID,
+        id: input.problemCardID,
+      }) as Record<string, unknown> | null
+    if (!card) throw new Error(`ProblemCard not found: ${input.problemCardID}`)
+
+    const now = nowIso()
+    const assessment = input.assessment
+    const learningStage = normalizeLearningStage(assessment.learningStage ?? undefined)
+    const normalizedMasteryLevel = String(assessment.masteryLevel ?? "").trim() || "unknown"
+    const tx = db.transaction(() => {
+      const existingState = db
+        .prepare(`SELECT * FROM question_card_learning_states WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`)
+        .get({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+        }) as Record<string, unknown> | null
+
+      const existingWeaknesses = db
+        .prepare(`SELECT * FROM question_card_weaknesses WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`)
+        .all({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+        }) as Array<Record<string, unknown>>
+
+      const findExistingWeakness = (weaknessKey: string, label: string) => {
+        const normalizedKey = normalizeWeaknessKey(weaknessKey || label)
+        const normalizedLabel = normalizeWeaknessKey(label)
+        return existingWeaknesses.find((item) => {
+          const itemKey = normalizeWeaknessKey(String(item.weakness_key ?? ""))
+          const itemLabel = normalizeWeaknessKey(String(item.label ?? ""))
+          return itemKey === normalizedKey || itemLabel === normalizedKey || (!!normalizedLabel && itemKey === normalizedLabel)
+        })
+      }
+
+      for (const item of assessment.resolvedWeaknesses ?? []) {
+        const label = String(item.label ?? "").trim()
+        const weaknessKey = String(item.weaknessKey ?? label).trim()
+        const existing = findExistingWeakness(weaknessKey, label)
+        if (!existing) continue
+        const note = String(item.note ?? existing.note ?? "").trim()
+        db.prepare(
+          `UPDATE question_card_weaknesses
+           SET status='resolved',
+               resolved_at=@resolved_at,
+               note=@note,
+               updated_at=@updated_at
+           WHERE id=@id`,
+        ).run({
+          id: String(existing.id),
+          note,
+          resolved_at: now,
+          updated_at: now,
+        })
+      }
+
+      for (const item of assessment.weaknesses ?? []) {
+        const label = String(item.label ?? "").trim()
+        if (!label) continue
+        const weaknessKey = String(item.weaknessKey ?? "").trim() || normalizeWeaknessKey(label)
+        const existing = findExistingWeakness(weaknessKey, label)
+        const status = normalizeWeaknessStatus(item.status)
+        const resolvedAt = status === "resolved" ? now : null
+        const note = String(item.note ?? "").trim()
+        if (existing) {
+          db.prepare(
+            `UPDATE question_card_weaknesses
+             SET weakness_key=@weakness_key,
+                 label=@label,
+                 category=@category,
+                 status=@status,
+                 severity=@severity,
+                 note=@note,
+                 last_seen_at=@last_seen_at,
+                 resolved_at=@resolved_at,
+                 updated_at=@updated_at
+             WHERE id=@id`,
+          ).run({
+            id: String(existing.id),
+            weakness_key: weaknessKey,
+            label,
+            category: normalizeWeaknessCategory(item.category ?? undefined),
+            status,
+            severity: normalizeWeaknessSeverity(item.severity ?? undefined),
+            note,
+            last_seen_at: now,
+            resolved_at: resolvedAt,
+            updated_at: now,
+          })
+          continue
+        }
+        db.prepare(
+          `INSERT INTO question_card_weaknesses
+           (id, user_id, workroom_id, card_id, weakness_key, label, category, status, severity, count, note, first_seen_at, last_seen_at, resolved_at, evidence_attempt_ids_json, evidence_diagnosis_ids_json, created_at, updated_at)
+           VALUES
+           (@id, @user_id, @workroom_id, @card_id, @weakness_key, @label, @category, @status, @severity, 1, @note, @first_seen_at, @last_seen_at, @resolved_at, '[]', '[]', @created_at, @updated_at)`,
+        ).run({
+          id: createID("question_card_weakness"),
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+          weakness_key: weaknessKey,
+          label,
+          category: normalizeWeaknessCategory(item.category ?? undefined),
+          status,
+          severity: normalizeWeaknessSeverity(item.severity ?? undefined),
+          note,
+          first_seen_at: now,
+          last_seen_at: now,
+          resolved_at: resolvedAt,
+          created_at: now,
+          updated_at: now,
+        })
+      }
+
+      const weaknessesAfter = db
+        .prepare(`SELECT * FROM question_card_weaknesses WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`)
+        .all({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+        }) as Array<Record<string, unknown>>
+      const unresolvedWeaknesses = weaknessesAfter
+        .filter((item) => String(item.status) !== "resolved")
+        .map((item) => String(item.label ?? "").trim())
+        .filter(Boolean)
+      const repeatedMistakes = weaknessesAfter
+        .filter((item) => String(item.status) !== "resolved" && Number(item.count ?? 0) >= 2)
+        .map((item) => String(item.category ?? "").trim())
+        .filter(Boolean)
+      const recommendation = assessment.generationRecommendation
+        ? {
+            ...assessment.generationRecommendation,
+            based_on_source: "lecture",
+            based_on_lecture_session_id: assessment.lectureSessionID,
+            updated_at: now,
+          }
+        : parseJsonText<Record<string, unknown>>(String(existingState?.generation_recommendation_json ?? "{}"), {})
+
+      if (!existingState) {
+        db.prepare(
+          `INSERT INTO question_card_learning_states
+           (id, user_id, workroom_id, card_id, mastery_level, learning_stage, total_attempts, correct_attempts, consecutive_correct_count, last_attempt_at, last_review_at, unresolved_weaknesses_json, repeated_mistakes_json, progress_signal, progress_summary, generation_recommendation_json, updated_at, created_at)
+           VALUES
+           (@id, @user_id, @workroom_id, @card_id, @mastery_level, @learning_stage, 0, 0, 0, NULL, @last_review_at, @unresolved_weaknesses_json, @repeated_mistakes_json, NULL, @progress_summary, @generation_recommendation_json, @updated_at, @created_at)`,
+        ).run({
+          id: createID("learning_state"),
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+          mastery_level: normalizedMasteryLevel,
+          learning_stage: learningStage,
+          last_review_at: now,
+          unresolved_weaknesses_json: JSON.stringify(unresolvedWeaknesses),
+          repeated_mistakes_json: JSON.stringify(Array.from(new Set(repeatedMistakes))),
+          progress_summary: String(assessment.progressSummary ?? "").trim() || null,
+          generation_recommendation_json: JSON.stringify(recommendation),
+          updated_at: now,
+          created_at: now,
+        })
+      } else {
+        db.prepare(
+          `UPDATE question_card_learning_states
+           SET mastery_level=@mastery_level,
+               learning_stage=@learning_stage,
+               last_review_at=@last_review_at,
+               unresolved_weaknesses_json=@unresolved_weaknesses_json,
+               repeated_mistakes_json=@repeated_mistakes_json,
+               progress_summary=@progress_summary,
+               generation_recommendation_json=@generation_recommendation_json,
+               updated_at=@updated_at
+           WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`,
+        ).run({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+          mastery_level: normalizedMasteryLevel,
+          learning_stage: learningStage,
+          last_review_at: now,
+          unresolved_weaknesses_json: JSON.stringify(unresolvedWeaknesses),
+          repeated_mistakes_json: JSON.stringify(Array.from(new Set(repeatedMistakes))),
+          progress_summary:
+            String(assessment.progressSummary ?? "").trim() || ((existingState.progress_summary as string | null) ?? null),
+          generation_recommendation_json: JSON.stringify(recommendation),
+          updated_at: now,
+        })
+      }
+
+      db.prepare(
+        `INSERT INTO question_card_study_events (id, user_id, workroom_id, card_id, event_type, payload_json, created_at)
+         VALUES (@id, @user_id, @workroom_id, @card_id, 'lecture_assessment', @payload_json, @created_at)`,
+      ).run({
+        id: createID("study_event"),
+        user_id: input.userID,
+        workroom_id: input.workroomID,
+        card_id: input.problemCardID,
+        payload_json: JSON.stringify({
+          lecture_session_id: assessment.lectureSessionID,
+          mastery_level: normalizedMasteryLevel,
+          learning_stage: learningStage,
+          progress_summary: assessment.progressSummary ?? null,
+          latest_diagnosis_summary: assessment.latestDiagnosisSummary ?? null,
+          generation_recommendation: recommendation,
+          weaknesses: assessment.weaknesses ?? [],
+          resolved_weaknesses: assessment.resolvedWeaknesses ?? [],
+          evidence: assessment.evidence ?? {},
+        }),
+        created_at: now,
+      })
+
+      const nextState = db
+        .prepare(`SELECT * FROM question_card_learning_states WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id`)
+        .get({
+          user_id: input.userID,
+          workroom_id: input.workroomID,
+          card_id: input.problemCardID,
+        }) as Record<string, unknown>
+      const currentSnapshot = parseJsonText<Record<string, unknown>>(String(card.learning_snapshot_json ?? "{}"), {})
+      const nextMasteryScore =
+        typeof assessment.masteryScore === "number" && Number.isFinite(assessment.masteryScore)
+          ? Math.max(0, Math.min(100, Math.round(assessment.masteryScore)))
+          : Number(currentSnapshot.masteryScore ?? NaN)
+      const snapshot = {
+        masteryScore: Number.isFinite(nextMasteryScore) ? nextMasteryScore : defaultMasteryScoreForLevel(normalizedMasteryLevel),
+        masteryLevel: mapLearningStateLevelToSnapshotLevel(normalizedMasteryLevel),
+        masteryTrend7d: Number(currentSnapshot.masteryTrend7d ?? 0),
+        attemptCount: Number(nextState.total_attempts ?? currentSnapshot.attemptCount ?? 0),
+        correctCount: Number(nextState.correct_attempts ?? currentSnapshot.correctCount ?? 0),
+        incorrectCount: Math.max(0, Number(nextState.total_attempts ?? 0) - Number(nextState.correct_attempts ?? 0)),
+        diagnosisFailedCount: Number(currentSnapshot.diagnosisFailedCount ?? 0),
+        firstAttemptAt: currentSnapshot.firstAttemptAt ?? null,
+        lastAttemptAt: nextState.last_attempt_at ?? currentSnapshot.lastAttemptAt ?? null,
+        lastReviewedAt: now,
+        lastJudgement: currentSnapshot.lastJudgement ?? null,
+        latestDiagnosisSummary:
+          String(assessment.latestDiagnosisSummary ?? "").trim() ||
+          (currentSnapshot.latestDiagnosisSummary as string | null) ||
+          null,
+        weaknessSummary: weaknessesAfter.map((item) => ({
+          weaknessKey: String(item.weakness_key ?? ""),
+          label: String(item.label ?? ""),
+          status: normalizeWeaknessStatus(String(item.status ?? "")),
+          severity: normalizeWeaknessSeverity(String(item.severity ?? "")),
+          count: Number(item.count ?? 1),
+          note: String(item.note ?? ""),
+        })),
+        reviewHeatmap180d: Array.isArray(currentSnapshot.reviewHeatmap180d) ? currentSnapshot.reviewHeatmap180d : [],
+      }
+      db.prepare(`UPDATE studio_question_cards SET learning_snapshot_json=@learning_snapshot_json, updated_at=@updated_at WHERE id=@id`).run({
+        id: input.problemCardID,
+        learning_snapshot_json: JSON.stringify(snapshot),
+        updated_at: now,
+      })
+    })
+    tx()
     return this.getLearningDetail(input)
   },
 
@@ -1238,7 +1587,7 @@ export const ProblemCardService = {
         card_id: input.problemCardID,
       }) as { count: number }
     const reviewCount = db
-      .prepare(`SELECT COUNT(*) as count FROM question_card_study_events WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id AND event_type IN ('submit_answer','finish_review')`)
+      .prepare(`SELECT COUNT(*) as count FROM question_card_study_events WHERE user_id=@user_id AND workroom_id=@workroom_id AND card_id=@card_id AND event_type IN ('submit_answer','finish_review','lecture_assessment')`)
       .get({
         user_id: input.userID,
         workroom_id: input.workroomID,
@@ -1311,6 +1660,7 @@ export const ProblemCardService = {
             problem_card_id: String(learningState.card_id),
             mastery_level: String(learningState.mastery_level || masteryFromState.masteryLevel),
             mastery_score: masteryFromState.masteryScore,
+            learning_stage: String(learningState.learning_stage ?? "初学"),
             total_attempts: Number(learningState.total_attempts ?? 0),
             correct_attempts: Number(learningState.correct_attempts ?? 0),
             consecutive_correct_count: Number(learningState.consecutive_correct_count ?? 0),
@@ -1388,6 +1738,7 @@ export const ProblemCardService = {
           first_seen_at: string
           last_seen_at: string
           resolved_at: string | null
+          note: string | null
         }>()
         for (const weakness of weaknesses) {
           const label = String(weakness.label ?? "")
@@ -1402,6 +1753,7 @@ export const ProblemCardService = {
             status: String(weakness.status),
             severity: String(weakness.severity),
             count: Number(weakness.count ?? 0),
+            note: weakness.note == null ? null : String(weakness.note),
             first_seen_at: String(weakness.first_seen_at),
             last_seen_at: String(weakness.last_seen_at),
             resolved_at: weakness.resolved_at == null ? null : String(weakness.resolved_at),

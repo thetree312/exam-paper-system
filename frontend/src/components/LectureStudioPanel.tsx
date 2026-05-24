@@ -18,6 +18,7 @@ import { getAuthToken } from '../utils/secureStorage'
 import { MarkdownWithMath } from './MarkdownWithMath'
 import { LectureGateShiftIndicator } from './LectureGateShiftIndicator'
 import { QuestionTextView } from './QuestionTextView'
+import { normalizeLectureVisualizationHTML } from './lecture-visualization-html'
 import { buildLectureStreamRenderItems } from './lecture-stream-layout'
 import {
   advanceLectureContinuationWait,
@@ -439,6 +440,7 @@ function buildVisualizationDoc(input: {
   theme: 'light' | 'dark'
   cssVariablesText: string
 }) {
+  const visualizationHTML = normalizeLectureVisualizationHTML(input.html)
   return `<!doctype html>
 <html data-theme="${input.theme}">
   <head>
@@ -490,11 +492,94 @@ function buildVisualizationDoc(input: {
       .lecture-focus {
         background: ${input.theme === 'dark' ? 'rgba(245, 189, 39, 0.2)' : '#fff1c7'};
       }
-    </style>
-    <script defer src="${katexScriptUrl}"></script>
-    <script defer src="${katexAutoRenderScriptUrl}"></script>
-    <script>
-      const DEFAULT_FONT_STACK = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
+      </style>
+      <script defer src="${katexScriptUrl}"></script>
+      <script defer src="${katexAutoRenderScriptUrl}"></script>
+      <script>
+        ;(() => {
+          const DEFAULT_FONT_STACK = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
+          const readViewport = (canvas) => {
+            const stage = document.getElementById('lecture-visualization-stage')
+            const root = document.getElementById('lecture-visualization-root')
+            const width = Math.max(1, Math.round(stage?.clientWidth || canvas?.parentElement?.clientWidth || root?.clientWidth || 0))
+            const height = Math.max(1, Math.round(stage?.clientHeight || canvas?.parentElement?.clientHeight || root?.clientHeight || 0))
+            return {
+              zoom: 1,
+              panX: 0,
+              panY: 0,
+              mode: 'canvas-viewport',
+              viewBox: null,
+              width,
+              height,
+              devicePixelRatio: window.devicePixelRatio || 1,
+            }
+          }
+          const callDrawScene = (drawScene, context, payload) => {
+            if (drawScene.length >= 3) {
+              drawScene(context, payload.width, payload.height, payload.dpr, payload.viewport)
+              return
+            }
+            drawScene(context, payload)
+          }
+          window.LectureCanvasRuntime = {
+            fontStack: DEFAULT_FONT_STACK,
+            setTextStyle(context, size, weight = 'normal') {
+              if (!context) return
+              context.font = weight + ' ' + size + 'px ' + DEFAULT_FONT_STACK
+              context.textBaseline = 'middle'
+            },
+            mountCanvas(canvas, drawScene) {
+              if (!(canvas instanceof HTMLCanvasElement) || typeof drawScene !== 'function') return null
+              const context = canvas.getContext('2d')
+              if (!context) return null
+              let frame = 0
+              let disposed = false
+              const render = () => {
+                if (disposed) return
+                frame = 0
+                const viewport = readViewport(canvas)
+                const dpr = viewport.devicePixelRatio || 1
+                canvas.style.width = viewport.width + 'px'
+                canvas.style.height = viewport.height + 'px'
+                canvas.width = Math.max(1, Math.round(viewport.width * dpr))
+                canvas.height = Math.max(1, Math.round(viewport.height * dpr))
+                context.setTransform(dpr, 0, 0, dpr, 0, 0)
+                context.font = '14px ' + DEFAULT_FONT_STACK
+                context.clearRect(0, 0, viewport.width, viewport.height)
+                callDrawScene(drawScene, context, {
+                  viewport,
+                  width: viewport.width,
+                  height: viewport.height,
+                  dpr,
+                  canvas,
+                  stage: document.getElementById('lecture-visualization-stage'),
+                  root: document.getElementById('lecture-visualization-root'),
+                })
+              }
+              const schedule = () => {
+                if (disposed) return
+                if (frame) cancelAnimationFrame(frame)
+                frame = requestAnimationFrame(render)
+              }
+              window.addEventListener('resize', schedule)
+              window.addEventListener('lecture-visualization-viewport-change', schedule)
+              schedule()
+              return {
+                redraw: schedule,
+                requestDraw: schedule,
+                destroy() {
+                  disposed = true
+                  if (frame) cancelAnimationFrame(frame)
+                  window.removeEventListener('resize', schedule)
+                  window.removeEventListener('lecture-visualization-viewport-change', schedule)
+                },
+              }
+            },
+          }
+        })()
+      </script>
+      <script>
+        const DEFAULT_FONT_STACK = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans GB", sans-serif'
       window.addEventListener('DOMContentLoaded', () => {
         const stage = document.getElementById('lecture-visualization-stage')
         const root = document.getElementById('lecture-visualization-root')
@@ -851,7 +936,7 @@ function buildVisualizationDoc(input: {
               context.setTransform(dpr * zoom, 0, 0, dpr * zoom, viewport.panX || 0, viewport.panY || 0)
               context.font = '14px ' + DEFAULT_FONT_STACK
               context.clearRect(0, 0, width, height)
-              drawScene(context, {
+              const payload = {
                 viewport,
                 width,
                 height,
@@ -859,7 +944,12 @@ function buildVisualizationDoc(input: {
                 canvas,
                 stage,
                 root,
-              })
+              }
+              if (drawScene.length >= 3) {
+                drawScene(context, width, height, dpr, viewport)
+              } else {
+                drawScene(context, payload)
+              }
             }
 
             const schedule = () => {
@@ -874,6 +964,7 @@ function buildVisualizationDoc(input: {
 
             return {
               redraw: schedule,
+              requestDraw: schedule,
               destroy() {
                 disposed = true
                 if (frame) cancelAnimationFrame(frame)
@@ -1014,7 +1105,7 @@ function buildVisualizationDoc(input: {
       })
     </script>
   </head>
-  <body><div id="lecture-visualization-stage"><div id="lecture-visualization-root">${input.html}</div></div></body>
+  <body><div id="lecture-visualization-stage"><div id="lecture-visualization-root">${visualizationHTML}</div></div></body>
 </html>`
 }
 
@@ -1573,7 +1664,6 @@ export const LectureStudioPanel: React.FC<LectureStudioPanelProps> = ({
 
   const buildCustomReply = (text: string) => {
     const answers = pendingQuestion?.questions.map(() => [] as string[]) ?? [[]]
-    answers[0] = [text.trim()]
     const freeText = pendingQuestion?.questions.map(() => null as string | null) ?? [null]
     freeText[0] = text.trim()
     return { answers, freeText }

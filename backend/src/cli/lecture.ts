@@ -27,7 +27,7 @@ function printUsage(stderr: NodeJS.WriteStream) {
       "answer [--session-id <id>] (--text-file <path>) [--delete-after-read] [--highlight-spans-env <ENV>]",
       "render-html [--session-id <id>] (--html-file <path>) [--delete-after-read]",
       "render-html-patch [--session-id <id>] (--patch-file <path>) [--delete-after-read]",
-      "complete [--session-id <id>] (--teaching-summary-file <path>) [--delete-after-read] [--next-suggestion <text>]",
+      "complete [--session-id <id>] (--teaching-summary-file <path>) [--delete-after-read] [--next-suggestion <text>] [--learning-assessment-file <path>]",
     ].join("\n") + "\n",
   )
 }
@@ -253,10 +253,15 @@ async function executeCommand(command: CliCommand, args: string[], io: CliIO = {
       fileFlag: "--teaching-summary-file",
     }))?.trim()
     if (!teachingSummary) throw new Error("MISSING_REQUIRED_ARGUMENT: teaching-summary")
+    const learningAssessmentText = (await resolvePayloadText({
+      args,
+      fileFlag: "--learning-assessment-file",
+    }))?.trim()
     return postJson(`/api/lectures/${encodeURIComponent(sessionID)}/complete`, {
       ...scope,
       teachingSummary,
       nextSuggestion: readFlagValue(args, "--next-suggestion")?.trim() ?? undefined,
+      learningAssessment: learningAssessmentText ? JSON.parse(learningAssessmentText) : undefined,
     })
   }
 

@@ -178,7 +178,6 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
   const [showApiKey, setShowApiKey] = useState(false)
   const [accountFeedback, setAccountFeedback] = useState<Record<string, { type: 'success' | 'error'; text: string } | undefined>>({})
   const [showModelListByProvider, setShowModelListByProvider] = useState<Record<string, boolean>>({})
-  const [agentAutoFallback, setAgentAutoFallback] = useState(true)
 
   useEffect(() => {
     if (!open) return
@@ -879,15 +878,15 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
             <div className="text-[13px] font-semibold text-[var(--ui-text-primary)]">{t('settings_modal.custom_model.agent_config_title')}</div>
             <div className="text-[11px] text-[var(--ui-text-primary)]">{t('settings_modal.custom_model.agent_config_desc')}</div>
           </div>
-          <table className="w-full table-fixed text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="min-w-[760px] w-full table-fixed text-[12px]">
             <thead className="bg-[var(--ui-bg-panel-muted)] text-[var(--ui-text-primary)]">
               <tr>
-                <th className="w-10 px-2 py-1.5 text-left text-[11px] font-medium"> </th>
-                <th className="w-12 px-2 py-1.5 text-left text-[11px] font-medium">{t('settings_modal.custom_model.col_priority')}</th>
-                <th className="px-2 py-1.5 text-left text-[11px] font-medium">{t('settings_modal.fields.provider')}</th>
+                <th className="w-12 px-2 py-1.5 text-left text-[11px] font-medium">序号</th>
+                <th className="w-[170px] px-2 py-1.5 text-left text-[11px] font-medium">{t('settings_modal.fields.provider')}</th>
                 <th className="px-2 py-1.5 text-left text-[11px] font-medium">{t('settings_modal.custom_model.col_model')}</th>
                 <th className="w-24 px-2 py-1.5 text-left text-[11px] font-medium">{t('settings_modal.fields.status')}</th>
-                <th className="w-12 px-2 py-1.5 text-right text-[11px] font-medium">{t('settings_modal.custom_model.col_action')}</th>
+                <th className="w-24 px-2 py-1.5 text-right text-[11px] font-medium">{t('settings_modal.custom_model.col_action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -896,12 +895,12 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
                 const modelOptions = providerModelsById.get(account?.providerID ?? '') ?? []
                 return (
                   <tr key={b.bindingID || `agent-${idx}`} className="border-t border-[var(--ui-border-default)]">
-                    <td className="px-2 py-1.5 text-[var(--ui-text-primary)]"><Icon name="drag_indicator" className="text-[13px]" /></td>
                     <td className="px-2 py-1.5 text-[var(--ui-text-primary)]">{i + 1}</td>
                     <td className="px-2 py-1.5">
                       {renderProviderSelect(
                         b.accountID,
                         (nextValue) => updateBinding(idx, { accountID: nextValue, modelID: '' }),
+                        'w-[156px] max-w-[156px]',
                       )}
                     </td>
                     <td className="px-2 py-1.5">
@@ -910,6 +909,7 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
                         (nextValue) => updateBinding(idx, { modelID: nextValue }),
                         modelOptions,
                         account?.providerID,
+                        'w-full',
                       )}
                     </td>
                     <td className="px-2 py-1.5">
@@ -942,6 +942,7 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
               })}
             </tbody>
           </table>
+          </div>
           <div className="flex items-center justify-between border-t border-[var(--ui-border-default)] px-3 py-2">
             <button
               type="button"
@@ -969,24 +970,9 @@ const AIModelSettingsDialogInner: React.FC<AIModelSettingsDialogProps> = ({
             >
               {t('settings_modal.custom_model.add_model')}
             </button>
-            <label className="flex items-center gap-2 text-[11px] text-[var(--ui-text-primary)]">
-              {renderSwitch(agentAutoFallback, () => setAgentAutoFallback((v) => !v))}
+            <div className="flex items-center gap-2 text-[11px] text-[var(--ui-text-primary)]">
               <span>{t('settings_modal.custom_model.auto_fallback')}</span>
-            </label>
-          </div>
-          <div className="flex items-center gap-2 border-t border-[var(--ui-border-default)] bg-[var(--ui-bg-panel-muted)] px-3 py-2 text-[11px] text-[var(--ui-text-primary)]">
-            <Icon name="info" className="text-[12px] text-[var(--ui-text-primary)]" />
-            <span>{t('settings_modal.custom_model.final_order')}</span>
-            <span className="truncate">
-              {agentRows
-                .map(({ b }) => b)
-                .filter((b) => b.enabled)
-                .map((b) => {
-                  const acc = accountById.get(b.accountID)
-                  return `${acc?.label || t('settings_modal.unconfigured')} / ${b.modelID || t('settings_modal.unconfigured')}`
-                })
-                .join('  →  ') || t('settings_modal.unconfigured')}
-            </span>
+            </div>
           </div>
         </div>
       </div>

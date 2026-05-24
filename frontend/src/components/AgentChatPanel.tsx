@@ -7,6 +7,7 @@ import type {
   AgentAssistantToolBlock,
   AgentCitationAnchor,
   AgentInputFile,
+  AgentRunMessage,
   AgentRunContext,
   AgentSendPayload,
   AgUiEvent,
@@ -27,6 +28,7 @@ import { updateAgentSession } from '../services/agentApi'
 import { deriveAssistantBlocks } from '../lib/agentFacts'
 import { ensureMathContentDocument, mathContentToPromptText } from '../lib/mathContent'
 import Icon from './Icon'
+import { LectureLaunchCard } from './LectureLaunchCard'
 import {
   resolveModelIconKey,
   resolveProviderIconKey,
@@ -43,6 +45,7 @@ interface AgentChatPanelProps {
   viewId?: string | null
   isOpen: boolean
   onClose: () => void
+  variant?: 'drawer' | 'docked'
   width?: number
   onResize?: (width: number) => void
   appendToken?: { id: number; payload: AgentSendPayload } | null
@@ -61,6 +64,15 @@ type GreetingInfo = {
   title: string
   subtitle: string
   animation: object
+}
+
+function getConversationMessagesSnapshot(messages: AgentRunMessage[]): string {
+  if (messages.length === 0) return '0'
+  const first = messages[0]
+  const last = messages[messages.length - 1]
+  const firstID = first?.messageInfo?.id ?? `${first?.role ?? 'unknown'}-0`
+  const lastID = last?.messageInfo?.id ?? `${last?.role ?? 'unknown'}-${messages.length - 1}`
+  return `${messages.length}:${firstID}:${lastID}`
 }
 
 function normalizeAiMarkdown(raw: string): string {
@@ -735,23 +747,7 @@ const AssistantNaturalFlow: React.FC<{
           })}
 
           {lectureLaunchPayload && onOpenLectureSession ? (
-            <div className="rounded-[18px] border border-amber-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_100%)] p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[13px] font-semibold text-amber-900">讲解入口已准备好</div>
-                  <div className="mt-1 text-[12px] leading-6 text-amber-800">
-                    讲解不会发生在对话侧栏里。点击后会在中间 Studio 新开讲解标签页，并用独立讲解 session 运行。
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenLectureSession(lectureLaunchPayload)}
-                  className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-amber-600"
-                >
-                  在 Studio 中打开
-                </button>
-              </div>
-            </div>
+            <LectureLaunchCard onOpen={() => onOpenLectureSession(lectureLaunchPayload)} />
           ) : null}
 
           {visibleBlocks.length === 0 && fallbackContent.trim() && (
@@ -795,6 +791,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   viewId,
   isOpen,
   onClose: _onClose,
+  variant = 'drawer',
   width = 480,
   onResize,
   appendToken,
@@ -808,10 +805,13 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   modelSettingsRevision = 0,
 }) => {
   const { t } = useTranslation()
+  const isDocked = variant === 'docked'
+  const effectiveIsOpen = isOpen
   const [input, setInput] = useState('')
   const [inputFiles, setInputFiles] = useState<AgentInputFile[]>([])
   const [selectedModel, setSelectedModel] = useState('')
   const [candidateModelOptions, setCandidateModelOptions] = useState<ModelSelectOption[]>([])
+  const [preferredModelOptionID, setPreferredModelOptionID] = useState('')
   const [isSkillSettingsOpen, setIsSkillSettingsOpen] = useState(false)
   const [isMcpSettingsOpen, setIsMcpSettingsOpen] = useState(false)
   const [inputHeight, setInputHeight] = useState(34)
@@ -822,7 +822,24 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   // 当前 useAgentChat 状态所“绑定”的会话 key，用于避免在切换会话过程中
   // 将上一会话的消息和 sessionId 写入到新激活的会话元信息中。
   const [boundConversationKey, setBoundConversationKey] = useState<string | null>(null)
-  const persistedSessionModelRef = useRef<string>('')
+  const appliedConversationSnapshotRef = useRef<string>('')
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null)
+  const conversationScrollTopRef = useRef(new Map<string, number>())
+  const pendingScrollRestoreKeyRef = useRef<string | null>(null)
+  const modelPreferenceStorageKey = useMemo(
+    () => `agent-chat-model-preference:${String(user?.id ?? 'anon')}:${String(workroomId)}`,
+    [user?.id, workroomId],
+  )
+
+  useEffect(() => {
+    if (!effectiveIsOpen) return
+    try {
+      const stored = window.localStorage.getItem(modelPreferenceStorageKey) || ''
+      setPreferredModelOptionID(stored)
+    } catch {
+      setPreferredModelOptionID('')
+    }
+  }, [effectiveIsOpen, modelPreferenceStorageKey])
 
   const effectiveUiContext: AgentRunContext = appendToken?.payload.uiContextOverride ?? 'exam_editor'
 
@@ -845,6 +862,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     documentId: documentId ?? null,
     viewId: viewId ?? null,
     preferredSessionId: preferredSessionId ?? null,
+    enabled: effectiveIsOpen,
   })
   const modelConversationKeyRef = useRef<string | null>(null)
   const modelOptions = useMemo(() => {
@@ -893,7 +911,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   })
   const deferredMessages = useDeferredValue(messages)
   useEffect(() => {
-    if (!isOpen) return
+    if (!effectiveIsOpen) return
     let cancelled = false
 
     void Promise.all([
@@ -928,6 +946,23 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             modelIconKey: resolveModelIconKey(modelID, modelMeta?.iconKey),
           })
         }
+        options.sort((a, b) => {
+          const providerCompare = (a.providerID || '').localeCompare(b.providerID || '')
+          if (providerCompare !== 0) return providerCompare
+          return (a.label || a.modelID || '').localeCompare(b.label || b.modelID || '')
+        })
+        const defaultAccountID = String(settings.defaultModel?.accountID || '').trim()
+        const defaultModelID = String(settings.defaultModel?.modelID || '').trim()
+        if (defaultAccountID && defaultModelID) {
+          const defaultAccount = accountByID.get(defaultAccountID)
+          const defaultProviderID = String(defaultAccount?.providerID || '').trim()
+          if (defaultProviderID) {
+            const defaultOptionID = `${defaultProviderID}::${defaultModelID}`
+            if (options.some((item) => (item.optionID || item.modelID) === defaultOptionID)) {
+              setPreferredModelOptionID((prev) => prev || defaultOptionID)
+            }
+          }
+        }
         setCandidateModelOptions(options)
       })
       .catch(() => {
@@ -938,7 +973,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     return () => {
       cancelled = true
     }
-  }, [backendBaseUrl, isOpen, modelSettingsRevision])
+  }, [backendBaseUrl, effectiveIsOpen, modelSettingsRevision])
 
   useEffect(() => {
     if (!activeConversationKey) return
@@ -957,31 +992,17 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       if (!conversationChanged && prev && modelOptions.some((item) => (item.optionID || item.modelID) === prev)) {
         return prev
       }
+      if (conversationChanged && preferredModelOptionID) {
+        const preferredGlobal = modelOptions.find((item) => (item.optionID || item.modelID) === preferredModelOptionID)
+        if (preferredGlobal) return preferredGlobal.optionID || preferredGlobal.modelID
+      }
       return modelOptions[0]?.optionID || modelOptions[0]?.modelID || ''
     })
-  }, [activeConversation?.selectedModel, activeConversationKey, modelOptions])
+  }, [activeConversation?.selectedModel, activeConversationKey, modelOptions, preferredModelOptionID])
 
   useEffect(() => {
     onSessionResolved?.(sessionId ?? null)
   }, [onSessionResolved, sessionId])
-
-  useEffect(() => {
-    if (!activeConversation?.sessionId || !activeConversation.selectedModel?.providerID || !activeConversation.selectedModel?.modelID) {
-      return
-    }
-    const signature = `${activeConversation.sessionId}::${activeConversation.selectedModel.providerID}::${activeConversation.selectedModel.modelID}`
-    if (persistedSessionModelRef.current === signature) return
-    persistedSessionModelRef.current = signature
-    void updateAgentSession(backendBaseUrl, activeConversation.sessionId, {
-      workroomId,
-      selectedModel: {
-        providerID: activeConversation.selectedModel.providerID,
-        modelID: activeConversation.selectedModel.modelID,
-      },
-    }).catch((error) => {
-      console.warn('[agent conversations] persist selected model failed', error)
-    })
-  }, [activeConversation?.selectedModel?.modelID, activeConversation?.selectedModel?.providerID, activeConversation?.sessionId, backendBaseUrl, workroomId])
 
   // 会话重置信号变化时（新建/切换会话），根据当前会话元信息和存量消息灌入 useAgentChat。
   // 仅在 conversationResetSignal 变化时运行一次，避免与 messages -> store 同步形成更新环。
@@ -990,6 +1011,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     if (!activeConversationKey || !activeConversation) return
 
     const isSameConversation = boundConversationKey === activeConversationKey
+    const historySnapshot = `${activeConversationKey}:${activeConversation.sessionId ?? 'draft'}:${getConversationMessagesSnapshot(activeConversationMessages)}`
+    const hasLocalPendingMessages = isLoading || messages.some((message) => Boolean(message.isOptimistic || message.isStreaming))
 
     // 在真正灌入消息之前，先将 useAgentChat 绑定到当前激活会话 key，
     // 后续 messages -> store 的同步只会作用于这个已绑定会话，
@@ -1001,7 +1024,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     // 新建会话首轮发送后，session_id 解析和会话列表刷新可能再次触发 reset signal。
     // 这时如果还是同一个会话 key，就不能再用历史消息回灌，否则会把当前流式中的
     // optimistic messages 覆盖成服务端尚未完全落盘的空历史。
-    if (isSameConversation) {
+    if (isSameConversation && (hasLocalPendingMessages || appliedConversationSnapshotRef.current === historySnapshot)) {
       return
     }
 
@@ -1010,7 +1033,32 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     } else {
       setMessagesFromHistory([] as any)
     }
+    appliedConversationSnapshotRef.current = historySnapshot
+    pendingScrollRestoreKeyRef.current = activeConversationKey
   }, [conversationResetSignal])
+
+  React.useLayoutEffect(() => {
+    if (!activeConversationKey) return
+    if (pendingScrollRestoreKeyRef.current !== activeConversationKey) return
+    const element = messagesScrollRef.current
+    if (!element) return
+
+    const restoreKey = activeConversationKey
+    const frame = window.requestAnimationFrame(() => {
+      if (pendingScrollRestoreKeyRef.current !== restoreKey) return
+      const savedTop = conversationScrollTopRef.current.get(restoreKey)
+      element.scrollTop = savedTop ?? element.scrollHeight
+      pendingScrollRestoreKeyRef.current = null
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeConversationKey, deferredMessages.length, conversationResetSignal])
+
+  const handleMessagesScroll = useCallback(() => {
+    if (!activeConversationKey) return
+    const element = messagesScrollRef.current
+    if (!element) return
+    conversationScrollTopRef.current.set(activeConversationKey, element.scrollTop)
+  }, [activeConversationKey])
 
   // 将当前 messages 同步回会话 store，便于下次切换/恢复。
   // 流式输出期间做轻度节流，避免每个 token 都触发全局状态更新导致页面抖动。
@@ -1156,12 +1204,24 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const handleSelectedModelChange = useCallback(
     (optionID: string) => {
       setSelectedModel(optionID)
+      setPreferredModelOptionID(optionID)
+      try {
+        window.localStorage.setItem(modelPreferenceStorageKey, optionID)
+      } catch {
+        // ignore localStorage failures
+      }
       const selectedOption = modelOptions.find((item) => (item.optionID || item.modelID) === optionID)
       if (!selectedOption?.providerID || !selectedOption.modelID || !activeConversationKey) return
       const selectedModelPayload = {
         providerID: selectedOption.providerID,
         modelID: selectedOption.modelID,
       }
+      const isSameAsActiveConversation =
+        activeConversation?.selectedModel?.providerID === selectedModelPayload.providerID &&
+        activeConversation?.selectedModel?.modelID === selectedModelPayload.modelID
+
+      if (isSameAsActiveConversation) return
+
       upsertConversation(activeConversationKey, (prev) => ({
         ...prev,
         selectedModel: selectedModelPayload,
@@ -1175,7 +1235,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         console.warn('[agent conversations] persist selected model failed', error)
       })
     },
-    [activeConversation?.sessionId, activeConversationKey, backendBaseUrl, modelOptions, upsertConversation, workroomId],
+    [activeConversation?.selectedModel?.modelID, activeConversation?.selectedModel?.providerID, activeConversation?.sessionId, activeConversationKey, backendBaseUrl, modelOptions, modelPreferenceStorageKey, upsertConversation, workroomId],
   )
 
   const handleHitlFieldChange = useCallback(
@@ -1474,19 +1534,27 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   )
 
   return (
-    <div className="agent-chat-panel fixed inset-0 z-40 pointer-events-none">
+    <div className={isDocked ? 'agent-chat-panel h-full min-h-0 w-full pointer-events-auto' : 'agent-chat-panel fixed inset-0 z-40 pointer-events-none'}>
       <aside
-        className={`fixed right-0 bg-[var(--ui-bg-agent)] flex flex-col transition-transform duration-300 pointer-events-auto ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={
+          isDocked
+            ? 'relative h-full w-full bg-[var(--ui-bg-agent)] flex flex-col pointer-events-auto'
+            : `fixed right-0 bg-[var(--ui-bg-agent)] flex flex-col transition-transform duration-300 pointer-events-auto ${
+                isOpen ? 'translate-x-0' : 'translate-x-full'
+              }`
+        }
         ref={drawerRef}
         data-agent-panel
-        style={{
-          top: 38,
-          height: 'calc(100% - 38px)',
-          width: Math.min(Math.max(width, 360), 640),
-          maxWidth: '90vw',
-        }}
+        style={
+          isDocked
+            ? undefined
+            : {
+                top: 38,
+                height: 'calc(100% - 38px)',
+                width: Math.min(Math.max(width, 360), 640),
+                maxWidth: '90vw',
+              }
+        }
       >
         <div className="flex flex-col h-full">
           {/* 顶部工具栏：标题下拉 + 新建按钮 */}
@@ -1541,7 +1609,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${!isHistoryOpen ? 'border-t border-[var(--ui-border-default)]' : ''}`}>
               {hasMessages ? (
                 <>
-                  <div className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-[var(--ui-border-default)]' : ''}`}>
+                  <div
+                    ref={messagesScrollRef}
+                    onScroll={handleMessagesScroll}
+                    className={`flex-1 overflow-y-auto px-4 pt-6 pb-5 ${!isHistoryOpen ? 'border-t border-[var(--ui-border-default)]' : ''}`}
+                  >
                     <div className="flex flex-col gap-4 text-sm text-[var(--ui-text-primary)] min-h-[340px]">
                       {deferredMessages.map((msg, idx) => {
                         const key = `${msg.role}-${idx}`
@@ -1714,7 +1786,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           </div>
         </div>
 
-        {onResize && (
+        {onResize && !isDocked && (
           <div
             className="absolute top-0 left-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--ui-border-default)]/60 transition-colors"
             onMouseDown={(e) => {

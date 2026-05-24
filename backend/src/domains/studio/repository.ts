@@ -535,6 +535,7 @@ export const StudioRepository = {
         status: row.status as QuestionCardWeaknessRecord["status"],
         severity: row.severity as QuestionCardWeaknessRecord["severity"],
         count: Number(row.count ?? 1),
+        note: row.note == null ? null : String(row.note),
         firstSeenAt: String(row.first_seen_at),
         lastSeenAt: String(row.last_seen_at),
         resolvedAt: (row.resolved_at as string | null) ?? null,
@@ -557,10 +558,10 @@ export const StudioRepository = {
         `
           INSERT INTO question_card_weaknesses (
             id, user_id, workroom_id, card_id, weakness_key, label, category, status, severity, count,
-            first_seen_at, last_seen_at, resolved_at, evidence_attempt_ids_json, evidence_diagnosis_ids_json, created_at, updated_at
+            note, first_seen_at, last_seen_at, resolved_at, evidence_attempt_ids_json, evidence_diagnosis_ids_json, created_at, updated_at
           ) VALUES (
             @id, @user_id, @workroom_id, @card_id, @weakness_key, @label, @category, @status, @severity, @count,
-            @first_seen_at, @last_seen_at, @resolved_at, @evidence_attempt_ids_json, @evidence_diagnosis_ids_json, @created_at, @updated_at
+            @note, @first_seen_at, @last_seen_at, @resolved_at, @evidence_attempt_ids_json, @evidence_diagnosis_ids_json, @created_at, @updated_at
           )
         `,
       )
@@ -576,6 +577,7 @@ export const StudioRepository = {
           status: item.status,
           severity: item.severity,
           count: item.count,
+          note: item.note ?? "",
           first_seen_at: item.firstSeenAt,
           last_seen_at: item.lastSeenAt,
           resolved_at: item.resolvedAt ?? null,

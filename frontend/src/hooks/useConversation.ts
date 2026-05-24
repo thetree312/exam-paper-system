@@ -75,6 +75,7 @@ export const useConversation = (
     documentId: string | number | null
     viewId?: string | null
     preferredSessionId?: string | null
+    enabled?: boolean
   },
 ): UseConversationReturn => {
   const storeConversations = useAppStore((state) => state.conversations)
@@ -98,6 +99,7 @@ export const useConversation = (
   const documentId = options.documentId ?? null
   const viewId = options.viewId ?? null
   const preferredSessionId = options.preferredSessionId ?? null
+  const enabled = options.enabled ?? true
 
   const scopeKey = useMemo(
     () => JSON.stringify({ backendBaseUrl, tenantId, userId, workroomId }),
@@ -164,6 +166,7 @@ export const useConversation = (
   )
 
   useEffect(() => {
+    if (!enabled) return
     if (conversationsLoaded) return
     if (!backendBaseUrl || workroomId == null) return
     if (loadInFlightScopeRef.current === scopeKey) return
@@ -289,9 +292,10 @@ export const useConversation = (
     }
 
     void load()
-  }, [backendBaseUrl, conversationsLoaded, documentId, fetchHistoryMessages, preferredSessionId, scopeKey, setStoreActiveConversationKey, setStoreConversationMessages, setStoreConversations, tenantId, userId, viewId, workroomId])
+  }, [backendBaseUrl, conversationsLoaded, documentId, enabled, fetchHistoryMessages, preferredSessionId, scopeKey, setStoreActiveConversationKey, setStoreConversationMessages, setStoreConversations, tenantId, userId, viewId, workroomId])
 
   useEffect(() => {
+    if (!enabled) return
     if (!conversationsLoaded || storeConversations.length === 0) return
     const selectionIntentKey = JSON.stringify({
       preferredSessionId: preferredSessionId ?? null,
@@ -327,7 +331,7 @@ export const useConversation = (
     if (storeActiveConversationKey === nextKey) return
     setStoreActiveConversationKey(nextKey)
     setConversationResetSignal(Date.now())
-  }, [conversationsLoaded, documentId, preferredSessionId, setStoreActiveConversationKey, storeActiveConversationKey, storeConversations, viewId])
+  }, [conversationsLoaded, documentId, enabled, preferredSessionId, setStoreActiveConversationKey, storeActiveConversationKey, storeConversations, viewId])
 
   const upsertConversation = useCallback(
     (key: string, updater: (prev: AgentConversationMeta) => AgentConversationMeta) => {

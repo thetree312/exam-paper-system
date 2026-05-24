@@ -26,6 +26,12 @@ import { createWorkspace, deleteWorkspace, fetchWorkspaces, launchWorkspace } fr
 import { fetchWorkroomFile, saveWorkroomFile } from './services/workroomTreeApi'
 import { createDocumentPreviewAssetRefs } from './services/documentPreviewAsset'
 import { createTextMathDocument } from './lib/mathContent'
+import {
+  getWorkbenchPanelOrder,
+  isWorkbenchLayoutPreset,
+  type WorkbenchLayoutPreset,
+  type WorkbenchPanelId,
+} from './lib/workbenchLayout'
 import { useAppStore } from './store/appStore'
 import { buildOcrItemFromStudioQuestionCard } from './utils/studioQuestionCards'
 import { applyThemeToDocument } from './lib/theme'
@@ -307,6 +313,10 @@ const App: React.FC = () => {
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const imageRefs = useRef<Record<number, HTMLImageElement | null>>({})
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const agentDockRef = useRef<HTMLDivElement>(null)
+  const agentDrawerWidthRef = useRef(360)
+  const agentResizeFrameRef = useRef<number | null>(null)
+  const pendingAgentWidthRef = useRef<number | null>(null)
   const toastTimerRef = useRef<number | null>(null)
   const launchedWorkspaceIdRef = useRef<string | number | null>(null)
   const runtimeStateSyncTimerRef = useRef<number | null>(null)
@@ -328,6 +338,7 @@ const App: React.FC = () => {
       open_document_ids?: string[]
       center_panel_state_json: {
         studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview' | 'lecture'
+        layout_preset?: WorkbenchLayoutPreset
         studio_tabs?: StudioWorkspaceTab[]
         active_studio_tab_id?: string
         studio_data_source_mode?: StudioDataSourceMode
@@ -420,6 +431,7 @@ const App: React.FC = () => {
         open_document_ids?: string[]
         center_panel_state_json: {
           studio_view: 'editor' | 'mindmap' | 'flashcard' | 'preview' | 'lecture'
+          layout_preset?: WorkbenchLayoutPreset
           studio_tabs?: StudioWorkspaceTab[]
           active_studio_tab_id?: string
           studio_data_source_mode?: StudioDataSourceMode
@@ -574,6 +586,9 @@ const App: React.FC = () => {
 
   const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false)
   const [agentDrawerWidth, setAgentDrawerWidth] = useState(360)
+  const [layoutPreset, setLayoutPreset] = useState<WorkbenchLayoutPreset>('source-studio-agent')
+  const pendingLayoutPresetRef = useRef<WorkbenchLayoutPreset | null>(null)
+  const layoutPresetFrameRef = useRef<number | null>(null)
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null)
   const [citationFocus, setCitationFocus] = useState<AgentCitationFocus | null>(null)
   const [agentAppendToken, setAgentAppendToken] = useState<
@@ -593,6 +608,18 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return 'off'
     return window.localStorage.getItem('studio_auto_save_mode') === 'afterDelay' ? 'afterDelay' : 'off'
   })
+  useEffect(() => {
+    agentDrawerWidthRef.current = agentDrawerWidth
+  }, [agentDrawerWidth])
+
+  useEffect(() => {
+    return () => {
+      if (agentResizeFrameRef.current != null) {
+        window.cancelAnimationFrame(agentResizeFrameRef.current)
+        agentResizeFrameRef.current = null
+      }
+    }
+  }, [])
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isAiModelSettingsOpen, setIsAiModelSettingsOpen] = useState(false)
   const [modelSettingsRevision, setModelSettingsRevision] = useState(0)
@@ -953,6 +980,100 @@ const App: React.FC = () => {
     return `view-${currentFile.fileId}-${currentFile.sessionId}`
   }, [currentFile])
 
+  const workbenchPanelOrder = useMemo(
+    () => getWorkbenchPanelOrder(layoutPreset),
+    [layoutPreset],
+  )
+  const workbenchPanelPosition = useMemo(() => {
+    return workbenchPanelOrder.reduce(
+      (acc, panelId, index) => {
+        acc[panelId] = index
+        return acc
+      },
+      {} as Record<WorkbenchPanelId, number>,
+    )
+  }, [workbenchPanelOrder])
+
+  const handleLayoutPresetChange = useCallback((nextPreset: WorkbenchLayoutPreset) => {
+    if (nextPreset === layoutPreset && pendingLayoutPresetRef.current == null) return
+    pendingLayoutPresetRef.current = nextPreset
+    if (layoutPresetFrameRef.current != null) return
+
+    layoutPresetFrameRef.current = window.requestAnimationFrame(() => {
+      layoutPresetFrameRef.current = null
+      const pending = pendingLayoutPresetRef.current
+      pendingLayoutPresetRef.current = null
+      if (!pending) return
+      setLayoutPreset((current) => (current === pending ? current : pending))
+    })
+  }, [layoutPreset])
+
+  useEffect(() => {
+    return () => {
+      if (layoutPresetFrameRef.current != null) {
+        window.cancelAnimationFrame(layoutPresetFrameRef.current)
+        layoutPresetFrameRef.current = null
+      }
+      pendingLayoutPresetRef.current = null
+    }
+  }, [])
+
+  const previewContentPaneStyle = useMemo<React.CSSProperties>(() => {
+    if (isMobileOrTablet) return previewPaneStyle
+    if (isPreviewCollapsed) {
+      return { width: 0, minWidth: 0, overflow: 'hidden', borderRightWidth: 0 }
+    }
+    return previewPaneStyle
+  }, [isMobileOrTablet, isPreviewCollapsed, previewPaneStyle])
+
+  const startAgentDockResize = useCallback(
+    (edge: 'left' | 'right') => (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      const startX = event.clientX
+      const dockElement = agentDockRef.current
+      const startWidth = dockElement?.getBoundingClientRect().width ?? agentDrawerWidthRef.current
+      if (dockElement) {
+        dockElement.style.transition = 'none'
+        dockElement.style.willChange = 'width, min-width'
+      }
+      const handleMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX
+        const rawWidth = edge === 'left' ? startWidth - delta : startWidth + delta
+        const next = Math.min(Math.max(rawWidth, 360), 640)
+        pendingAgentWidthRef.current = next
+        if (agentResizeFrameRef.current != null) return
+        agentResizeFrameRef.current = window.requestAnimationFrame(() => {
+          agentResizeFrameRef.current = null
+          const width = pendingAgentWidthRef.current
+          const element = agentDockRef.current
+          if (width == null || !element) return
+          element.style.width = `${width}px`
+          element.style.minWidth = `${width}px`
+        })
+      }
+      const handleUp = () => {
+        window.removeEventListener('mousemove', handleMove)
+        window.removeEventListener('mouseup', handleUp)
+        if (agentResizeFrameRef.current != null) {
+          window.cancelAnimationFrame(agentResizeFrameRef.current)
+          agentResizeFrameRef.current = null
+        }
+        const next = pendingAgentWidthRef.current ?? startWidth
+        pendingAgentWidthRef.current = null
+        agentDrawerWidthRef.current = next
+        const element = agentDockRef.current
+        if (element) {
+          element.style.transition = ''
+          element.style.willChange = ''
+        }
+        setAgentDrawerWidth(next)
+      }
+      window.addEventListener('mousemove', handleMove)
+      window.addEventListener('mouseup', handleUp)
+    },
+    [],
+  )
+
   useEffect(() => {
     if (appView === 'favorites') {
       setIsAgentDrawerOpen(false)
@@ -1136,6 +1257,7 @@ const App: React.FC = () => {
     const nextSourceMode = center.studio_data_source_mode
     const restoredDocumentContext = workroomRuntimeState.active_studio_document_id ?? null
     const restoredAgentSession = workroomRuntimeState.active_agent_session_id ?? null
+    const shouldRestoreAgentSession = right.is_agent_drawer_open === true
     const runtimeStateKey = JSON.stringify({
       runtimeStateId: workroomRuntimeState.id,
       activeStudioDocumentId: restoredDocumentContext,
@@ -1184,6 +1306,9 @@ const App: React.FC = () => {
     if (nextSourceMode === 'follow_preview' || nextSourceMode === 'keep_workset') {
       setStudioDataSourceMode(nextSourceMode)
     }
+    if (isWorkbenchLayoutPreset(center.layout_preset)) {
+      setLayoutPreset(center.layout_preset)
+    }
     if (typeof center.is_answer_mode === 'boolean') {
       setIsAnswerMode(center.is_answer_mode)
     }
@@ -1208,8 +1333,10 @@ const App: React.FC = () => {
     if (typeof restoredDocumentContext === 'string' || typeof restoredDocumentContext === 'number') {
       setActiveStudioDocumentId(String(restoredDocumentContext))
     }
-    if (typeof restoredAgentSession === 'string' || typeof restoredAgentSession === 'number') {
+    if (shouldRestoreAgentSession && (typeof restoredAgentSession === 'string' || typeof restoredAgentSession === 'number')) {
       setAgentSessionId(String(restoredAgentSession))
+    } else {
+      setAgentSessionId(null)
     }
     if (typeof right.is_agent_drawer_open === 'boolean') {
       setIsAgentDrawerOpen(right.is_agent_drawer_open)
@@ -1337,7 +1464,7 @@ const App: React.FC = () => {
       active_session_id: sessionId ?? undefined,
       active_tab_index: activeTabIndex >= 0 ? activeTabIndex : undefined,
       active_studio_document_id: activeStudioDocumentId ?? undefined,
-      active_agent_session_id: agentSessionId ?? undefined,
+      active_agent_session_id: isAgentDrawerOpen ? (agentSessionId ?? null) : null,
       active_extraction_session_id: sessionId ?? undefined,
       open_document_ids: fileTabs.filter((tab) => !tab.isPlaceholder).map((tab) => String(tab.fileId)),
       left_panel_state_json: {
@@ -1348,6 +1475,7 @@ const App: React.FC = () => {
       },
       center_panel_state_json: {
         studio_view: activeStudioTabKind === 'preview' && !hasPreviewTab ? 'editor' : activeStudioTabKind,
+        layout_preset: layoutPreset,
         studio_tabs: persistedStudioTabs,
         active_studio_tab_id: persistedActiveStudioTabId,
         studio_data_source_mode: studioDataSourceMode,
@@ -1406,6 +1534,7 @@ const App: React.FC = () => {
     previewScrollPositions,
     isAnswerMode,
     isAgentDrawerOpen,
+    layoutPreset,
     route?.kind,
     sendRuntimeStateSync,
     appPerfLog,
@@ -1755,6 +1884,227 @@ const App: React.FC = () => {
     [backendBaseUrl, navigate, resetWorkroomSurface, route, showToast, user],
   )
 
+  const renderPreviewPanel = (variant: 'full' | 'rail' | 'content' = 'full') => (
+    <PreviewPaneShell
+      leftPaneRef={leftPaneRef as React.RefObject<HTMLElement>}
+      style={variant === 'content' ? previewContentPaneStyle : previewPaneStyle}
+      variant={variant}
+      isPreviewCollapsed={isPreviewCollapsed}
+      isMobileOrTablet={isMobileOrTablet}
+      appView={appView}
+      onAppViewChange={setAppView}
+      collapsePreview={collapsePreview}
+      expandPreview={expandPreview}
+      fileTabs={fileTabs}
+      activeTabIndex={activeTabIndex}
+      isUploading={isUploading}
+      onAddEmptyTab={handleAddEmptyTab}
+      onTabSelect={handleTabSelect}
+      onCloseTab={handleCloseTab}
+      onUploadClick={handleUploadClick}
+      fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
+      onFileChange={handleFileChange}
+      previewSources={previewSources}
+      previewType={previewType}
+      activeStatus={activeStatus}
+      hasActiveFile={!!currentFile}
+      activeFileId={currentFile?.fileId != null ? String(currentFile.fileId) : null}
+      pageRefs={pageRefs}
+      imageRefs={imageRefs}
+      isExtracting={isExtracting}
+      previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
+      citationFocus={citationFocus}
+      onSelectionSnapshotChange={handleSelectionSnapshotChange}
+      onSelectionAddClick={handleSelectionAddClick}
+      onClearSelection={() => {
+        selectionSnapshotRef.current = null
+      }}
+      backendBaseUrl={backendBaseUrl}
+      user={user!}
+      isUserMenuOpen={isUserMenuOpen}
+      userMenuRef={userMenuRef as React.RefObject<HTMLDivElement>}
+      onToggleUserMenu={() => setIsUserMenuOpen((prev) => !prev)}
+      onOpenAiModelSettings={() => {
+        setIsUserMenuOpen(false)
+        setIsAiModelSettingsOpen(true)
+      }}
+      theme={theme}
+      onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      onLogout={handleAppLogout}
+      onOpenWorkroomFile={handleOpenWorkroomFile}
+      onRequestSaveOpenFile={handleRequestSaveOpenFile}
+      onToast={showToast}
+      onBackToWorkspace={() => {
+        resetWorkroomSurface()
+        navigate(buildWorkspaceIndexPath())
+      }}
+    />
+  )
+
+  const renderStudioPanel = () => {
+    if (appView === 'favorites' && workroom) {
+      return (
+        <div className="flex-1 overflow-hidden">
+          <FavoritesPage
+            backendBaseUrl={backendBaseUrl}
+            user={user!}
+            workroomID={String(workroom.id)}
+            onToast={showToast}
+            onBack={() => setAppView('editor')}
+            onAddToEditor={handleAddFavoriteToEditor}
+          />
+        </div>
+      )
+    }
+
+    return (
+      <EditorWorkspaceShell
+        backendBaseUrl={backendBaseUrl}
+        user={user!}
+        workroomId={workroom?.id != null ? String(workroom.id) : null}
+        studioTabs={studioTabs}
+        activeStudioTabId={activeStudioTabId}
+        onOpenStudioTab={openStudioTab}
+        onActivateStudioTab={activateStudioTab}
+        onCloseStudioTab={closeStudioTab}
+        onReorderStudioTabs={reorderStudioTabs}
+        onUpdateStudioPreviewContent={updateStudioPreviewContent}
+        onUpdateStudioPreviewViewMode={updateStudioPreviewViewMode}
+        onSaveStudioPreviewTab={saveStudioPreviewTab}
+        studioDataSourceMode={studioDataSourceMode}
+        onStudioDataSourceModeChange={setStudioDataSourceMode}
+        isAnswerMode={isAnswerMode}
+        onToggleAnswerMode={handleToggleAnswerMode}
+        onOpenAgentDrawer={handleToggleAgentDrawer}
+        currentFile={currentFile}
+        sessionId={sessionId != null ? String(sessionId) : null}
+        ocrItems={ocrItems}
+        studioDocumentId={activeStudioDocumentId}
+        sourceDocumentId={currentFile?.fileId != null ? String(currentFile.fileId) : null}
+        onDocumentChange={handleStudioDocumentChange}
+        onUpdateItem={handleOcrItemUpdate}
+        onDeleteItem={handleOcrItemDelete}
+        onSendToAgent={handleSendQuestionToAgent}
+        onAnswerChange={handleAnswerChange}
+        onSubmitGrading={handleWorkspaceSubmitGrading}
+        isGrading={isGrading}
+        onSplitItem={handleWorkspaceSplitItem}
+        splittingItemId={splittingItemId}
+        previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
+        onToast={showToast}
+        onRunGlmOcr={handleRunGlmOcr}
+        modelSettingsRevision={modelSettingsRevision}
+        agentDrawerInset={0}
+      />
+    )
+  }
+
+  const renderAgentPanel = (variant: 'drawer' | 'docked') => {
+    if (!workroom) return null
+    return (
+      <MemoizedAgentChatPanel
+        backendBaseUrl={backendBaseUrl}
+        user={user!}
+        workroomId={workroom.id}
+        documentId={activeStudioDocumentId}
+        viewId={agentViewId ?? undefined}
+        preferredSessionId={agentSessionId}
+        isOpen={isAgentDrawerOpen}
+        onClose={() => setIsAgentDrawerOpen(false)}
+        variant={variant}
+        width={agentDrawerWidth}
+        onResize={variant === 'drawer' ? setAgentDrawerWidth : undefined}
+        appendToken={agentAppendToken}
+        onAgUiEvent={handleAgentUiEvent}
+        onOpenLectureSession={handleOpenLectureSession}
+        onAppendTokenConsumed={handleAppendTokenConsumed}
+        onDocumentResolved={handleAgentDocumentResolved}
+        onSessionResolved={handleAgentSessionResolved}
+        onCitationClick={handleAgentCitationClick}
+        onOpenWorkroomFile={handleOpenWorkroomFile}
+        modelSettingsRevision={modelSettingsRevision}
+      />
+    )
+  }
+
+  const renderDesktopSourcePanel = () => {
+    const position = workbenchPanelPosition.source
+    const isLastPanel = position === workbenchPanelOrder.length - 1
+    const isFirstPanel = position === 0
+
+    return (
+      <div
+        key="source"
+        className="flex h-full min-h-0 shrink-0 overflow-hidden"
+        style={{ order: position }}
+      >
+        {!isFirstPanel && !isPreviewCollapsed && (
+          <div
+            onMouseDown={() => startResize('left')}
+            className="w-1 shrink-0 cursor-col-resize bg-[var(--ui-border-default)] transition-colors hover:bg-[var(--ui-border-strong)]"
+          />
+        )}
+        {renderPreviewPanel('content')}
+        {!isLastPanel && !isPreviewCollapsed && (
+          <div
+            onMouseDown={() => startResize('right')}
+            className="w-1 shrink-0 cursor-col-resize bg-[var(--ui-border-default)] transition-colors hover:bg-[var(--ui-border-strong)]"
+          />
+        )}
+      </div>
+    )
+  }
+
+  const renderDesktopAgentPanel = () => {
+    const position = workbenchPanelPosition.agent
+    const isLastPanel = position === workbenchPanelOrder.length - 1
+    const isFirstPanel = position === 0
+
+    return (
+      <div
+        key="agent"
+        className="flex h-full min-h-0 shrink-0 overflow-hidden"
+        style={{ order: position }}
+      >
+        {isAgentDrawerOpen && !isFirstPanel && (
+          <div
+            onMouseDown={startAgentDockResize('left')}
+            className="w-1 shrink-0 cursor-col-resize bg-[var(--ui-border-default)] transition-colors hover:bg-[var(--ui-border-strong)]"
+          />
+        )}
+        <div
+          ref={agentDockRef}
+          className={`flex h-full min-h-0 shrink-0 overflow-hidden transition-[width,min-width,border-color] duration-300 ease-out ${
+            isAgentDrawerOpen ? 'border-l border-[var(--ui-border-default)]' : 'border-l border-transparent'
+          }`}
+          style={{
+            width: isAgentDrawerOpen ? agentDrawerWidth : 0,
+            minWidth: isAgentDrawerOpen ? 360 : 0,
+            maxWidth: 640,
+          }}
+        >
+          {renderAgentPanel('docked')}
+        </div>
+        {isAgentDrawerOpen && !isLastPanel && (
+          <div
+            onMouseDown={startAgentDockResize('right')}
+            className="w-1 shrink-0 cursor-col-resize bg-[var(--ui-border-default)] transition-colors hover:bg-[var(--ui-border-strong)]"
+          />
+        )}
+      </div>
+    )
+  }
+
+  const renderDesktopStudioPanel = () => (
+    <div
+      key="studio"
+      className="flex min-w-[480px] flex-1 overflow-hidden"
+      style={{ order: workbenchPanelPosition.studio }}
+    >
+      {renderStudioPanel()}
+    </div>
+  )
+
   if (!user) {
     return (
       <div className="bg-background-light text-[var(--ui-text-primary)] font-display antialiased overflow-hidden h-screen flex flex-col">
@@ -1811,6 +2161,9 @@ const App: React.FC = () => {
     >
       <AppHeader
         onExportClick={() => setIsExportDialogOpen(true)}
+        showLayoutButton={!isMobileOrTablet}
+        layoutPreset={layoutPreset}
+        onLayoutPresetChange={handleLayoutPresetChange}
         rightOffset={0}
       />
 
@@ -1859,144 +2212,29 @@ const App: React.FC = () => {
             className={`flex flex-1 ${isMobileOrTablet ? 'flex-col overflow-y-auto' : 'overflow-hidden'}`}
             style={undefined}
           >
-            <PreviewPaneShell
-              leftPaneRef={leftPaneRef as React.RefObject<HTMLElement>}
-              style={previewPaneStyle}
-              isPreviewCollapsed={isPreviewCollapsed}
-              isMobileOrTablet={isMobileOrTablet}
-              appView={appView}
-              onAppViewChange={setAppView}
-              collapsePreview={collapsePreview}
-              expandPreview={expandPreview}
-              fileTabs={fileTabs}
-              activeTabIndex={activeTabIndex}
-              isUploading={isUploading}
-              onAddEmptyTab={handleAddEmptyTab}
-              onTabSelect={handleTabSelect}
-              onCloseTab={handleCloseTab}
-              onUploadClick={handleUploadClick}
-              fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
-              onFileChange={handleFileChange}
-              previewSources={previewSources}
-              previewType={previewType}
-              activeStatus={activeStatus}
-              hasActiveFile={!!currentFile}
-              activeFileId={currentFile?.fileId != null ? String(currentFile.fileId) : null}
-              pageRefs={pageRefs}
-              imageRefs={imageRefs}
-              isExtracting={isExtracting}
-              previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
-              citationFocus={citationFocus}
-              onSelectionSnapshotChange={handleSelectionSnapshotChange}
-              onSelectionAddClick={handleSelectionAddClick}
-              onClearSelection={() => {
-                selectionSnapshotRef.current = null
-              }}
-              backendBaseUrl={backendBaseUrl}
-              user={user}
-              isUserMenuOpen={isUserMenuOpen}
-              userMenuRef={userMenuRef as React.RefObject<HTMLDivElement>}
-              onToggleUserMenu={() => setIsUserMenuOpen((prev) => !prev)}
-              onOpenAiModelSettings={() => {
-                setIsUserMenuOpen(false)
-                setIsAiModelSettingsOpen(true)
-              }}
-              theme={theme}
-              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              onLogout={handleAppLogout}
-              onOpenWorkroomFile={handleOpenWorkroomFile}
-              onRequestSaveOpenFile={handleRequestSaveOpenFile}
-              onToast={showToast}
-              onBackToWorkspace={() => {
-                resetWorkroomSurface()
-                navigate(buildWorkspaceIndexPath())
-              }}
-            />
-
-            {!isMobileOrTablet && appView !== 'favorites' && (
-              <div
-                onMouseDown={startResize}
-                className="w-1 cursor-col-resize bg-[var(--ui-border-default)] hover:bg-[var(--ui-border-strong)] transition-colors"
-              />
-            )}
-
-            {appView === 'favorites' ? (
-              <div className="flex-1 overflow-hidden">
-                <FavoritesPage
-                  backendBaseUrl={backendBaseUrl}
-                  user={user}
-                  workroomID={String(workroom.id)}
-                  onToast={showToast}
-                  onBack={() => setAppView('editor')}
-                  onAddToEditor={handleAddFavoriteToEditor}
-                />
-              </div>
+            {isMobileOrTablet || appView === 'favorites' ? (
+              <>
+                {renderPreviewPanel()}
+                {!isMobileOrTablet && appView !== 'favorites' && (
+                  <div
+                    onMouseDown={() => startResize('right')}
+                    className="w-1 cursor-col-resize bg-[var(--ui-border-default)] transition-colors hover:bg-[var(--ui-border-strong)]"
+                  />
+                )}
+                {renderStudioPanel()}
+              </>
             ) : (
-              <EditorWorkspaceShell
-                backendBaseUrl={backendBaseUrl}
-                user={user}
-                workroomId={workroom?.id != null ? String(workroom.id) : null}
-                studioTabs={studioTabs}
-                activeStudioTabId={activeStudioTabId}
-                onOpenStudioTab={openStudioTab}
-                onActivateStudioTab={activateStudioTab}
-                onCloseStudioTab={closeStudioTab}
-                onReorderStudioTabs={reorderStudioTabs}
-                onUpdateStudioPreviewContent={updateStudioPreviewContent}
-                onUpdateStudioPreviewViewMode={updateStudioPreviewViewMode}
-                onSaveStudioPreviewTab={saveStudioPreviewTab}
-                studioDataSourceMode={studioDataSourceMode}
-                onStudioDataSourceModeChange={setStudioDataSourceMode}
-                isAnswerMode={isAnswerMode}
-                onToggleAnswerMode={handleToggleAnswerMode}
-                onOpenAgentDrawer={handleToggleAgentDrawer}
-                currentFile={currentFile}
-                sessionId={sessionId != null ? String(sessionId) : null}
-                ocrItems={ocrItems}
-                studioDocumentId={activeStudioDocumentId}
-                sourceDocumentId={currentFile?.fileId != null ? String(currentFile.fileId) : null}
-                onDocumentChange={handleStudioDocumentChange}
-                onUpdateItem={handleOcrItemUpdate}
-                onDeleteItem={handleOcrItemDelete}
-                onSendToAgent={handleSendQuestionToAgent}
-                onAnswerChange={handleAnswerChange}
-                onSubmitGrading={handleWorkspaceSubmitGrading}
-                isGrading={isGrading}
-                onSplitItem={handleWorkspaceSplitItem}
-                splittingItemId={splittingItemId}
-                previewScrollRef={previewScrollRef as React.RefObject<HTMLDivElement>}
-                onToast={showToast}
-                onRunGlmOcr={handleRunGlmOcr}
-                modelSettingsRevision={modelSettingsRevision}
-                agentDrawerInset={!isMobileOrTablet && isAgentDrawerOpen ? agentDrawerWidth : 0}
-              />
+              <>
+                {renderPreviewPanel('rail')}
+                {renderDesktopSourcePanel()}
+                {renderDesktopStudioPanel()}
+                {renderDesktopAgentPanel()}
+              </>
             )}
           </main>
         )}
 
-        {workroom && (
-          <MemoizedAgentChatPanel
-            backendBaseUrl={backendBaseUrl}
-            user={user}
-            workroomId={workroom.id}
-            documentId={activeStudioDocumentId}
-            viewId={agentViewId ?? undefined}
-            preferredSessionId={agentSessionId}
-            isOpen={isAgentDrawerOpen}
-            onClose={() => setIsAgentDrawerOpen(false)}
-            width={agentDrawerWidth}
-            onResize={setAgentDrawerWidth}
-            appendToken={agentAppendToken}
-            onAgUiEvent={handleAgentUiEvent}
-            onOpenLectureSession={handleOpenLectureSession}
-            onAppendTokenConsumed={handleAppendTokenConsumed}
-            onDocumentResolved={handleAgentDocumentResolved}
-            onSessionResolved={handleAgentSessionResolved}
-            onCitationClick={handleAgentCitationClick}
-            onOpenWorkroomFile={handleOpenWorkroomFile}
-            modelSettingsRevision={modelSettingsRevision}
-          />
-        )}
+        {workroom && isMobileOrTablet && renderAgentPanel('drawer')}
 
         <ExportTemplateDialog
           open={isExportDialogOpen}

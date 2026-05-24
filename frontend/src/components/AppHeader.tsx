@@ -2,10 +2,14 @@
 import { useTranslation } from 'react-i18next'
 import BrandIcon from './BrandIcon'
 import Icon from './Icon'
+import type { WorkbenchLayoutPreset } from '../lib/workbenchLayout'
 
 interface AppHeaderProps {
   onExportClick?: () => void
   showExportButton?: boolean
+  showLayoutButton?: boolean
+  layoutPreset?: WorkbenchLayoutPreset
+  onLayoutPresetChange?: (preset: WorkbenchLayoutPreset) => void
   titleText?: string
   searchPlaceholder?: string
   searchValue?: string
@@ -18,6 +22,9 @@ interface AppHeaderProps {
 export const AppHeader: React.FC<AppHeaderProps> = ({
   onExportClick,
   showExportButton = true,
+  showLayoutButton = false,
+  layoutPreset = 'source-studio-agent',
+  onLayoutPresetChange,
   titleText,
   searchPlaceholder,
   searchValue = '',
@@ -30,6 +37,28 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const desktopRuntime = (window as any).desktopRuntime
   const canControlWindow = Boolean(desktopRuntime?.isDesktop && desktopRuntime?.window)
   const [maximized, setMaximized] = React.useState(false)
+  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = React.useState(false)
+  const layoutMenuRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    if (!isLayoutMenuOpen) return
+    const close = (event: MouseEvent) => {
+      if (!layoutMenuRef.current?.contains(event.target as Node)) {
+        setIsLayoutMenuOpen(false)
+      }
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsLayoutMenuOpen(false)
+      }
+    }
+    window.addEventListener('mousedown', close)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [isLayoutMenuOpen])
 
   const handleMinimize = React.useCallback(() => {
     void desktopRuntime?.window?.minimize?.()
@@ -53,6 +82,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     transition: rightOffset > 0 ? 'padding-right 200ms ease' : undefined,
     WebkitAppRegion: 'drag' as const,
   }
+
+  const layoutOptions: Array<{ preset: WorkbenchLayoutPreset; label: string }> = [
+    { preset: 'source-studio-agent', label: '资料 / 工作区 / 对话' },
+    { preset: 'agent-studio-source', label: '对话 / 工作区 / 资料' },
+    { preset: 'source-agent-studio', label: '资料 / 对话 / 工作区' },
+  ]
 
   return (
     <header
@@ -87,6 +122,51 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               {userDisplayName ? <div className="text-sm font-medium text-[var(--ui-text-primary)]">{userDisplayName}</div> : null}
               {userEmail ? <div className="text-xs text-[var(--ui-text-primary)]">{userEmail}</div> : null}
             </div>
+          </div>
+        ) : null}
+        {showLayoutButton && onLayoutPresetChange ? (
+          <div
+            ref={layoutMenuRef}
+            className="relative"
+            style={{ WebkitAppRegion: 'no-drag' as const }}
+          >
+            <button
+              className="flex h-8 items-center gap-2 rounded-lg bg-[var(--ui-bg-panel-muted)] px-3 text-sm font-bold text-[var(--ui-text-primary)] transition-colors hover:bg-[var(--ui-bg-panel-muted)]"
+              type="button"
+              onClick={() => setIsLayoutMenuOpen((prev) => !prev)}
+              title="切换布局"
+              aria-label="切换布局"
+              aria-expanded={isLayoutMenuOpen}
+            >
+              <Icon name="splitscreen_add" className="text-[20px]" />
+              <span>布局</span>
+            </button>
+            {isLayoutMenuOpen ? (
+              <div className="absolute right-0 top-10 z-50 w-56 rounded-lg border border-[var(--ui-border-default)] bg-[var(--ui-bg-panel)] py-1 text-sm shadow-xl">
+                {layoutOptions.map((option) => {
+                  const active = option.preset === layoutPreset
+                  return (
+                    <button
+                      key={option.preset}
+                      type="button"
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--ui-bg-panel-muted)] ${
+                        active ? 'font-semibold text-[var(--ui-text-primary)]' : 'text-[var(--ui-text-primary)]'
+                      }`}
+                      onClick={() => {
+                        onLayoutPresetChange(option.preset)
+                        setIsLayoutMenuOpen(false)
+                      }}
+                    >
+                      <Icon
+                        name={active ? 'check' : 'splitscreen_add'}
+                        className="text-[18px]"
+                      />
+                      <span>{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {showExportButton && onExportClick ? (
